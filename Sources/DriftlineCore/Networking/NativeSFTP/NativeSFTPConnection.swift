@@ -102,7 +102,9 @@ public actor NativeSFTPConnection {
 
     public func close() async {
         try? await sftpChannel.close().get()
+        try? await sftpChannel.closeFuture.get()
         try? await channel.close().get()
+        try? await channel.closeFuture.get()
         try? await group.shutdownGracefully()
     }
 
@@ -141,6 +143,11 @@ public actor NativeSFTPConnection {
         let kind = try await stat(path: path).fileKind
         switch kind {
         case .folder:
+            let entries = try await rawDirectoryEntries(at: path)
+            for entry in entries {
+                let child = entry.fileItem(parentPath: path)
+                try await deleteItem(at: child.path)
+            }
             try await expectStatusOK(SFTPRequestBuilder.rmdir(id: nextID(), path: path))
         case .file, .symbolicLink, .unknown:
             try await expectStatusOK(SFTPRequestBuilder.remove(id: nextID(), path: path))
@@ -261,7 +268,7 @@ public actor NativeSFTPConnection {
         }
     }
 
-    private func expectHandle(_ packet: SFTPPacket) async throws -> Data {
+    func expectHandle(_ packet: SFTPPacket) async throws -> Data {
         let response = try await send(packet)
         switch response.type {
         case .handle:
@@ -275,7 +282,7 @@ public actor NativeSFTPConnection {
         }
     }
 
-    private func expectStatusOK(_ packet: SFTPPacket) async throws {
+    func expectStatusOK(_ packet: SFTPPacket) async throws {
         let response = try await send(packet)
         guard response.type == .status else {
             throw RemoteClientError.commandFailed("Unexpected SFTP response.")
@@ -286,12 +293,12 @@ public actor NativeSFTPConnection {
         }
     }
 
-    private func send(_ packet: SFTPPacket) async throws -> SFTPPacket {
+    func send(_ packet: SFTPPacket) async throws -> SFTPPacket {
         try Task.checkCancellation()
         return try await handler.send(packet, on: sftpChannel).get()
     }
 
-    private func nextID() -> UInt32 {
+    func nextID() -> UInt32 {
         defer { nextRequestID = nextRequestID &+ 1 }
         return nextRequestID
     }

@@ -1,4 +1,5 @@
 import XCTest
+import Crypto
 @testable import DriftlineCore
 
 final class SFTPIntegrationTests: XCTestCase {
@@ -239,6 +240,241 @@ final class SFTPIntegrationTests: XCTestCase {
             XCTAssertTrue(true)
         }
         await connection.close()
+    }
+
+    func testLargeFileUploadAndDownloadViaSystemSFTPWhenHarnessEnabled() async throws {
+        let env = ProcessInfo.processInfo.environment
+        guard env["DRIFTLINE_INTEGRATION_SFTP"] == "1" else {
+            throw XCTSkip("Set DRIFTLINE_INTEGRATION_SFTP=1 after running scripts/integration-sftp-server.sh start")
+        }
+
+        let host = env["DRIFTLINE_TEST_HOST"] ?? "127.0.0.1"
+        let port = Int(env["DRIFTLINE_TEST_PORT"] ?? "22222") ?? 22222
+        let user = env["DRIFTLINE_TEST_USER"] ?? "driftline"
+        let key = env["DRIFTLINE_TEST_KEY"] ?? ""
+
+        let trustStore = try await trustedStore(host: host, port: port)
+        let profile = ServerProfile(
+            displayName: "Large File Integration",
+            host: host,
+            port: port,
+            protocolKind: .sftp,
+            username: user,
+            authenticationMethod: .privateKey(path: key, passphrase: nil),
+            remoteDefaultPath: "/config"
+        )
+
+        let temp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("driftline-largefile-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let fileSize = 50 * 1024 * 1024
+        let uploadURL = temp.appendingPathComponent("large-upload.bin")
+        let downloadURL = temp.appendingPathComponent("large-download.bin")
+        let randomData = Data((0..<fileSize).map { _ in UInt8.random(in: 0...255) })
+        try randomData.write(to: uploadURL)
+
+        let remotePath = "/config/driftline-large-\(UUID().uuidString).bin"
+        let credentials = InMemoryCredentialStore()
+        let transferClient = NativeSFTPTransferClient(credentialStore: credentials, hostTrustStore: trustStore)
+
+        let upload = TransferJob(
+            direction: .upload,
+            sourcePath: uploadURL.path,
+            destinationPath: remotePath,
+            byteCount: Int64(fileSize),
+            serverName: profile.displayName,
+            protocolKind: .sftp
+        )
+        try await transferClient.enqueue(upload, profile: profile)
+
+        let download = TransferJob(
+            direction: .download,
+            sourcePath: remotePath,
+            destinationPath: downloadURL.path,
+            byteCount: Int64(fileSize),
+            serverName: profile.displayName,
+            protocolKind: .sftp
+        )
+        try await transferClient.enqueue(download, profile: profile)
+
+        let originalHash = sha256(of: randomData)
+        let downloadedData = try Data(contentsOf: downloadURL)
+        let downloadedHash = sha256(of: downloadedData)
+        XCTAssertEqual(originalHash, downloadedHash, "Downloaded file content must match uploaded file")
+
+        let cleanupClient = NativeSFTPClient(credentialStore: credentials, hostTrustStore: trustStore)
+        let session = try await cleanupClient.connect(to: profile)
+        try await cleanupClient.deleteItem(at: remotePath, profile: profile, session: session)
+        try await cleanupClient.disconnect(session: session)
+    }
+
+    func testNativeSFTPLargeFileRoundTripWhenHarnessEnabled() async throws {
+        let env = ProcessInfo.processInfo.environment
+        guard env["DRIFTLINE_NATIVE_INTEGRATION_SFTP"] == "1" else {
+            throw XCTSkip("Set DRIFTLINE_TEST_PASSWORD and DRIFTLINE_NATIVE_INTEGRATION_SFTP=1 before running scripts/integration-sftp-server.sh start")
+        }
+        guard let password = env["DRIFTLINE_TEST_PASSWORD"], !password.isEmpty else {
+            throw XCTSkip("Set DRIFTLINE_TEST_PASSWORD to enable native SFTP large-file test.")
+        }
+
+        let host = env["DRIFTLINE_TEST_HOST"] ?? "127.0.0.1"
+        let port = Int(env["DRIFTLINE_TEST_PORT"] ?? "22222") ?? 22222
+        let user = env["DRIFTLINE_TEST_USER"] ?? "driftline"
+        let reference = CredentialReference(service: "app.driftline.largefile", account: "\(user)@\(host)")
+        let credentials = InMemoryCredentialStore()
+        try await credentials.saveString(password, reference: reference)
+        let trustStore = try await trustedStore(host: host, port: port)
+        let profile = ServerProfile(
+            displayName: "Native Large File Integration",
+            host: host,
+            port: port,
+            protocolKind: .sftp,
+            username: user,
+            authenticationMethod: .password(reference),
+            remoteDefaultPath: "/config"
+        )
+
+        let temp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("driftline-native-large-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let fileSize = 20 * 1024 * 1024
+        let uploadURL = temp.appendingPathComponent("native-large-upload.bin")
+        let downloadURL = temp.appendingPathComponent("native-large-download.bin")
+        let randomData = Data((0..<fileSize).map { _ in UInt8.random(in: 0...255) })
+        try randomData.write(to: uploadURL)
+
+        let remotePath = "/config/driftline-native-large-\(UUID().uuidString).bin"
+        let transferClient = NativeSFTPTransferClient(credentialStore: credentials, hostTrustStore: trustStore)
+
+        let upload = TransferJob(
+            direction: .upload,
+            sourcePath: uploadURL.path,
+            destinationPath: remotePath,
+            byteCount: Int64(fileSize),
+            serverName: profile.displayName,
+            protocolKind: .sftp
+        )
+        try await transferClient.enqueue(upload, profile: profile)
+
+        let download = TransferJob(
+            direction: .download,
+            sourcePath: remotePath,
+            destinationPath: downloadURL.path,
+            byteCount: Int64(fileSize),
+            serverName: profile.displayName,
+            protocolKind: .sftp
+        )
+        try await transferClient.enqueue(download, profile: profile)
+
+        let originalHash = sha256(of: randomData)
+        let downloadedData = try Data(contentsOf: downloadURL)
+        let downloadedHash = sha256(of: downloadedData)
+        XCTAssertEqual(originalHash, downloadedHash, "Downloaded file content must match uploaded file")
+
+        let cleanupClient = NativeSFTPClient(credentialStore: credentials, hostTrustStore: trustStore)
+        let session = try await cleanupClient.connect(to: profile)
+        try await cleanupClient.deleteItem(at: remotePath, profile: profile, session: session)
+        try await cleanupClient.disconnect(session: session)
+    }
+
+    func testRecursiveFolderUploadDownloadViaSystemSFTPWhenHarnessEnabled() async throws {
+        let env = ProcessInfo.processInfo.environment
+        guard env["DRIFTLINE_NATIVE_INTEGRATION_SFTP"] == "1" else {
+            throw XCTSkip("Set DRIFTLINE_TEST_PASSWORD and DRIFTLINE_NATIVE_INTEGRATION_SFTP=1 before running scripts/integration-sftp-server.sh start")
+        }
+        guard let password = env["DRIFTLINE_TEST_PASSWORD"], !password.isEmpty else {
+            throw XCTSkip("Set DRIFTLINE_TEST_PASSWORD to enable recursive folder transfer test.")
+        }
+
+        let host = env["DRIFTLINE_TEST_HOST"] ?? "127.0.0.1"
+        let port = Int(env["DRIFTLINE_TEST_PORT"] ?? "22222") ?? 22222
+        let user = env["DRIFTLINE_TEST_USER"] ?? "driftline"
+        let reference = CredentialReference(service: "app.driftline.folder", account: "\(user)@\(host)")
+        let credentials = InMemoryCredentialStore()
+        try await credentials.saveString(password, reference: reference)
+        let trustStore = try await trustedStore(host: host, port: port)
+        let profile = ServerProfile(
+            displayName: "Folder Transfer Integration",
+            host: host,
+            port: port,
+            protocolKind: .sftp,
+            username: user,
+            authenticationMethod: .password(reference),
+            remoteDefaultPath: "/config"
+        )
+
+        let rootName = "driftline-folder-\(UUID().uuidString)"
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(rootName, isDirectory: true)
+        try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let subDirs = ["alpha", "beta", "gamma"]
+        for sub in subDirs {
+            try FileManager.default.createDirectory(at: temp.appendingPathComponent(sub), withIntermediateDirectories: true)
+        }
+
+        let fileSizes: [(String, Int)] = [
+            ("root-1kb.bin", 1 * 1024),
+            ("alpha/alpha-100kb.bin", 100 * 1024),
+            ("beta/beta-1mb.bin", 1 * 1024 * 1024),
+            ("gamma/gamma-100kb.bin", 100 * 1024),
+            ("gamma/gamma-1kb.bin", 1 * 1024)
+        ]
+        var expectedSizes: [String: Int] = [:]
+        for (relativePath, size) in fileSizes {
+            let fileURL = temp.appendingPathComponent(relativePath)
+            let data = Data((0..<size).map { _ in UInt8.random(in: 0...255) })
+            try data.write(to: fileURL)
+            expectedSizes[relativePath] = size
+        }
+
+        let remoteFolderPath = "/config/\(rootName)"
+        let transferClient = NativeSFTPTransferClient(credentialStore: credentials, hostTrustStore: trustStore)
+
+        let upload = TransferJob(
+            direction: .upload,
+            sourcePath: temp.path,
+            destinationPath: remoteFolderPath,
+            isFolder: true,
+            serverName: profile.displayName,
+            protocolKind: .sftp
+        )
+        try await transferClient.enqueue(upload, profile: profile)
+
+        let downloadRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("\(rootName)-downloaded", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: downloadRoot) }
+
+        let download = TransferJob(
+            direction: .download,
+            sourcePath: remoteFolderPath,
+            destinationPath: downloadRoot.path,
+            isFolder: true,
+            serverName: profile.displayName,
+            protocolKind: .sftp
+        )
+        try await transferClient.enqueue(download, profile: profile)
+
+        for (relativePath, expectedSize) in expectedSizes {
+            let downloadedFile = downloadRoot.appendingPathComponent(relativePath)
+            let attrs = try FileManager.default.attributesOfItem(atPath: downloadedFile.path)
+            let actualSize = (attrs[.size] as? NSNumber)?.intValue ?? 0
+            XCTAssertEqual(actualSize, expectedSize, "File \(relativePath) size mismatch after round-trip")
+        }
+
+        let cleanupClient = NativeSFTPClient(credentialStore: credentials, hostTrustStore: trustStore)
+        let session = try await cleanupClient.connect(to: profile)
+        try await cleanupClient.deleteItem(at: remoteFolderPath, profile: profile, session: session)
+        try await cleanupClient.disconnect(session: session)
+    }
+
+    private func sha256(of data: Data) -> String {
+        let digest = SHA256.hash(data: data)
+        return digest.map { String(format: "%02x", $0) }.joined()
     }
 
     private func trustedStore(host: String, port: Int) async throws -> InMemoryHostTrustStore {

@@ -265,3 +265,19 @@
   - Signing was not attempted because `DRIFTLINE_SIGN_IDENTITY` is not set.
   - Notarization was not attempted because `DRIFTLINE_NOTARY_PROFILE` is not set.
   - Manual VoiceOver and high-contrast audit is still recommended before a tagged public release.
+
+## 2026-05-26 Native SFTP Polish And Placeholder Audit
+
+- Added passphrase-protected OpenSSH Ed25519 key parsing coverage with generated encrypted keys.
+- Corrected the OpenSSH `bcrypt_pbkdf` output shuffling to match the OpenBSD/OpenSSH algorithm.
+- Marked app-created upload/download jobs as folder transfers when the selected item is a folder.
+- Added native recursive folder upload/download path normalization for macOS `/var` versus `/private/var` temporary paths.
+- Added native recursive remote folder delete so non-empty directories can be removed after confirmation.
+- Changed native transfer failures to update job state and rethrow, so tests and app callers can observe failures directly.
+- Added a one-shot retry for transient SSH handshake closes during native connection setup.
+- Renamed active branding assets away from placeholder names and updated README/scripts/docs references.
+- Added `docs/product/production-readiness-audit.md` to track wired features, intentional non-production defaults, and remaining release blockers.
+- Validation:
+  - `swift test`: passed, 75 tests with Docker-gated integration tests skipped.
+  - `DRIFTLINE_INTEGRATION_SFTP=1 DRIFTLINE_NATIVE_INTEGRATION_SFTP=1 ... swift test --filter SFTPIntegrationTests/testRecursiveFolderUploadDownloadViaSystemSFTPWhenHarnessEnabled`: passed.
+  - Full `SFTPIntegrationTests` class still exposed the linuxserver.io Docker SSH daemon closing later System SSH handshakes after several native sequential tests. Individual native and system integration tests pass against a fresh harness; the full-class harness needs isolation/restart work before it can be treated as deterministic CI.

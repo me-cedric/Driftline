@@ -8,7 +8,7 @@ ICNS="$ROOT_DIR/assets/Driftline.icns"
 
 if [[ ! -f "$SOURCE_PNG" ]]; then
   echo "Provide a 1024x1024 PNG at $SOURCE_PNG or pass a path as the first argument." >&2
-  echo "The SVG concept lives at assets/app-icon-placeholder.svg." >&2
+  echo "The SVG concept lives at assets/app-icon-concept.svg." >&2
   exit 2
 fi
 

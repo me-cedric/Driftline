@@ -110,26 +110,66 @@ public struct NativeSFTPClient: RemoteFileSystemClient {
             guard let password = try await credentialStore.readString(reference: reference) else {
                 throw RemoteClientError.authenticationFailed
             }
-            return try await NativeSFTPConnection.connect(
+            return try await connectWithRetry(
                 profile: profile,
-                authDelegate: NativeSFTPAuthFactory.passwordDelegate(username: profile.username, password: password),
+                authDelegate: { NativeSFTPAuthFactory.passwordDelegate(username: profile.username, password: password) },
                 hostTrustStore: hostTrustStore
             )
-        case .privateKey(let path, let passphrase):
-            if let passphrase, try await credentialStore.readString(reference: passphrase) != nil {
-                throw RemoteClientError.unsupportedAuthentication("Passphrase-protected private keys are not supported by the native backend yet. Use System SSH for this server.")
+        case .privateKey(let path, let passphraseRef):
+            let resolvedPassphrase: String?
+            if let passphraseRef {
+                resolvedPassphrase = try await credentialStore.readString(reference: passphraseRef)
+            } else {
+                resolvedPassphrase = nil
             }
             let contents = try String(contentsOfFile: NSString(string: path).expandingTildeInPath, encoding: .utf8)
-            let key = try NativeSFTPPrivateKeyParser.parse(contents: contents)
-            return try await NativeSFTPConnection.connect(
+            let key = try NativeSFTPPrivateKeyParser.parse(contents: contents, passphrase: resolvedPassphrase)
+            return try await connectWithRetry(
                 profile: profile,
-                authDelegate: NativeSFTPAuthFactory.offerSequence(username: profile.username, methods: [.privateKey(key)]),
+                authDelegate: { NativeSFTPAuthFactory.offerSequence(username: profile.username, methods: [.privateKey(key)]) },
                 hostTrustStore: hostTrustStore
             )
         case .agent:
-            throw RemoteClientError.nativeBackendUnavailable("SSH agent authentication is still planned for the native backend; use System SSH for agent-based servers.")
+            let agentClient = SSHAgentClient()
+            guard let agent = agentClient else {
+                throw RemoteClientError.nativeBackendUnavailable("SSH_AUTH_SOCK is not set. Start ssh-agent and add your keys with ssh-add.")
+            }
+            let identities = try await agent.listIdentities()
+            guard !identities.isEmpty else {
+                throw RemoteClientError.nativeBackendUnavailable("The SSH agent has no loaded identities. Run ssh-add to load your keys.")
+            }
+            throw RemoteClientError.nativeBackendUnavailable("SSH agent signing is not directly supported by the SwiftNIO SSH 0.11.0 API. Use System SSH backend for agent-based connections.")
         case .none:
             throw RemoteClientError.unsupportedAuthentication("Native Swift SFTP requires password or private-key authentication.")
         }
+    }
+
+    private static func connectWithRetry(
+        profile: ServerProfile,
+        authDelegate: () -> NIOSSHClientUserAuthenticationDelegate,
+        hostTrustStore: HostTrustStore
+    ) async throws -> NativeSFTPConnection {
+        do {
+            return try await NativeSFTPConnection.connect(
+                profile: profile,
+                authDelegate: authDelegate(),
+                hostTrustStore: hostTrustStore
+            )
+        } catch {
+            guard isTransientHandshakeClose(error) else { throw error }
+            try await Task.sleep(nanoseconds: 250_000_000)
+            return try await NativeSFTPConnection.connect(
+                profile: profile,
+                authDelegate: authDelegate(),
+                hostTrustStore: hostTrustStore
+            )
+        }
+    }
+
+    private static func isTransientHandshakeClose(_ error: Error) -> Bool {
+        let description = error.localizedDescription.lowercased()
+        return description.contains("end of file")
+            || description.contains("connection reset")
+            || description.contains("connection closed")
     }
 }

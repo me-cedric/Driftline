@@ -2,27 +2,45 @@ import XCTest
 @testable import DriftlineCore
 
 final class NativeSFTPClientTests: XCTestCase {
-    func testNativeSFTPClientReportsPrivateKeyAuthAsPlanned() async throws {
-        let passphraseReference = CredentialReference(service: "app.driftline.test", account: "deploy@example.com")
-        let credentialStore = InMemoryCredentialStore()
-        try await credentialStore.saveString("phrase", reference: passphraseReference)
+    func testPassphraseProtectedOpenSSHEd25519KeyParsesWithCorrectPassphrase() throws {
+        let sshKeygen = try XCTUnwrap(Self.executablePath(named: "ssh-keygen"), "ssh-keygen is required for encrypted OpenSSH key coverage.")
+        let passphrase = "driftline-test-passphrase"
+        let temp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("driftline-key-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let keyURL = temp.appendingPathComponent("id_ed25519")
+        try Self.run(sshKeygen, arguments: [
+            "-q",
+            "-t", "ed25519",
+            "-N", passphrase,
+            "-f", keyURL.path
+        ])
+
+        let contents = try String(contentsOf: keyURL, encoding: .utf8)
+        XCTAssertNoThrow(try NativeSFTPPrivateKeyParser.parse(contents: contents, passphrase: passphrase))
+        XCTAssertThrowsError(try NativeSFTPPrivateKeyParser.parse(contents: contents, passphrase: "wrong-passphrase"))
+    }
+
+    func testNativeSFTPClientAgentAuthProvidesUsefulError() async throws {
         let client = NativeSFTPClient(
-            credentialStore: credentialStore,
+            credentialStore: InMemoryCredentialStore(),
             hostTrustStore: InMemoryHostTrustStore()
         )
         let profile = ServerProfile(
-            displayName: "Native",
+            displayName: "AgentTest",
             host: "example.com",
             protocolKind: .sftp,
             username: "deploy",
-            authenticationMethod: .privateKey(path: "/Users/example/.ssh/id_ed25519", passphrase: passphraseReference)
+            authenticationMethod: .agent
         )
 
         do {
             _ = try await client.connect(to: profile)
-            XCTFail("Expected private key auth to remain guarded until native key parsing is implemented.")
-        } catch RemoteClientError.unsupportedAuthentication(let message) {
-            XCTAssertTrue(message.contains("Passphrase-protected"))
+            XCTFail("Expected agent auth to throw nativeBackendUnavailable.")
+        } catch RemoteClientError.nativeBackendUnavailable(let message) {
+            XCTAssertTrue(message.contains("SSH"), "Error message should mention SSH, got: \(message)")
         }
     }
 
@@ -45,6 +63,33 @@ final class NativeSFTPClientTests: XCTestCase {
             XCTFail("Expected missing Keychain credential to fail authentication.")
         } catch RemoteClientError.authenticationFailed {
             XCTAssertTrue(true)
+        }
+    }
+
+    private static func executablePath(named name: String) -> String? {
+        ProcessInfo.processInfo.environment["PATH"]?
+            .split(separator: ":")
+            .map(String.init)
+            .map { URL(fileURLWithPath: $0).appendingPathComponent(name).path }
+            .first(where: { FileManager.default.isExecutableFile(atPath: $0) })
+    }
+
+    private static func run(_ executable: String, arguments: [String]) throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executable)
+        process.arguments = arguments
+        let stderr = Pipe()
+        process.standardError = stderr
+        try process.run()
+        process.waitUntilExit()
+        if process.terminationStatus != 0 {
+            let data = stderr.fileHandleForReading.readDataToEndOfFile()
+            let message = String(data: data, encoding: .utf8) ?? "unknown error"
+            throw NSError(
+                domain: "NativeSFTPClientTests",
+                code: Int(process.terminationStatus),
+                userInfo: [NSLocalizedDescriptionKey: message]
+            )
         }
     }
 }

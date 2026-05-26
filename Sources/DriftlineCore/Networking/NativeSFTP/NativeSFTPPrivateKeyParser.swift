@@ -3,9 +3,9 @@ import Foundation
 import NIOSSH
 
 public enum NativeSFTPPrivateKeyParser {
-    public static func parse(contents: String) throws -> NIOSSHPrivateKey {
+    public static func parse(contents: String, passphrase: String? = nil) throws -> NIOSSHPrivateKey {
         if contents.contains("BEGIN OPENSSH PRIVATE KEY") {
-            return try parseOpenSSHEd25519(contents: contents)
+            return try parseOpenSSH(contents: contents, passphrase: passphrase)
         }
         if contents.contains("BEGIN PRIVATE KEY") || contents.contains("BEGIN EC PRIVATE KEY") {
             return try parsePEM(contents: contents)
@@ -26,7 +26,7 @@ public enum NativeSFTPPrivateKeyParser {
         throw RemoteClientError.unsupportedAuthentication("Unsupported PEM private key. Driftline currently supports ECDSA P-256/P-384/P-521 PEM keys.")
     }
 
-    private static func parseOpenSSHEd25519(contents: String) throws -> NIOSSHPrivateKey {
+    private static func parseOpenSSH(contents: String, passphrase: String?) throws -> NIOSSHPrivateKey {
         let base64 = contents
             .split(separator: "\n")
             .filter { !$0.hasPrefix("-----") }
@@ -43,9 +43,28 @@ public enum NativeSFTPPrivateKeyParser {
 
         let cipherName = try reader.readString()
         let kdfName = try reader.readString()
-        _ = try reader.readBinaryString()
-        guard cipherName == "none", kdfName == "none" else {
-            throw RemoteClientError.unsupportedAuthentication("Encrypted OpenSSH private keys are not supported by the native backend yet. Use System SSH for passphrase-protected keys.")
+        let kdfOptions = try reader.readBinaryString()
+
+        let isEncrypted = cipherName != "none" || kdfName != "none"
+        if isEncrypted {
+            guard let phrase = passphrase, !phrase.isEmpty else {
+                throw RemoteClientError.unsupportedAuthentication("This private key is passphrase-protected. Provide a passphrase to unlock it.")
+            }
+            let keyCount = try reader.readUInt32()
+            guard keyCount == 1 else {
+                throw RemoteClientError.unsupportedAuthentication("OpenSSH keys with multiple identities are not supported.")
+            }
+            _ = try reader.readBinaryString()
+
+            let encryptedBlob = try reader.readBinaryString()
+            let decryptedBlob = try OpenSSHKeyDecryptor.decrypt(
+                encryptedPrivateBlob: encryptedBlob,
+                cipher: cipherName,
+                kdfName: kdfName,
+                kdfOptions: kdfOptions,
+                passphrase: phrase
+            )
+            return try parsePrivateBlob(decryptedBlob)
         }
 
         let keyCount = try reader.readUInt32()
@@ -54,11 +73,16 @@ public enum NativeSFTPPrivateKeyParser {
         }
         _ = try reader.readBinaryString()
 
-        var privateReader = SFTPDataReader(data: try reader.readBinaryString())
+        let privateBlob = try reader.readBinaryString()
+        return try parsePrivateBlob(privateBlob)
+    }
+
+    private static func parsePrivateBlob(_ blob: Data) throws -> NIOSSHPrivateKey {
+        var privateReader = SFTPDataReader(data: blob)
         let check1 = try privateReader.readUInt32()
         let check2 = try privateReader.readUInt32()
         guard check1 == check2 else {
-            throw RemoteClientError.unsupportedAuthentication("OpenSSH private key integrity check failed.")
+            throw RemoteClientError.unsupportedAuthentication("Incorrect passphrase for private key.")
         }
 
         let keyType = try privateReader.readString()

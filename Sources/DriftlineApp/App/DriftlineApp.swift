@@ -546,6 +546,7 @@ final class AppModel: @unchecked Sendable {
             sourcePath: selectedFile.path,
             destinationPath: destination,
             byteCount: selectedFile.size,
+            isFolder: selectedFile.kind == .folder,
             serverName: profile.displayName,
             protocolKind: profile.protocolKind
         )
@@ -581,6 +582,7 @@ final class AppModel: @unchecked Sendable {
             sourcePath: selectedFile.path,
             destinationPath: destination,
             byteCount: selectedFile.size,
+            isFolder: selectedFile.kind == .folder,
             serverName: profile.displayName,
             protocolKind: profile.protocolKind
         )

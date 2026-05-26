@@ -19,6 +19,7 @@ public struct TransferJob: Identifiable, Codable, Sendable {
     public var sourcePath: String
     public var destinationPath: String
     public var byteCount: Int64?
+    public var isFolder: Bool
     public var status: TransferStatus
     public var serverName: String?
     public var protocolKind: TransferProtocolKind?
@@ -32,6 +33,7 @@ public struct TransferJob: Identifiable, Codable, Sendable {
         sourcePath: String,
         destinationPath: String,
         byteCount: Int64? = nil,
+        isFolder: Bool = false,
         status: TransferStatus = .queued,
         serverName: String? = nil,
         protocolKind: TransferProtocolKind? = nil,
@@ -44,12 +46,34 @@ public struct TransferJob: Identifiable, Codable, Sendable {
         self.sourcePath = sourcePath
         self.destinationPath = destinationPath
         self.byteCount = byteCount
+        self.isFolder = isFolder
         self.status = status
         self.serverName = serverName
         self.protocolKind = protocolKind
         self.createdAt = createdAt
         self.startedAt = startedAt
         self.finishedAt = finishedAt
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, direction, sourcePath, destinationPath, byteCount, isFolder
+        case status, serverName, protocolKind, createdAt, startedAt, finishedAt
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(TransferJobID.self, forKey: .id)
+        direction = try c.decode(TransferDirection.self, forKey: .direction)
+        sourcePath = try c.decode(String.self, forKey: .sourcePath)
+        destinationPath = try c.decode(String.self, forKey: .destinationPath)
+        byteCount = try c.decodeIfPresent(Int64.self, forKey: .byteCount)
+        isFolder = try c.decodeIfPresent(Bool.self, forKey: .isFolder) ?? false
+        status = try c.decode(TransferStatus.self, forKey: .status)
+        serverName = try c.decodeIfPresent(String.self, forKey: .serverName)
+        protocolKind = try c.decodeIfPresent(TransferProtocolKind.self, forKey: .protocolKind)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        startedAt = try c.decodeIfPresent(Date.self, forKey: .startedAt)
+        finishedAt = try c.decodeIfPresent(Date.self, forKey: .finishedAt)
     }
 }
 

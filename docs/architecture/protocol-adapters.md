@@ -21,14 +21,15 @@ Password profiles are saved as Keychain references, but password authentication 
 
 ## Native Swift SSH/SFTP
 
-`NativeSFTPClient` introduces the native backend boundary and is selectable through settings as an experimental backend. It currently:
+`NativeSFTPClient` is selectable through settings as an experimental backend. It currently:
 
 - depends on Apple SwiftNIO SSH for the native SSH foundation;
 - retrieves password and private-key passphrase credentials through `CredentialStore`;
-- reports a clear `nativeBackendUnavailable` error for file operations until Driftline implements a production SFTP subsystem over the SSH channel;
-- keeps the stable system SSH backend as the default for real browsing and transfers.
+- supports password auth, OpenSSH Ed25519 private-key auth, passphrase-protected OpenSSH Ed25519 keys, and ECDSA PEM keys;
+- supports native SFTP listing, create folder, rename, recursive delete, existence checks, file upload/download, folder upload/download, progress, and cancellation;
+- keeps the stable system SSH backend as the default while the native backend receives broader real-server testing.
 
-This avoids fake security: password auth now has a tested architectural path, but the app does not pretend a native SFTP subsystem is complete before it exists.
+SSH agent signing remains on the System SSH backend. Driftline includes a native agent protocol client for discovery/list/sign primitives, but SwiftNIO SSH 0.11.0 does not expose a custom agent-backed signer hook for user authentication.
 
 The implementation plan lives in [native-swift-sftp-plan.md](native-swift-sftp-plan.md).
 

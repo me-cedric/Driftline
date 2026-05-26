@@ -1,6 +1,6 @@
 # Native Swift SFTP Plan
 
-This plan replaces the guarded `NativeSFTPClient` placeholder with a production Swift implementation built on Apple SwiftNIO SSH.
+This plan tracks the native Swift SFTP implementation built on Apple SwiftNIO SSH.
 
 ## Goals
 
@@ -23,7 +23,7 @@ This plan replaces the guarded `NativeSFTPClient` placeholder with a production 
 
 - System SSH backend is functional for private-key/agent SFTP flows.
 - Docker SFTP integration harness is available.
-- `NativeSFTPClient` currently retrieves credentials and then returns `nativeBackendUnavailable`.
+- `NativeSFTPClient` now performs native SSH/SFTP connect, browse, file operations, and transfers for supported auth methods.
 - `swift-nio-ssh` is pinned in `Package.swift`.
 
 ## Implementation Status
@@ -52,16 +52,19 @@ Implemented:
 - Docker SFTP password-auth validation for the native Swift backend.
 - Native private-key parsing/signing for:
   - unencrypted OpenSSH Ed25519 keys;
+  - passphrase-protected OpenSSH Ed25519 keys using OpenSSH `bcrypt` KDF containers;
   - ECDSA P-256/P-384/P-521 PEM keys.
 - Native upload/download transfer engine for files.
+- Native recursive folder upload/download.
+- Native recursive remote folder delete.
 - Progress reporting with bytes-per-second estimates.
 - Cancellation checks that close native channels and handles.
+- Large-file Docker integration coverage.
+- A native SSH agent protocol client for agent discovery, identity listing, and sign requests.
 
 Not implemented yet:
 
-- Native SSH agent auth.
-- Passphrase-protected OpenSSH private keys.
-- Native folder-recursive upload/download.
+- Native SSH agent auth in SwiftNIO SSH user authentication, blocked on a custom signer hook or upstream support.
 - Rich estimated-time-remaining display.
 - Persistent native connection reuse across app launches.
 

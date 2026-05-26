@@ -18,7 +18,7 @@ func printHelp() {
 
     Notes:
       Secrets are never accepted as CLI arguments.
-      App launching is scaffolded for the SwiftPM build; future releases install a signed helper.
+      The CLI records a local open request and launches Driftline.app when installed or built.
     """)
 }
 

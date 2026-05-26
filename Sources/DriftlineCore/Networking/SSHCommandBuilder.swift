@@ -1,7 +1,19 @@
 import Foundation
 
+public struct JumpHost: Equatable, Sendable {
+    public var host: String
+    public var port: Int
+    public var username: String?
+
+    public init(host: String, port: Int = 22, username: String? = nil) {
+        self.host = host
+        self.port = port
+        self.username = username
+    }
+}
+
 public enum SSHCommandBuilder {
-    public static func baseArguments(for profile: ServerProfile, batchMode: Bool = true, knownHostsURL: URL? = DriftlineStoragePaths.knownHostsURL) throws -> [String] {
+    public static func baseArguments(for profile: ServerProfile, batchMode: Bool = true, knownHostsURL: URL? = DriftlineStoragePaths.knownHostsURL, jumpHosts: [JumpHost] = []) throws -> [String] {
         guard profile.protocolKind == .sftp else {
             throw RemoteClientError.unsupportedProtocol(profile.protocolKind)
         }
@@ -22,7 +34,20 @@ public enum SSHCommandBuilder {
         if case .privateKey(let path, _) = profile.authenticationMethod {
             arguments.append(contentsOf: ["-i", NSString(string: path).expandingTildeInPath])
         }
+        if !jumpHosts.isEmpty {
+            arguments.append(contentsOf: ["-o", "ProxyJump=\(jumpProxyValue(for: jumpHosts))"])
+        }
         return arguments
+    }
+
+    public static func jumpProxyValue(for jumpHosts: [JumpHost]) -> String {
+        jumpHosts.map { jump in
+            let hostPort = "\(jump.host):\(jump.port)"
+            if let username = jump.username {
+                return "\(username)@\(hostPort)"
+            }
+            return hostPort
+        }.joined(separator: ",")
     }
 
     public static func remoteListArguments(for profile: ServerProfile, path: String) throws -> [String] {

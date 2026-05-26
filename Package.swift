@@ -37,7 +37,10 @@ let package = Package(
         ),
         .testTarget(
             name: "DriftlineCoreTests",
-            dependencies: ["DriftlineCore"]
+            dependencies: [
+                "DriftlineCore",
+                .product(name: "Crypto", package: "swift-crypto")
+            ]
         )
     ]
 )

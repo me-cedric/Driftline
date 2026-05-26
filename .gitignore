@@ -1,0 +1,10 @@
+.build/
+DerivedData/
+dist/
+*.xcodeproj
+*.xcworkspace
+.DS_Store
+*.dmg
+*.xcresult
+.integration/
+assets/*.iconset/

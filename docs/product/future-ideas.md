@@ -1,0 +1,25 @@
+# Future Ideas
+
+- Visual connection health indicator.
+- Command palette.
+- Favorite path pairs.
+- Saved workspace layouts.
+- Transfer presets.
+- One-click upload current file.
+- File conflict resolver.
+- Local/remote diff preview.
+- Resumable transfers.
+- Checksum comparison.
+- Bandwidth limiter.
+- Scheduled sync and dry-run preview.
+- Drag and drop upload/download.
+- Global quick connect hotkey.
+- Recent transfer replay.
+- Touch ID secure vault unlock.
+- Encrypted export/import.
+- Per-bookmark color icons.
+- Workspace profiles.
+- Raycast quick connect.
+- Menu bar quick transfer.
+- Desktop widget stats.
+- Shortcuts actions.

@@ -6,6 +6,8 @@
 [![macOS](https://img.shields.io/badge/macOS-14%2B-blue.svg)](https://developer.apple.com/macos/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![CI](https://github.com/me-cedric/Driftline/actions/workflows/ci.yml/badge.svg)](https://github.com/me-cedric/Driftline/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/me-cedric/Driftline?label=Latest%20Release)](https://github.com/me-cedric/Driftline/releases)
+[![Last Commit](https://img.shields.io/github/last-commit/me-cedric/Driftline)](https://github.com/me-cedric/Driftline/commits/main)
 
 Driftline is a modern macOS file transfer client inspired by Finder, FileZilla's practical dual-pane workflow, and polished native Mac tools. It is designed around SFTP first, with protocol adapters for FTP, FTPS, WebDAV, S3, SMB, SCP, and other backends.
 
@@ -64,7 +66,7 @@ Requirements:
 - Swift 5.10 or newer
 
 ```bash
-git clone https://github.com/OWNER/Driftline.git
+git clone https://github.com/me-cedric/Driftline.git
 cd Driftline
 ./scripts/bootstrap.sh
 swift build
@@ -135,7 +137,7 @@ See [ROADMAP.md](ROADMAP.md).
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=OWNER/Driftline&type=Date)](https://star-history.com/#OWNER/Driftline&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=me-cedric/Driftline&type=Date)](https://star-history.com/#me-cedric/Driftline&Date)
 
 ## License
 

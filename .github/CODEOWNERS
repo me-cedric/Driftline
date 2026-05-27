@@ -1,0 +1,19 @@
+# Each line is a file pattern followed by one or more owners.
+
+# Default owner for everything in the repo
+* @me-cedric
+
+# GitHub Actions workflows
+.github/ @me-cedric
+
+# Swift source code
+Sources/ @me-cedric
+Tests/ @me-cedric
+
+# Documentation
+docs/ @me-cedric
+*.md @me-cedric
+
+# Configuration
+Package.swift @me-cedric
+Makefile @me-cedric

@@ -17,7 +17,15 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+      - name: Select Xcode (Swift 6.x)
+        run: |
+          latest=$(ls /Applications | grep -E 'Xcode_[0-9]+\.[0-9]+\.app' | sort -V | tail -1)
+          if [ -n "$latest" ]; then
+            sudo xcode-select -s "/Applications/$latest"
+          fi
+          swift --version
       - uses: github/codeql-action/init@v3
         with:
           languages: swift
+      - uses: github/codeql-action/autobuild@v3
       - uses: github/codeql-action/analyze@v3

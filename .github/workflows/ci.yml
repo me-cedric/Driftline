@@ -14,11 +14,13 @@ jobs:
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
-      - name: Setup Swift
-        uses: swift-actions/setup-swift@v3
-        with:
-          swift-version: "6.1"
-          skip-verify-gpg: true
+      - name: Select Xcode (Swift 6.x)
+        run: |
+          latest=$(ls /Applications | grep -E 'Xcode_[0-9]+\.[0-9]+\.app' | sort -V | tail -1)
+          if [ -n "$latest" ]; then
+            sudo xcode-select -s "/Applications/$latest"
+          fi
+          swift --version
       - name: Cache SwiftPM dependencies
         uses: actions/cache@v4
         with:

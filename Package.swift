@@ -14,7 +14,8 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-crypto.git", exact: "3.15.1"),
-        .package(url: "https://github.com/apple/swift-nio.git", exact: "2.100.0"),
+        .package(url: "https://github.com/apple/swift-nio.git", "2.80.0"..<"2.100.0"),
+        .package(url: "https://github.com/apple/swift-asn1.git", exact: "1.6.0"),
         .package(url: "https://github.com/apple/swift-nio-ssh.git", exact: "0.11.0"),
         .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", exact: "0.63.2"),
         .package(url: "https://github.com/nicklockwood/SwiftFormat", exact: "0.61.1")

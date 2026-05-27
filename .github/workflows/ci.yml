@@ -31,3 +31,5 @@ jobs:
         run: ./scripts/lint.sh
       - name: Test
         run: swift test
+      - name: UI Smoke Test
+        run: ./scripts/ui-smoke.sh

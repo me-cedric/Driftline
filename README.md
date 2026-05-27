@@ -1,69 +1,219 @@
-# Driftline
+<div align="center">
+<br />
+<img src="assets/banner.svg" width="100%" alt="Driftline banner" />
+<br /><br />
+<p align="center">
+<a href="#-overview">Overview</a> •
+<a href="#-features">Features</a> •
+<a href="#-architecture">Architecture</a> •
+<a href="#-quick-start">Quick Start</a> •
+<a href="#-cli">CLI</a> •
+<a href="#-security">Security</a> •
+<a href="#-testing">Testing</a> •
+<a href="#-roadmap">Roadmap</a>
+</p>
+<p align="center">
+<a href="https://github.com/me-cedric/Driftline/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/me-cedric/Driftline/ci.yml?branch=main&label=CI&logo=github&style=flat" alt="CI Status" /></a>
+<a href="https://github.com/me-cedric/Driftline/releases/latest"><img src="https://img.shields.io/github/v/release/me-cedric/Driftline?display_name=tag&label=Release&logo=github&style=flat" alt="Latest Release" /></a>
+<a href="LICENSE"><img src="https://img.shields.io/github/license/me-cedric/Driftline?label=License&style=flat" alt="MIT License" /></a>
+<a href="https://swift.org"><img src="https://img.shields.io/badge/Swift-5.10-orange?logo=swift&style=flat" alt="Swift 5.10" /></a>
+<a href="https://developer.apple.com/macos/"><img src="https://img.shields.io/badge/macOS-14%2B-blue?logo=apple&style=flat" alt="macOS 14+" /></a>
+<a href="https://github.com/me-cedric/Driftline/stargazers"><img src="https://img.shields.io/github/stars/me-cedric/Driftline?style=flat&label=Stars&logo=github" alt="Stars" /></a>
+<img src="https://img.shields.io/badge/platform-macOS-lightgrey?style=flat" alt="Platform" />
+</p>
+<br />
+</div>
 
-> Native file transfer, calmly secure.
+Driftline is a modern macOS file transfer client inspired by Finder, FileZilla's practical dual-pane workflow, and polished native Mac tools. It's designed around SFTP first, with protocol adapters for FTP, FTPS, WebDAV, S3, SMB, SCP, and other backends.
 
-[![Swift](https://img.shields.io/badge/Swift-5.10-orange.svg)](https://swift.org)
-[![macOS](https://img.shields.io/badge/macOS-14%2B-blue.svg)](https://developer.apple.com/macos/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![CI](https://github.com/me-cedric/Driftline/actions/workflows/ci.yml/badge.svg)](https://github.com/me-cedric/Driftline/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/me-cedric/Driftline?label=Latest%20Release)](https://github.com/me-cedric/Driftline/releases)
-[![Last Commit](https://img.shields.io/github/last-commit/me-cedric/Driftline)](https://github.com/me-cedric/Driftline/commits/main)
+---
 
-Driftline is a modern macOS file transfer client inspired by Finder, FileZilla's practical dual-pane workflow, and polished native Mac tools. It is designed around SFTP first, with protocol adapters for FTP, FTPS, WebDAV, S3, SMB, SCP, and other backends.
+## 📑 Table of Contents
 
-![Driftline banner](assets/banner.svg)
+- [✨ Overview](#-overview)
+- [🚀 Features](#-features)
+  - [Secure Server Management](#secure-server-management)
+  - [Dual-Pane File Browser](#dual-pane-file-browser)
+  - [Transfer Engine](#transfer-engine)
+  - [Native Swift SFTP](#native-swift-sftp)
+  - [macOS Integration](#macos-integration)
+- [🏗️ Architecture](#-architecture)
+  - [Project Structure](#project-structure)
+  - [Protocol Adapters](#protocol-adapters)
+- [🏁 Quick Start](#-quick-start)
+  - [Requirements](#requirements)
+  - [Build & Run](#build--run)
+- [💻 CLI](#-cli)
+- [🔒 Security](#-security)
+- [🧪 Testing](#-testing)
+  - [Unit Tests](#unit-tests)
+  - [SFTP Integration Tests](#sftp-integration-tests)
+  - [Code Quality](#code-quality)
+- [🗺️ Roadmap](#-roadmap)
+- [⭐ Star History](#-star-history)
+- [📄 License](#-license)
+- [🙏 Acknowledgements](#-acknowledgements)
 
-![Driftline icon](assets/app-icon-1024.png)
+---
 
-## Current Status
+## ✨ Overview
 
-Driftline is in early implementation. This repository contains the production architecture, SwiftUI app shell, secure domain model, Keychain abstraction, JSON persistence for non-secret app data, local and remote browsing, native Swift SFTP for password and supported private-key profiles, rsync-over-SSH transfers with SCP fallback, host trust prompts, terminal integration, CLI launch handoff, documentation, tests, and release scaffolding. System SSH remains the default stable backend; the native Swift backend is available from Settings and is covered by Docker integration tests for connect, list, remote operations, upload, download, recursive folder transfer, cancellation, and large-file round-trips.
+Driftline solves a common problem for developers and sysadmins: file transfers over SSH/SFTP are typically handled by CLI tools (`scp`, `rsync`, `sftp`) or cross-platform GUI tools that feel foreign on macOS. Neither option integrates well with the Mac ecosystem.
 
-## Features
+- **Native** — Built with SwiftUI, feels like a first-class Mac app
+- **Secure** — Keychain-first credential storage, host fingerprint verification, password-safe terminal integration
+- **Dual backends** — System SSH for proven reliability, native Swift SFTP for password and key-based auth
+- **Extensible** — Protocol adapter architecture for future backends (FTP, WebDAV, S3, etc.)
 
-- Native SwiftUI macOS shell with sidebar, toolbar, tabs, dual-pane browser, inspector, and transfer panel.
-- First-run state is empty and user-driven; no fake example server or fake transfer queue is seeded.
-- Secure server profile model with protocols, bookmarks, favorites, groups, notes, and tags.
-- Saved server UI for create, edit, duplicate, and delete.
-- Keychain-first credential storage abstraction; no plain-text password persistence.
-- Server editor supports Keychain password/passphrase entry and private key file picking.
-- Host trust record model for first-use fingerprint trust and change warnings.
-- Explicit host fingerprint prompt before first SFTP connection; changed fingerprints are blocked.
-- Driftline-managed `known_hosts` file with strict host checking for SSH/SCP.
-- Durable JSON repositories for profiles, host trust records, transfer history, and preferences.
-- Local file listing with sorting, hidden file filtering, and Finder-style metadata.
-- SFTP remote listing through system SSH for SSH agent/private-key profiles.
-- Native Swift SFTP backend for password auth, unencrypted OpenSSH Ed25519 keys, passphrase-protected OpenSSH Ed25519 keys, and ECDSA PEM keys.
-- Native Swift SFTP upload/download for files and folders with progress and cancellation hooks.
-- Upload/download execution through system `rsync` over SSH for SSH agent/private-key profiles, with live progress parsing.
-- SCP transfer backend remains available as a simpler fallback implementation.
-- Local and remote folder navigation with parent/refresh actions.
-- Local and remote create folder, rename, and delete actions.
-- Transfer conflicts support skip, overwrite, or rename before upload/download.
-- Open SSH sessions in Terminal.app without exposing passwords.
-- Per-tab browsing context for local/remote paths and listings.
-- Bookmarks, favorites, and recent server access in the sidebar.
-- Advanced view options popover for sorting, hidden files, and panel visibility.
-- Transfer job and stats models for uploads, downloads, queue states, retries, cancellation, and history.
-- Terminal command generation that never places passwords in CLI arguments.
-- CLI scaffold: `driftline .`, `--help`, `--version`, `--open`, `--bookmark`, `--new-tab`.
-- Documentation-first open-source structure with security, architecture, UX, testing, release, and roadmap docs.
+> **Status**: Active development. SFTP transfers are functional through both System SSH and native Swift backends. APIs and storage format may change before v1.0.
 
-## Supported Protocols
+---
 
-| Protocol | Status |
-| --- | --- |
-| SFTP | Functional through System SSH for agent/private-key workflows and through native Swift SSH/SFTP for password and unencrypted Ed25519 private-key workflows |
-| FTP | Adapter planned, intentionally unsupported in code until secure behavior is implemented |
-| FTPS | Adapter planned, intentionally unsupported in code until certificate and trust handling are implemented |
+## 🚀 Features
 
-## Build From Source
+### Secure Server Management
 
-Requirements:
+| Feature | Description |
+|---------|-------------|
+| **Keychain-first credentials** | Passwords and passphrases stored in macOS Keychain, never in plain text |
+| **Host fingerprint trust** | First-use fingerprint prompt; changed fingerprints are blocked |
+| **Known hosts** | Driftline-managed `known_hosts` file with strict host checking for SSH/SCP |
+| **Profile model** | Protocols, bookmarks, favorites, groups, notes, tags — full CRUD |
+| **Private key support** | Key file picking, passphrase entry, ECDSA PEM and Ed25519 support |
+
+### Dual-Pane File Browser
+
+| Feature | Description |
+|---------|-------------|
+| **Local browsing** | File listing with sorting, hidden file filtering, Finder-style metadata |
+| **Remote browsing** | SFTP directory listing through System SSH or native Swift SFTP |
+| **Folder operations** | Create, rename, delete — local and remote |
+| **Per-tab state** | Independent local/remote paths and listings per tab |
+| **View options** | Sort order, hidden files toggle, panel visibility popover |
+
+### Transfer Engine
+
+| Feature | Description |
+|---------|-------------|
+| **System SSH transfers** | `rsync` over SSH with live progress parsing (default backend) |
+| **Native Swift SFTP** | Password and Ed25519 private-key auth, progress hooks, cancellation |
+| **SCP fallback** | Simpler fallback transfer backend |
+| **Recursive transfers** | Full folder upload/download with progress |
+| **Conflict handling** | Skip, overwrite, or rename before transfer |
+| **Transfer history** | Persistent job records with retry, cancellation, and stats |
+
+### Native Swift SFTP
+
+An in-process SSH/SFTP implementation built on SwiftNIO SSH:
+
+| Capability | Status |
+|------------|--------|
+| Password authentication | ✅ Tested |
+| Unencrypted Ed25519 keys | ✅ Tested |
+| Passphrase-protected Ed25519 keys | ✅ Tested |
+| ECDSA PEM keys | ✅ Tested |
+| Upload/download (files & folders) | ✅ Tested |
+| Cancellation | ✅ Tested |
+| Large-file round-trips | ✅ Tested |
+| SSH agent signing | ⏳ On System SSH only (SwiftNIO SSH 0.11.0 limitation) |
+
+### macOS Integration
+
+| Feature | Description |
+|---------|-------------|
+| **SwiftUI shell** | Sidebar, toolbar, tabs, dual-pane browser, inspector, transfer panel |
+| **Terminal integration** | Open SSH sessions in Terminal.app without exposing passwords |
+| **CLI launch** | `driftline .`, `--open`, `--bookmark`, `--new-tab` — zero-password CLI |
+| **Bookmarks & favorites** | Quick access sidebar with recent servers |
+| **Empty-first state** | No fake example servers or seeded transfer queues |
+
+---
+
+## 🏗️ Architecture
+
+```
+┌───────────────────────────────────────────────────────────┐
+│                   Driftline (SwiftUI App)                  │
+│   Features: FileBrowser │ Transfers │ Settings │ About   │
+└──────────────┬────────────────────────────────────────────┘
+               │
+┌──────────────▼────────────────────────────────────────────┐
+│                    DriftlineCore                           │
+│                                                           │
+│  ┌─────────────┐  ┌─────────────────────────────────┐    │
+│  │ Security    │  │ Networking                       │    │
+│  │ Credential  │  │ ┌─────────┐ ┌───────────────┐   │    │
+│  │  Store      │  │ │ System  │ │ Native Swift  │   │    │
+│  │ HostTrust   │  │ │ SSH/SFTP│ │ SFTP (NIO)    │   │    │
+│  │ Encrypted   │  │ │ Rsync   │ │ SCP           │   │    │
+│  │  Export     │  │ └─────────┘ └───────────────┘   │    │
+│  └─────────────┘  └─────────────────────────────────┘    │
+│                                                           │
+│  ┌─────────────┐  ┌──────────────┐  ┌──────────────┐    │
+│  │ Domain      │  │ Persistence  │  │ Terminal     │    │
+│  │ Server      │  │ JSONFileStore│  │ Command Gen  │    │
+│  │  Profiles   │  │ Repositories │  │ Launcher     │    │
+│  │ Transfers   │  │              │  │              │    │
+│  │ Connections │  │              │  │              │    │
+│  └─────────────┘  └──────────────┘  └──────────────┘    │
+│                                                           │
+│  ┌──────────────────────────────────────────────────┐    │
+│  │ Logging (Redactor)                               │    │
+│  └──────────────────────────────────────────────────┘    │
+└──────────────┬────────────────────────────────────────────┘
+               │
+┌──────────────▼────────────────────────────────────────────┐
+│                   driftline (CLI)                          │
+│            Launch app, open tabs, bookmarks                │
+└───────────────────────────────────────────────────────────┘
+```
+
+### Project Structure
+
+```
+Driftline/
+├── Sources/
+│   ├── DriftlineApp/          # SwiftUI macOS application shell
+│   │   ├── App/               # App entry, content view, commands
+│   │   ├── Core/              # Design system components
+│   │   └── Features/          # FileBrowser, Transfers, Connections, Settings
+│   ├── DriftlineCore/         # UI-free domain, security, networking
+│   │   ├── Domain/            # ServerProfile, Transfer, FileItem, Connection
+│   │   ├── Security/          # CredentialStore, HostTrust, EncryptedProfile
+│   │   ├── Networking/        # System SSH, Native SFTP, SCP
+│   │   │   └── NativeSFTP/    # SwiftNIO SSH/SFTP implementation
+│   │   ├── Persistence/       # JSONFileStore, Repositories
+│   │   ├── Terminal/          # Command generation, Terminal.app launch
+│   │   ├── Logging/           # Redaction utilities
+│   │   └── Utilities/         # StreamingProcess, CLIRequest, ViewPreferences
+│   └── driftline/             # CLI entry point
+├── Tests/
+│   └── DriftlineCoreTests/    # Unit + integration tests (20+ test files)
+├── docs/                      # Architecture, security, UX, testing docs
+├── scripts/                   # Build, test, lint, release, packaging scripts
+└── assets/                    # Icons, banners
+```
+
+### Protocol Adapters
+
+| Backend | Auth Methods | Status |
+|---------|-------------|--------|
+| **System SSH** | SSH agent, private key | ✅ Production default |
+| **Native Swift SFTP** | Password, Ed25519 (plain & passphrase), ECDSA PEM | ✅ Tested, opt-in |
+| **SCP** | SSH agent, private key | ✅ Fallback |
+| **FTP / FTPS** | — | 🚧 Adapter planned |
+
+---
+
+## 🏁 Quick Start
+
+### Requirements
 
 - macOS 14 or newer
 - Xcode 15 or newer
 - Swift 5.10 or newer
+
+### Build & Run
 
 ```bash
 git clone https://github.com/me-cedric/Driftline.git
@@ -76,7 +226,9 @@ swift test
 ./scripts/package-dmg.sh
 ```
 
-## CLI
+---
+
+## 💻 CLI
 
 ```bash
 driftline .
@@ -88,36 +240,41 @@ driftline --version
 
 Driftline never accepts passwords, passphrases, tokens, or private key material as CLI arguments.
 
-## Security First
+---
+
+## 🔒 Security
 
 Driftline treats credentials, host trust, logs, and terminal integration as security-sensitive surfaces.
 
-- Credentials belong in macOS Keychain.
-- Logs pass through redaction utilities.
-- Host fingerprints must be explicitly trusted on first use.
-- Changed host fingerprints are blocking security warnings.
-- Terminal commands never embed passwords.
-- Password auth is stored as a Keychain reference. System SSH execution requires agent/private-key auth to avoid unsafe password exposure; native Swift SFTP retrieves passwords from `CredentialStore` and never places them in process arguments.
-- Native private-key auth supports unencrypted and passphrase-protected OpenSSH Ed25519 keys plus ECDSA PEM keys. SSH agent signing remains on the System SSH backend because SwiftNIO SSH 0.11.0 does not expose an agent-backed signer hook.
-- Telemetry is absent by default. Any future telemetry must be opt-in.
+| Principle | Implementation |
+|-----------|---------------|
+| **No plain-text secrets** | Credentials live in macOS Keychain, never in JSON, logs, or config files |
+| **Trust on first use** | Host fingerprints must be explicitly trusted before the first connection |
+| **Changed fingerprints blocked** | SSH host key mismatch is a blocking security warning requiring manual review |
+| **Password-safe terminal** | Terminal commands never embed passwords; System SSH uses agent/private-key auth |
+| **Redacted logging** | All logs pass through `Redactor` before output |
+| **Opt-in telemetry** | Absent by default; any future telemetry must be opt-in |
+| **Native credential isolation** | Native Swift SFTP retrieves passwords from `CredentialStore`, never from process arguments |
 
 Read [SECURITY.md](SECURITY.md), [docs/security/threat-model.md](docs/security/threat-model.md), and [docs/security/keychain-and-credentials.md](docs/security/keychain-and-credentials.md).
 
-## Architecture
+---
 
-Driftline is package-first and split into:
+## 🧪 Testing
 
-- `DriftlineCore`: domain models, security, persistence protocols, protocol adapters, terminal command generation, testable utilities.
-- `Driftline`: SwiftUI macOS application shell.
-- `driftline`: command-line entry point.
-
-Read [ARCHITECTURE.md](ARCHITECTURE.md) and [docs/architecture/architecture-overview.md](docs/architecture/architecture-overview.md).
-
-## Testing
+### Unit Tests
 
 ```bash
 swift test
+```
+
+### SFTP Integration Tests
+
+Requires the Docker SFTP test server:
+
+```bash
 DRIFTLINE_TEST_PASSWORD='driftline-test-password' ./scripts/integration-sftp-server.sh start
+
 DRIFTLINE_INTEGRATION_SFTP=1 DRIFTLINE_NATIVE_INTEGRATION_SFTP=1 \
   DRIFTLINE_TEST_HOST=127.0.0.1 \
   DRIFTLINE_TEST_PORT=22222 \
@@ -127,22 +284,44 @@ DRIFTLINE_INTEGRATION_SFTP=1 DRIFTLINE_NATIVE_INTEGRATION_SFTP=1 \
   swift test
 ```
 
-Current validation is SwiftPM-first. The Docker-gated SFTP tests cover System SSH, native password auth, native private-key auth, native upload/download, recursive folder transfers, cancellation, and large-file round-trips.
+Test coverage includes System SSH transfers, native password auth, native private-key auth, native upload/download, recursive folder transfers, cancellation, and large-file round-trips.
 
-## Roadmap
+### Code Quality
 
-The first milestone is a hardened SFTP MVP: complete manual accessibility/security QA, keep hardening native transfer edge cases against more real servers, and complete signed/notarized release credentials. Future ideas include Raycast, Shortcuts, Finder extension, menu bar monitor, WebDAV, S3, SMB, SCP, encrypted import/export, Touch ID unlock, and Sparkle updates.
+```bash
+./scripts/lint.sh          # SwiftLint + SwiftFormat
+./scripts/release-check.sh # Release readiness validation
+```
 
-See [ROADMAP.md](ROADMAP.md).
+---
 
-## Star History
+## 🗺️ Roadmap
+
+**Milestone 1 — Hardened SFTP MVP** (current):
+- Complete manual accessibility and security QA
+- Harden native transfer edge cases against real-world servers
+- Signed and notarized release credentials
+
+**Future**:
+- Raycast extension, Shortcuts integration, Finder extension
+- Menu bar transfer monitor
+- WebDAV, S3, SMB, SCP adapters
+- Encrypted profile import/export
+- Touch ID credential unlock
+- Sparkle automatic updates
+
+See [ROADMAP.md](ROADMAP.md) for details.
+
+---
+
+## ⭐ Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=me-cedric/Driftline&type=Date)](https://star-history.com/#me-cedric/Driftline&Date)
 
-## License
+## 📄 License
 
 MIT. See [LICENSE](LICENSE).
 
-## Acknowledgements
+## 🙏 Acknowledgements
 
 Driftline takes inspiration from the practical transfer workflows of classic FTP/SFTP clients and the calmer interaction patterns of native macOS tools.

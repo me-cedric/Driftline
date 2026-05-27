@@ -62,18 +62,18 @@ public struct TransferJob: Identifiable, Codable, Sendable {
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        id = try c.decode(TransferJobID.self, forKey: .id)
-        direction = try c.decode(TransferDirection.self, forKey: .direction)
-        sourcePath = try c.decode(String.self, forKey: .sourcePath)
-        destinationPath = try c.decode(String.self, forKey: .destinationPath)
-        byteCount = try c.decodeIfPresent(Int64.self, forKey: .byteCount)
-        isFolder = try c.decodeIfPresent(Bool.self, forKey: .isFolder) ?? false
-        status = try c.decode(TransferStatus.self, forKey: .status)
-        serverName = try c.decodeIfPresent(String.self, forKey: .serverName)
-        protocolKind = try c.decodeIfPresent(TransferProtocolKind.self, forKey: .protocolKind)
-        createdAt = try c.decode(Date.self, forKey: .createdAt)
-        startedAt = try c.decodeIfPresent(Date.self, forKey: .startedAt)
-        finishedAt = try c.decodeIfPresent(Date.self, forKey: .finishedAt)
+        self.id = try c.decode(TransferJobID.self, forKey: .id)
+        self.direction = try c.decode(TransferDirection.self, forKey: .direction)
+        self.sourcePath = try c.decode(String.self, forKey: .sourcePath)
+        self.destinationPath = try c.decode(String.self, forKey: .destinationPath)
+        self.byteCount = try c.decodeIfPresent(Int64.self, forKey: .byteCount)
+        self.isFolder = try c.decodeIfPresent(Bool.self, forKey: .isFolder) ?? false
+        self.status = try c.decode(TransferStatus.self, forKey: .status)
+        self.serverName = try c.decodeIfPresent(String.self, forKey: .serverName)
+        self.protocolKind = try c.decodeIfPresent(TransferProtocolKind.self, forKey: .protocolKind)
+        self.createdAt = try c.decode(Date.self, forKey: .createdAt)
+        self.startedAt = try c.decodeIfPresent(Date.self, forKey: .startedAt)
+        self.finishedAt = try c.decodeIfPresent(Date.self, forKey: .finishedAt)
     }
 }
 

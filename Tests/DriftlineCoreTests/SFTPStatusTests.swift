@@ -1,5 +1,5 @@
-import XCTest
 @testable import DriftlineCore
+import XCTest
 
 final class SFTPStatusTests: XCTestCase {
     func testStatusParserMapsPermissionDenied() throws {
@@ -19,4 +19,3 @@ final class SFTPStatusTests: XCTestCase {
         XCTAssertNil(SFTPStatus(code: .ok).remoteError())
     }
 }
-

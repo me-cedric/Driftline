@@ -1,9 +1,9 @@
-import XCTest
 @testable import DriftlineCore
+import XCTest
 
 final class PersistenceTests: XCTestCase {
     func testJSONServerProfileRepositoryRoundTripsAndDeletesProfiles() async throws {
-        let url = temporaryFileURL("profiles.json")
+        let url = self.temporaryFileURL("profiles.json")
         let repository = JSONServerProfileRepository(url: url)
         let profile = ServerProfile(
             displayName: "Production",
@@ -28,7 +28,7 @@ final class PersistenceTests: XCTestCase {
     }
 
     func testJSONViewPreferencesRepositoryRoundTripsPreferences() async throws {
-        let url = temporaryFileURL("preferences.json")
+        let url = self.temporaryFileURL("preferences.json")
         let repository = JSONViewPreferencesRepository(url: url)
         let preferences = ViewPreferences(
             fileList: FileListPreferences(showHiddenFiles: true, showFileExtensions: false, sortKey: .modifiedAt, sortAscending: false, foldersFirst: false),
@@ -73,7 +73,7 @@ final class PersistenceTests: XCTestCase {
     }
 
     func testJSONTransferHistoryRepositoryAppendsListsAndClears() async throws {
-        let url = temporaryFileURL("history.json")
+        let url = self.temporaryFileURL("history.json")
         let repository = JSONTransferHistoryRepository(url: url)
         let failed = TransferJob(direction: .upload, sourcePath: "/a", destinationPath: "/b", status: .failed(message: "Nope"))
         let succeeded = TransferJob(direction: .download, sourcePath: "/c", destinationPath: "/d", status: .succeeded)
@@ -96,7 +96,7 @@ final class PersistenceTests: XCTestCase {
     }
 
     func testBookmarkRepositoryRoundTripsAndDeletesBookmarks() async throws {
-        let url = temporaryFileURL("bookmarks.json")
+        let url = self.temporaryFileURL("bookmarks.json")
         let repository = JSONServerBookmarkRepository(url: url)
         let profileID = ServerProfileID()
         let bookmark = ServerBookmark(profileID: profileID, name: "Web Root", localPath: "/Users/me/Sites", remotePath: "/var/www")
@@ -114,7 +114,7 @@ final class PersistenceTests: XCTestCase {
     }
 
     func testRecentRepositoryKeepsMostRecentPerProfileAndLimit() async throws {
-        let url = temporaryFileURL("recents.json")
+        let url = self.temporaryFileURL("recents.json")
         let repository = JSONRecentServerRepository(url: url)
         let first = ServerProfileID()
         let second = ServerProfileID()
@@ -131,7 +131,7 @@ final class PersistenceTests: XCTestCase {
     }
 
     func testJSONHostTrustStoreDetectsUnknownTrustedAndChangedFingerprints() async throws {
-        let url = temporaryFileURL("host-trust.json")
+        let url = self.temporaryFileURL("host-trust.json")
         let store = JSONHostTrustStore(url: url)
 
         let unknown = try await store.verificationResult(host: "example.com", port: 22, algorithm: "SHA256", fingerprint: "aaa")

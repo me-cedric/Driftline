@@ -1,6 +1,6 @@
-import XCTest
 import Crypto
 @testable import DriftlineCore
+import XCTest
 
 final class SFTPIntegrationTests: XCTestCase {
     func testRealSFTPListCreateRenameDeleteWhenHarnessEnabled() async throws {
@@ -29,7 +29,7 @@ final class SFTPIntegrationTests: XCTestCase {
         do {
             _ = try await firstClient.connect(to: profile)
             XCTFail("Expected first connection to require trust")
-        } catch RemoteClientError.hostNotTrusted(let host, let port, let algorithm, let fingerprint, let knownHostsLine) {
+        } catch let RemoteClientError.hostNotTrusted(host, port, algorithm, fingerprint, knownHostsLine) {
             try await trustStore.trust(HostTrustRecord(host: host, port: port, algorithm: algorithm, fingerprint: fingerprint, knownHostsLine: knownHostsLine))
             try await ManagedKnownHostsFile().trust(HostTrustRecord(host: host, port: port, algorithm: algorithm, fingerprint: fingerprint, knownHostsLine: knownHostsLine))
         }
@@ -81,7 +81,7 @@ final class SFTPIntegrationTests: XCTestCase {
         do {
             _ = try await client.connect(to: profile)
             XCTFail("Expected first native connection to require explicit host trust.")
-        } catch RemoteClientError.hostNotTrusted(let host, let port, let algorithm, let fingerprint, let knownHostsLine) {
+        } catch let RemoteClientError.hostNotTrusted(host, port, algorithm, fingerprint, knownHostsLine) {
             try await trustStore.trust(HostTrustRecord(host: host, port: port, algorithm: algorithm, fingerprint: fingerprint, knownHostsLine: knownHostsLine))
         }
 
@@ -176,7 +176,7 @@ final class SFTPIntegrationTests: XCTestCase {
         let upload = TransferJob(direction: .upload, sourcePath: uploadURL.path, destinationPath: remotePath, byteCount: Int64(body.utf8.count), serverName: profile.displayName, protocolKind: .sftp)
         let progressRecorder = TransferProgressRecorder()
         try await transferClient.enqueue(upload, profile: profile) { updated in
-            if case .running(let progress, _) = updated.status {
+            if case let .running(progress, _) = updated.status {
                 await progressRecorder.append(progress)
             }
         }
@@ -272,7 +272,7 @@ final class SFTPIntegrationTests: XCTestCase {
         let fileSize = 50 * 1024 * 1024
         let uploadURL = temp.appendingPathComponent("large-upload.bin")
         let downloadURL = temp.appendingPathComponent("large-download.bin")
-        let randomData = Data((0..<fileSize).map { _ in UInt8.random(in: 0...255) })
+        let randomData = Data((0 ..< fileSize).map { _ in UInt8.random(in: 0 ... 255) })
         try randomData.write(to: uploadURL)
 
         let remotePath = "/config/driftline-large-\(UUID().uuidString).bin"
@@ -299,9 +299,9 @@ final class SFTPIntegrationTests: XCTestCase {
         )
         try await transferClient.enqueue(download, profile: profile)
 
-        let originalHash = sha256(of: randomData)
+        let originalHash = self.sha256(of: randomData)
         let downloadedData = try Data(contentsOf: downloadURL)
-        let downloadedHash = sha256(of: downloadedData)
+        let downloadedHash = self.sha256(of: downloadedData)
         XCTAssertEqual(originalHash, downloadedHash, "Downloaded file content must match uploaded file")
 
         let cleanupClient = NativeSFTPClient(credentialStore: credentials, hostTrustStore: trustStore)
@@ -344,7 +344,7 @@ final class SFTPIntegrationTests: XCTestCase {
         let fileSize = 20 * 1024 * 1024
         let uploadURL = temp.appendingPathComponent("native-large-upload.bin")
         let downloadURL = temp.appendingPathComponent("native-large-download.bin")
-        let randomData = Data((0..<fileSize).map { _ in UInt8.random(in: 0...255) })
+        let randomData = Data((0 ..< fileSize).map { _ in UInt8.random(in: 0 ... 255) })
         try randomData.write(to: uploadURL)
 
         let remotePath = "/config/driftline-native-large-\(UUID().uuidString).bin"
@@ -370,9 +370,9 @@ final class SFTPIntegrationTests: XCTestCase {
         )
         try await transferClient.enqueue(download, profile: profile)
 
-        let originalHash = sha256(of: randomData)
+        let originalHash = self.sha256(of: randomData)
         let downloadedData = try Data(contentsOf: downloadURL)
-        let downloadedHash = sha256(of: downloadedData)
+        let downloadedHash = self.sha256(of: downloadedData)
         XCTAssertEqual(originalHash, downloadedHash, "Downloaded file content must match uploaded file")
 
         let cleanupClient = NativeSFTPClient(credentialStore: credentials, hostTrustStore: trustStore)
@@ -422,12 +422,12 @@ final class SFTPIntegrationTests: XCTestCase {
             ("alpha/alpha-100kb.bin", 100 * 1024),
             ("beta/beta-1mb.bin", 1 * 1024 * 1024),
             ("gamma/gamma-100kb.bin", 100 * 1024),
-            ("gamma/gamma-1kb.bin", 1 * 1024)
+            ("gamma/gamma-1kb.bin", 1 * 1024),
         ]
         var expectedSizes: [String: Int] = [:]
         for (relativePath, size) in fileSizes {
             let fileURL = temp.appendingPathComponent(relativePath)
-            let data = Data((0..<size).map { _ in UInt8.random(in: 0...255) })
+            let data = Data((0 ..< size).map { _ in UInt8.random(in: 0 ... 255) })
             try data.write(to: fileURL)
             expectedSizes[relativePath] = size
         }
@@ -495,10 +495,10 @@ private actor TransferProgressRecorder {
     private var progress: [Double] = []
 
     func append(_ value: Double) {
-        progress.append(value)
+        self.progress.append(value)
     }
 
     func values() -> [Double] {
-        progress
+        self.progress
     }
 }

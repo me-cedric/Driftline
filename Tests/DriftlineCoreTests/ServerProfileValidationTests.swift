@@ -1,5 +1,5 @@
-import XCTest
 @testable import DriftlineCore
+import XCTest
 
 final class ServerProfileValidationTests: XCTestCase {
     func testValidProfilePassesValidation() throws {
@@ -25,7 +25,7 @@ final class ServerProfileValidationTests: XCTestCase {
     }
 
     func testInvalidPortFailsValidation() {
-        let profile = ServerProfile(displayName: "Server", host: "example.com", port: 70_000, protocolKind: .sftp, username: "deploy", authenticationMethod: .agent)
+        let profile = ServerProfile(displayName: "Server", host: "example.com", port: 70000, protocolKind: .sftp, username: "deploy", authenticationMethod: .agent)
 
         XCTAssertThrowsError(try ServerProfileValidator.validate(profile)) { error in
             XCTAssertEqual(error as? ServerProfileValidationError, .invalidPort)

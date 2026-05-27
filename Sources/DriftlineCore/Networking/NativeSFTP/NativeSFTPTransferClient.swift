@@ -1,11 +1,11 @@
 import Foundation
 
-struct BandwidthThrottle: Sendable {
+struct BandwidthThrottle {
     let bytesPerSecondLimit: Int64
 
     func delay(bytesSent: Int64, elapsed: TimeInterval) -> TimeInterval {
         guard elapsed > 0 else { return 0 }
-        let expected = Double(bytesSent) / Double(bytesPerSecondLimit)
+        let expected = Double(bytesSent) / Double(self.bytesPerSecondLimit)
         return max(0, expected - elapsed)
     }
 }
@@ -28,13 +28,13 @@ public actor NativeSFTPTransferClient: TransferClient {
         var current = job
         current.status = .running(progress: 0, bytesPerSecond: nil)
         current.startedAt = Date()
-        upsert(current)
+        self.upsert(current)
         await onUpdate?(current)
 
-        let connection = try await NativeSFTPClient.makeConnection(profile: profile, credentialStore: credentialStore, hostTrustStore: hostTrustStore)
-        activeConnections[job.id] = connection
+        let connection = try await NativeSFTPClient.makeConnection(profile: profile, credentialStore: self.credentialStore, hostTrustStore: self.hostTrustStore)
+        self.activeConnections[job.id] = connection
 
-        let throttle = bytesPerSecondLimit.map { BandwidthThrottle(bytesPerSecondLimit: $0) }
+        let throttle = self.bytesPerSecondLimit.map { BandwidthThrottle(bytesPerSecondLimit: $0) }
         let transferStart = Date()
         var caughtError: Error?
 
@@ -43,15 +43,15 @@ public actor NativeSFTPTransferClient: TransferClient {
                 switch job.direction {
                 case .upload:
                     try await connection.uploadFolder(localPath: job.sourcePath, remotePath: job.destinationPath, jobID: job.id) { [self] progress, speed in
-                        await applyThrottle(throttle, progress: progress, byteCount: job.byteCount, transferStart: transferStart)
-                        await publishRunning(id: job.id, progress: progress, speed: speed, onUpdate: onUpdate)
+                        await self.applyThrottle(throttle, progress: progress, byteCount: job.byteCount, transferStart: transferStart)
+                        await self.publishRunning(id: job.id, progress: progress, speed: speed, onUpdate: onUpdate)
                     } cancellation: { [weakSelf = self] in
                         await weakSelf.isCancelled(job.id)
                     }
                 case .download:
                     try await connection.downloadFolder(remotePath: job.sourcePath, localPath: job.destinationPath, jobID: job.id) { [self] progress, speed in
-                        await applyThrottle(throttle, progress: progress, byteCount: job.byteCount, transferStart: transferStart)
-                        await publishRunning(id: job.id, progress: progress, speed: speed, onUpdate: onUpdate)
+                        await self.applyThrottle(throttle, progress: progress, byteCount: job.byteCount, transferStart: transferStart)
+                        await self.publishRunning(id: job.id, progress: progress, speed: speed, onUpdate: onUpdate)
                     } cancellation: { [weakSelf = self] in
                         await weakSelf.isCancelled(job.id)
                     }
@@ -60,22 +60,22 @@ public actor NativeSFTPTransferClient: TransferClient {
                 switch job.direction {
                 case .upload:
                     try await connection.uploadFile(localPath: job.sourcePath, remotePath: job.destinationPath, jobID: job.id) { [self] progress, speed in
-                        await applyThrottle(throttle, progress: progress, byteCount: job.byteCount, transferStart: transferStart)
-                        await publishRunning(id: job.id, progress: progress, speed: speed, onUpdate: onUpdate)
+                        await self.applyThrottle(throttle, progress: progress, byteCount: job.byteCount, transferStart: transferStart)
+                        await self.publishRunning(id: job.id, progress: progress, speed: speed, onUpdate: onUpdate)
                     } cancellation: { [weakSelf = self] in
                         await weakSelf.isCancelled(job.id)
                     }
                 case .download:
                     try await connection.downloadFile(remotePath: job.sourcePath, localPath: job.destinationPath, jobID: job.id) { [self] progress, speed in
-                        await applyThrottle(throttle, progress: progress, byteCount: job.byteCount, transferStart: transferStart)
-                        await publishRunning(id: job.id, progress: progress, speed: speed, onUpdate: onUpdate)
+                        await self.applyThrottle(throttle, progress: progress, byteCount: job.byteCount, transferStart: transferStart)
+                        await self.publishRunning(id: job.id, progress: progress, speed: speed, onUpdate: onUpdate)
                     } cancellation: { [weakSelf = self] in
                         await weakSelf.isCancelled(job.id)
                     }
                 }
             }
 
-            if isCancelled(job.id) {
+            if self.isCancelled(job.id) {
                 current.status = .cancelled
             } else {
                 current.status = .succeeded
@@ -87,35 +87,35 @@ public actor NativeSFTPTransferClient: TransferClient {
             current.status = .failed(message: Redactor().redact(error.localizedDescription))
             caughtError = error
         }
-        activeConnections[job.id] = nil
+        self.activeConnections[job.id] = nil
         await connection.close()
         current.finishedAt = Date()
-        upsert(current)
+        self.upsert(current)
         await onUpdate?(current)
-        cancelled.remove(job.id)
+        self.cancelled.remove(job.id)
         if let caughtError {
             throw caughtError
         }
     }
 
     public func cancel(id: TransferJobID) async throws {
-        cancelled.insert(id)
-        await activeConnections[id]?.close()
+        self.cancelled.insert(id)
+        await self.activeConnections[id]?.close()
         guard let index = storedJobs.firstIndex(where: { $0.id == id }) else { return }
-        storedJobs[index].status = .cancelled
-        storedJobs[index].finishedAt = Date()
+        self.storedJobs[index].status = .cancelled
+        self.storedJobs[index].finishedAt = Date()
     }
 
     public func retry(id: TransferJobID) async throws {
-        cancelled.remove(id)
+        self.cancelled.remove(id)
         guard let index = storedJobs.firstIndex(where: { $0.id == id }) else { return }
-        storedJobs[index].status = .queued
-        storedJobs[index].startedAt = nil
-        storedJobs[index].finishedAt = nil
+        self.storedJobs[index].status = .queued
+        self.storedJobs[index].startedAt = nil
+        self.storedJobs[index].finishedAt = nil
     }
 
     public func jobs() async -> [TransferJob] {
-        storedJobs
+        self.storedJobs
     }
 
     private func publishRunning(
@@ -126,19 +126,19 @@ public actor NativeSFTPTransferClient: TransferClient {
     ) async {
         guard var job = storedJobs.first(where: { $0.id == id }) else { return }
         job.status = .running(progress: progress, bytesPerSecond: speed)
-        upsert(job)
+        self.upsert(job)
         await onUpdate?(job)
     }
 
     private func isCancelled(_ id: TransferJobID) -> Bool {
-        cancelled.contains(id)
+        self.cancelled.contains(id)
     }
 
     private func upsert(_ job: TransferJob) {
         if let index = storedJobs.firstIndex(where: { $0.id == job.id }) {
-            storedJobs[index] = job
+            self.storedJobs[index] = job
         } else {
-            storedJobs.append(job)
+            self.storedJobs.append(job)
         }
     }
 

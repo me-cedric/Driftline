@@ -7,18 +7,18 @@ struct StatsDashboardView: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            stat("Uploads", "\(stats.uploadCount)", "arrow.up.circle")
-            stat("Downloads", "\(stats.downloadCount)", "arrow.down.circle")
-            stat("Uploaded", ByteCountFormatter.string(fromByteCount: stats.bytesUploaded), "externaldrive.badge.plus")
-            stat("Downloaded", ByteCountFormatter.string(fromByteCount: stats.bytesDownloaded), "externaldrive.badge.checkmark")
-            stat("Active", "\(stats.activeTransfers)", "bolt.circle")
-            stat("Failed", "\(stats.failedTransfers)", "exclamationmark.triangle")
+            self.stat("Uploads", "\(self.stats.uploadCount)", "arrow.up.circle")
+            self.stat("Downloads", "\(self.stats.downloadCount)", "arrow.down.circle")
+            self.stat("Uploaded", ByteCountFormatter.string(fromByteCount: self.stats.bytesUploaded), "externaldrive.badge.plus")
+            self.stat("Downloaded", ByteCountFormatter.string(fromByteCount: self.stats.bytesDownloaded), "externaldrive.badge.checkmark")
+            self.stat("Active", "\(self.stats.activeTransfers)", "bolt.circle")
+            self.stat("Failed", "\(self.stats.failedTransfers)", "exclamationmark.triangle")
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
                 Text("Last Connection")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text(lastConnection)
+                Text(self.lastConnection)
                     .font(.caption.weight(.semibold))
                     .lineLimit(1)
             }

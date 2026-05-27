@@ -54,7 +54,7 @@ public struct SFTPAttributes: Equatable, Sendable {
         }
         if flags & SFTPAttributeFlag.extended != 0 {
             let count = try reader.readUInt32()
-            for _ in 0..<count {
+            for _ in 0 ..< count {
                 _ = try reader.readString()
                 _ = try reader.readString()
             }
@@ -65,11 +65,11 @@ public struct SFTPAttributes: Equatable, Sendable {
 }
 
 public enum SFTPAttributeFlag {
-    public static let size: UInt32 = 0x00000001
-    public static let uidgid: UInt32 = 0x00000002
-    public static let permissions: UInt32 = 0x00000004
-    public static let acmodtime: UInt32 = 0x00000008
-    public static let extended: UInt32 = 0x80000000
+    public static let size: UInt32 = 0x0000_0001
+    public static let uidgid: UInt32 = 0x0000_0002
+    public static let permissions: UInt32 = 0x0000_0004
+    public static let acmodtime: UInt32 = 0x0000_0008
+    public static let extended: UInt32 = 0x8000_0000
 }
 
 public struct SFTPNameEntry: Equatable, Sendable {
@@ -90,11 +90,11 @@ public enum SFTPNameParser {
         let count = try reader.readUInt32()
         var entries: [SFTPNameEntry] = []
         entries.reserveCapacity(Int(count))
-        for _ in 0..<count {
+        for _ in 0 ..< count {
             let filename = try reader.readString()
             let longname = try reader.readString()
             let attrs = try SFTPAttributes.parse(from: &reader)
-            if filename != "." && filename != ".." {
+            if filename != ".", filename != ".." {
                 entries.append(SFTPNameEntry(filename: filename, longname: longname, attributes: attrs))
             }
         }

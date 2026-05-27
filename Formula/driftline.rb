@@ -2,7 +2,7 @@ class Driftline < Formula
   desc "Native macOS file transfer client with secure SFTP-first architecture"
   homepage "https://github.com/me-cedric/Driftline"
   url "https://github.com/me-cedric/Driftline/archive/refs/tags/v0.2.0.tar.gz"
-  sha256 ""
+  sha256 "bfc915884d131acb7ef191e82f647733f08de0f9402a247f02ea9d2fefec45b3"
   license "MIT"
 
   depends_on xcode: ["15.0", :build]

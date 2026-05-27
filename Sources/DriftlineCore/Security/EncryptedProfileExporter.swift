@@ -1,5 +1,5 @@
-import Foundation
 import Crypto
+import Foundation
 
 // HKDF-SHA256 is used for key derivation from the password + salt.
 // HKDF is not a password-stretching KDF (no iteration rounds), so it provides
@@ -22,6 +22,7 @@ public enum EncryptedProfileExporter {
         e.dateEncodingStrategy = .iso8601
         return e
     }()
+
     private static let decoder: JSONDecoder = {
         let d = JSONDecoder()
         d.dateDecodingStrategy = .iso8601
@@ -29,8 +30,8 @@ public enum EncryptedProfileExporter {
     }()
 
     public static func export(profiles: [ServerProfile], password: String) throws -> Data {
-        let salt = randomBytes(count: 32)
-        let derivedKey = deriveKey(password: password, salt: salt)
+        let salt = self.randomBytes(count: 32)
+        let derivedKey = self.deriveKey(password: password, salt: salt)
         let nonce = AES.GCM.Nonce()
         let payload = ProfileBundlePayload(profiles: profiles)
         let plaintext = try encoder.encode(payload)
@@ -45,22 +46,22 @@ public enum EncryptedProfileExporter {
             profileCount: profiles.count,
             exportedAt: Date()
         )
-        return try encoder.encode(bundle)
+        return try self.encoder.encode(bundle)
     }
 
     public static func `import`(data: Data, password: String) throws -> [ServerProfile] {
         let bundle: EncryptedProfileBundle
         do {
-            bundle = try decoder.decode(EncryptedProfileBundle.self, from: data)
+            bundle = try self.decoder.decode(EncryptedProfileBundle.self, from: data)
         } catch {
             throw EncryptedProfileError.malformedBundle
         }
 
-        guard bundle.version == currentVersion else {
+        guard bundle.version == self.currentVersion else {
             throw EncryptedProfileError.unsupportedVersion(bundle.version)
         }
 
-        let derivedKey = deriveKey(password: password, salt: bundle.salt)
+        let derivedKey = self.deriveKey(password: password, salt: bundle.salt)
 
         let nonce: AES.GCM.Nonce
         do {
@@ -104,26 +105,26 @@ public enum EncryptedProfileExporter {
         return HKDF<SHA256>.deriveKey(
             inputKeyMaterial: inputKey,
             salt: salt,
-            info: hkdfInfo,
+            info: self.hkdfInfo,
             outputByteCount: 32
         )
     }
 
     private static func randomBytes(count: Int) -> Data {
         #if canImport(Security)
-        return randomBytesViaSecurity(count: count)
+            return randomBytesViaSecurity(count: count)
         #else
-        return SymmetricKey(size: .bits256).withUnsafeBytes { Data($0) }.prefix(count)
+            return SymmetricKey(size: .bits256).withUnsafeBytes { Data($0) }.prefix(count)
         #endif
     }
 }
 
 #if canImport(Security)
-import Security
+    import Security
 
-private func randomBytesViaSecurity(count: Int) -> Data {
-    var bytes = Data(count: count)
-    _ = bytes.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, count, $0.baseAddress!) }
-    return bytes
-}
+    private func randomBytesViaSecurity(count: Int) -> Data {
+        var bytes = Data(count: count)
+        _ = bytes.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, count, $0.baseAddress!) }
+        return bytes
+    }
 #endif

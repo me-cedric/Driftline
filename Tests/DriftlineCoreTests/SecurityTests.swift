@@ -1,5 +1,5 @@
-import XCTest
 @testable import DriftlineCore
+import XCTest
 
 final class SecurityTests: XCTestCase {
     func testInMemoryCredentialStoreRoundTrip() async throws {

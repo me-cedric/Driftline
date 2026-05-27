@@ -10,7 +10,7 @@ public struct TerminalCommand: Equatable, Codable, Sendable {
     }
 
     public var displayString: String {
-        ([executable] + arguments).map(Self.shellEscaped).joined(separator: " ")
+        ([self.executable] + self.arguments).map(Self.shellEscaped).joined(separator: " ")
     }
 
     public static func shellEscaped(_ value: String) -> String {
@@ -28,7 +28,7 @@ public enum TerminalCommandFactory {
         }
 
         var args = ["-p", String(profile.port)]
-        if case .privateKey(let path, _) = profile.authenticationMethod {
+        if case let .privateKey(path, _) = profile.authenticationMethod {
             args.append(contentsOf: ["-i", path])
         }
         args.append("\(profile.username)@\(profile.host)")

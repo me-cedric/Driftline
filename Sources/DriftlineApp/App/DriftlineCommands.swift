@@ -5,40 +5,40 @@ struct DriftlineCommands: Commands {
 
     var body: some Commands {
         CommandGroup(after: .newItem) {
-            Button("New Connection") { model.beginQuickConnect() }
+            Button("New Connection") { self.model.beginQuickConnect() }
                 .keyboardShortcut("n")
-            Button("New Tab") { model.newTab() }
+            Button("New Tab") { self.model.newTab() }
                 .keyboardShortcut("t")
-            Button("Close Tab") { model.closeSelectedTab() }
+            Button("Close Tab") { self.model.closeSelectedTab() }
                 .keyboardShortcut("w")
         }
 
         CommandMenu("Connection") {
-            Button("Quick Connect") { model.beginQuickConnect() }
+            Button("Quick Connect") { self.model.beginQuickConnect() }
                 .keyboardShortcut("l")
-            Button("Connect Selected Server") { model.connectToSelectedServer() }
-            Button("Open SSH in Terminal") { model.openTerminalSession() }
-            Button("Disconnect") { model.disconnect() }
+            Button("Connect Selected Server") { self.model.connectToSelectedServer() }
+            Button("Open SSH in Terminal") { self.model.openTerminalSession() }
+            Button("Disconnect") { self.model.disconnect() }
                 .keyboardShortcut("k", modifiers: [.command, .shift])
-            Button("Reconnect Last") { model.reconnectLastServer() }
+            Button("Reconnect Last") { self.model.reconnectLastServer() }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
-            Button("Save Current Connection") { model.saveCurrentConnectionAsBookmark() }
+            Button("Save Current Connection") { self.model.saveCurrentConnectionAsBookmark() }
                 .keyboardShortcut("s", modifiers: [.command, .option])
         }
 
         CommandMenu("Transfer") {
-            Button("Upload") { model.uploadSelectedItem() }
+            Button("Upload") { self.model.uploadSelectedItem() }
                 .keyboardShortcut("u", modifiers: [.command, .option])
-            Button("Download") { model.downloadSelectedItem() }
+            Button("Download") { self.model.downloadSelectedItem() }
                 .keyboardShortcut("d", modifiers: [.command, .option])
-            Button("Show Inspector") { model.preferences.showInspector.toggle() }
+            Button("Show Inspector") { self.model.preferences.showInspector.toggle() }
                 .keyboardShortcut("i")
-            Button("View Options") { model.showViewOptions.toggle() }
+            Button("View Options") { self.model.showViewOptions.toggle() }
                 .keyboardShortcut("j")
         }
 
         CommandGroup(replacing: .appInfo) {
-            Button("About Driftline") { model.showAbout = true }
+            Button("About Driftline") { self.model.showAbout = true }
         }
     }
 }

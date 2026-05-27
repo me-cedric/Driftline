@@ -9,17 +9,17 @@ struct HostTrustPromptView: View {
         VStack(alignment: .leading, spacing: 18) {
             Label("Trust Host?", systemImage: "lock.shield")
                 .font(.title2.bold())
-            Text("\(trust.host):\(trust.port)")
+            Text("\(self.trust.host):\(self.trust.port)")
                 .font(.headline)
             VStack(alignment: .leading, spacing: 8) {
                 Text("Algorithm")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text(trust.algorithm)
+                Text(self.trust.algorithm)
                 Text("Fingerprint")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text(trust.fingerprint)
+                Text(self.trust.fingerprint)
                     .font(.system(.body, design: .monospaced))
                     .textSelection(.enabled)
             }
@@ -29,8 +29,8 @@ struct HostTrustPromptView: View {
                 .foregroundStyle(.secondary)
             HStack {
                 Spacer()
-                Button("Cancel", role: .cancel, action: onCancel)
-                Button("Trust and Connect", action: onTrust)
+                Button("Cancel", role: .cancel, action: self.onCancel)
+                Button("Trust and Connect", action: self.onTrust)
                     .buttonStyle(.borderedProminent)
                     .accessibilityHint("Stores this fingerprint in Driftline known hosts and reconnects.")
             }

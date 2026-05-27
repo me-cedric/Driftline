@@ -5,7 +5,9 @@ public enum TransferProtocolKind: String, CaseIterable, Codable, Sendable, Ident
     case ftp
     case ftps
 
-    public var id: String { rawValue }
+    public var id: String {
+        rawValue
+    }
 
     public var defaultPort: Int {
         switch self {
@@ -87,7 +89,7 @@ public struct ServerProfile: Identifiable, Hashable, Codable, Sendable {
     public func duplicated(now: Date = Date()) -> ServerProfile {
         var copy = self
         copy.id = ServerProfileID()
-        copy.displayName = "\(displayName) Copy"
+        copy.displayName = "\(self.displayName) Copy"
         copy.createdAt = now
         copy.updatedAt = now
         return copy

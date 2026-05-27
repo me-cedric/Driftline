@@ -1,5 +1,5 @@
-import XCTest
 @testable import DriftlineCore
+import XCTest
 
 final class NativeSFTPClientTests: XCTestCase {
     func testPassphraseProtectedOpenSSHEd25519KeyParsesWithCorrectPassphrase() throws {
@@ -15,7 +15,7 @@ final class NativeSFTPClientTests: XCTestCase {
             "-q",
             "-t", "ed25519",
             "-N", passphrase,
-            "-f", keyURL.path
+            "-f", keyURL.path,
         ])
 
         let contents = try String(contentsOf: keyURL, encoding: .utf8)
@@ -39,7 +39,7 @@ final class NativeSFTPClientTests: XCTestCase {
         do {
             _ = try await client.connect(to: profile)
             XCTFail("Expected agent auth to throw nativeBackendUnavailable.")
-        } catch RemoteClientError.nativeBackendUnavailable(let message) {
+        } catch let RemoteClientError.nativeBackendUnavailable(message) {
             XCTAssertTrue(message.contains("SSH"), "Error message should mention SSH, got: \(message)")
         }
     }

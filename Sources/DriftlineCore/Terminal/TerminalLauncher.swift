@@ -33,7 +33,7 @@ public struct SystemTerminalLauncher: TerminalLaunching {
     }
 
     public func launch(_ command: TerminalCommand) async throws {
-        let script = scriptBuilder.script(for: command)
+        let script = self.scriptBuilder.script(for: command)
         let result = try await processExecutor.run(executable: "/usr/bin/osascript", arguments: ["-e", script], timeout: 15)
         guard result.exitCode == 0 else {
             throw TerminalLaunchError.failed(result.standardError.trimmingCharacters(in: .whitespacesAndNewlines))
@@ -46,7 +46,7 @@ public enum TerminalLaunchError: Error, Equatable, LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case .failed(let message):
+        case let .failed(message):
             message.isEmpty ? "Terminal could not be opened." : message
         }
     }

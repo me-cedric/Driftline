@@ -13,7 +13,10 @@ public enum FileItemKind: String, Codable, Sendable {
 }
 
 public struct FileItem: Identifiable, Hashable, Codable, Sendable {
-    public var id: String { "\(source.rawValue):\(path)" }
+    public var id: String {
+        "\(self.source.rawValue):\(self.path)"
+    }
+
     public var name: String
     public var path: String
     public var kind: FileItemKind

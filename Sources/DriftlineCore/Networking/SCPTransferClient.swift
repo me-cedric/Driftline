@@ -6,7 +6,7 @@ public enum TransferCommandBuilder {
         arguments.removeFirst(2) // scp uses -P instead of ssh's -p.
         arguments.insert(contentsOf: ["-P", String(profile.port)], at: 0)
 
-        if isLikelyDirectory(path: job.sourcePath) {
+        if self.isLikelyDirectory(path: job.sourcePath) {
             arguments.append("-r")
         }
 
@@ -39,7 +39,7 @@ public actor SystemSCPTransferClient: TransferClient {
         var running = job
         running.status = .running(progress: 0, bytesPerSecond: nil)
         running.startedAt = Date()
-        upsert(running)
+        self.upsert(running)
         await onUpdate?(running)
 
         let arguments = try TransferCommandBuilder.scpArguments(for: job, profile: profile)
@@ -53,32 +53,32 @@ public actor SystemSCPTransferClient: TransferClient {
             let message = Redactor().redact(result.standardError.trimmingCharacters(in: .whitespacesAndNewlines))
             finished.status = .failed(message: message.isEmpty ? "Transfer failed." : message)
         }
-        upsert(finished)
+        self.upsert(finished)
         await onUpdate?(finished)
     }
 
     public func cancel(id: TransferJobID) async throws {
         guard let index = storedJobs.firstIndex(where: { $0.id == id }) else { return }
-        storedJobs[index].status = .cancelled
-        storedJobs[index].finishedAt = Date()
+        self.storedJobs[index].status = .cancelled
+        self.storedJobs[index].finishedAt = Date()
     }
 
     public func retry(id: TransferJobID) async throws {
         guard let index = storedJobs.firstIndex(where: { $0.id == id }) else { return }
-        storedJobs[index].status = .queued
-        storedJobs[index].startedAt = nil
-        storedJobs[index].finishedAt = nil
+        self.storedJobs[index].status = .queued
+        self.storedJobs[index].startedAt = nil
+        self.storedJobs[index].finishedAt = nil
     }
 
     public func jobs() async -> [TransferJob] {
-        storedJobs
+        self.storedJobs
     }
 
     private func upsert(_ job: TransferJob) {
         if let index = storedJobs.firstIndex(where: { $0.id == job.id }) {
-            storedJobs[index] = job
+            self.storedJobs[index] = job
         } else {
-            storedJobs.append(job)
+            self.storedJobs.append(job)
         }
     }
 }

@@ -28,10 +28,10 @@ public enum ServerProfileValidator {
         if profile.host.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             throw ServerProfileValidationError.missingHost
         }
-        if !(1...65_535).contains(profile.port) {
+        if !(1 ... 65535).contains(profile.port) {
             throw ServerProfileValidationError.invalidPort
         }
-        if requiresUsername(profile.authenticationMethod), profile.username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if self.requiresUsername(profile.authenticationMethod), profile.username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             throw ServerProfileValidationError.missingUsername
         }
     }

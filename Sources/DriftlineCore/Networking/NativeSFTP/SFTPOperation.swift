@@ -1,12 +1,12 @@
 import Foundation
 
 public enum SFTPOpenPFlags {
-    public static let read: UInt32 = 0x00000001
-    public static let write: UInt32 = 0x00000002
-    public static let append: UInt32 = 0x00000004
-    public static let create: UInt32 = 0x00000008
-    public static let truncate: UInt32 = 0x00000010
-    public static let exclusive: UInt32 = 0x00000020
+    public static let read: UInt32 = 0x0000_0001
+    public static let write: UInt32 = 0x0000_0002
+    public static let append: UInt32 = 0x0000_0004
+    public static let create: UInt32 = 0x0000_0008
+    public static let truncate: UInt32 = 0x0000_0010
+    public static let exclusive: UInt32 = 0x0000_0020
 }
 
 public enum SFTPRequestBuilder {
@@ -49,19 +49,19 @@ public enum SFTPRequestBuilder {
     }
 
     public static func remove(id: UInt32, path: String) -> SFTPPacket {
-        pathOnlyPacket(type: .remove, id: id, path: path)
+        self.pathOnlyPacket(type: .remove, id: id, path: path)
     }
 
     public static func rmdir(id: UInt32, path: String) -> SFTPPacket {
-        pathOnlyPacket(type: .rmdir, id: id, path: path)
+        self.pathOnlyPacket(type: .rmdir, id: id, path: path)
     }
 
     public static func stat(id: UInt32, path: String) -> SFTPPacket {
-        pathOnlyPacket(type: .stat, id: id, path: path)
+        self.pathOnlyPacket(type: .stat, id: id, path: path)
     }
 
     public static func lstat(id: UInt32, path: String) -> SFTPPacket {
-        pathOnlyPacket(type: .lstat, id: id, path: path)
+        self.pathOnlyPacket(type: .lstat, id: id, path: path)
     }
 
     public static func open(id: UInt32, path: String, pflags: UInt32) -> SFTPPacket {

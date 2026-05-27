@@ -1,5 +1,5 @@
-import XCTest
 @testable import DriftlineCore
+import XCTest
 
 final class RsyncTransferClientTests: XCTestCase {
     func testRsyncProgressParserReadsPercentAndSpeed() {
@@ -18,7 +18,7 @@ final class RsyncTransferClientTests: XCTestCase {
         XCTAssertTrue(arguments.contains("-az"))
         XCTAssertTrue(arguments.contains("--progress"))
         XCTAssertTrue(arguments.contains("-e"))
-        let sshCommand = arguments[arguments.firstIndex(of: "-e")! + 1]
+        let sshCommand = try arguments[XCTUnwrap(arguments.firstIndex(of: "-e")) + 1]
         XCTAssertTrue(sshCommand.contains("StrictHostKeyChecking=yes"))
         XCTAssertTrue(sshCommand.contains("UserKnownHostsFile="))
         XCTAssertTrue(arguments.contains("deploy@example.com:'/var/www/a.txt'"))
@@ -27,7 +27,7 @@ final class RsyncTransferClientTests: XCTestCase {
     func testRsyncTransferClientPublishesProgressAndSuccess() async throws {
         let executor = ScriptedStreamingExecutor(events: [
             .standardOutput("      1.00M  50%  2.00MB/s    0:00:01"),
-            .finished(ProcessResult(exitCode: 0, standardOutput: "", standardError: ""))
+            .finished(ProcessResult(exitCode: 0, standardOutput: "", standardError: "")),
         ])
         let client = SystemRsyncTransferClient(streamingExecutor: executor)
         let profile = ServerProfile(displayName: "Server", host: "example.com", protocolKind: .sftp, username: "deploy", authenticationMethod: .agent)
@@ -40,7 +40,7 @@ final class RsyncTransferClientTests: XCTestCase {
         let updates = await recorder.updates
 
         XCTAssertTrue(updates.contains { update in
-            if case .running(let progress, let speed) = update.status {
+            if case let .running(progress, speed) = update.status {
                 return progress == 0.5 && speed == 2_000_000
             }
             return false
@@ -61,9 +61,9 @@ final class RsyncTransferClientTests: XCTestCase {
 private struct ScriptedStreamingExecutor: StreamingProcessExecuting {
     var events: [ProcessOutputEvent]
 
-    func stream(executable: String, arguments: [String], timeout: TimeInterval) -> AsyncThrowingStream<ProcessOutputEvent, Error> {
+    func stream(executable _: String, arguments _: [String], timeout _: TimeInterval) -> AsyncThrowingStream<ProcessOutputEvent, Error> {
         AsyncThrowingStream { continuation in
-            for event in events {
+            for event in self.events {
                 continuation.yield(event)
             }
             continuation.finish()
@@ -77,16 +77,16 @@ private final class CancellableScriptedStreamingExecutor: CancellableStreamingPr
     private var cancelled = false
 
     var didCancel: Bool {
-        queue.sync { cancelled }
+        self.queue.sync { self.cancelled }
     }
 
     init(events: [ProcessOutputEvent]) {
         self.events = events
     }
 
-    func stream(executable: String, arguments: [String], timeout: TimeInterval) -> AsyncThrowingStream<ProcessOutputEvent, Error> {
+    func stream(executable _: String, arguments _: [String], timeout _: TimeInterval) -> AsyncThrowingStream<ProcessOutputEvent, Error> {
         AsyncThrowingStream { continuation in
-            for event in events {
+            for event in self.events {
                 continuation.yield(event)
             }
             continuation.finish()
@@ -94,8 +94,8 @@ private final class CancellableScriptedStreamingExecutor: CancellableStreamingPr
     }
 
     func cancelAll() async {
-        queue.sync {
-            cancelled = true
+        self.queue.sync {
+            self.cancelled = true
         }
     }
 }
@@ -104,6 +104,6 @@ private actor TransferUpdateRecorder {
     private(set) var updates: [TransferJob] = []
 
     func record(_ update: TransferJob) {
-        updates.append(update)
+        self.updates.append(update)
     }
 }

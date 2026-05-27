@@ -22,10 +22,10 @@ struct InspectorView: View {
                 }
 
                 InspectorSection(title: "Connection") {
-                    LabeledContent("State", value: String(describing: session.state))
-                    LabeledContent("Protocol", value: session.protocolKind?.rawValue.uppercased() ?? "--")
-                    LabeledContent("Local Path", value: session.localPath)
-                    LabeledContent("Remote Path", value: session.remotePath)
+                    LabeledContent("State", value: String(describing: self.session.state))
+                    LabeledContent("Protocol", value: self.session.protocolKind?.rawValue.uppercased() ?? "--")
+                    LabeledContent("Local Path", value: self.session.localPath)
+                    LabeledContent("Remote Path", value: self.session.remotePath)
                 }
             }
             .padding(16)

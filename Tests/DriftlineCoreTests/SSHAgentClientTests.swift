@@ -1,5 +1,5 @@
-import XCTest
 @testable import DriftlineCore
+import XCTest
 
 final class SSHAgentClientTests: XCTestCase {
     func testSSHAgentClientReturnsNilWhenSocketPathEmpty() {
@@ -20,7 +20,7 @@ final class SSHAgentClientTests: XCTestCase {
     func testJumpHostProxyValueMultipleHosts() {
         let jumps = [
             JumpHost(host: "first.example.com", port: 22, username: "alice"),
-            JumpHost(host: "second.example.com", port: 2222, username: "bob")
+            JumpHost(host: "second.example.com", port: 2222, username: "bob"),
         ]
         XCTAssertEqual(
             SSHCommandBuilder.jumpProxyValue(for: jumps),

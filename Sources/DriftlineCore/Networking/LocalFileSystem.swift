@@ -10,7 +10,7 @@ public struct FoundationLocalFileSystemClient: LocalFileSystemClient {
         let mapped = try urls.compactMap { itemURL -> FileItem? in
             let values = try itemURL.resourceValues(forKeys: keys)
             let isHidden = values.isHidden ?? itemURL.lastPathComponent.hasPrefix(".")
-            if isHidden && !preferences.showHiddenFiles { return nil }
+            if isHidden, !preferences.showHiddenFiles { return nil }
             let kind: FileItemKind
             if values.isDirectory == true {
                 kind = .folder

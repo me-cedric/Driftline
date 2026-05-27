@@ -1,0 +1,31 @@
+# SwiftLint configuration for Driftline
+
+disabled_rules:
+  - trailing_comma
+  - force_cast
+  - line_length
+  - function_body_length
+  - type_body_length
+  - file_length
+  - identifier_name
+  - nesting
+
+opt_in_rules:
+  - sorted_imports
+  - void_return
+  - closure_spacing
+  - redundant_nil_coalescing
+  - yoda_condition
+
+analyzer_rules:
+  - unused_import
+  - unused_declaration
+
+included:
+  - Sources
+  - Tests
+
+excluded:
+  - .build
+  - dist
+  - .integration

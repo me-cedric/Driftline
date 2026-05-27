@@ -9,7 +9,7 @@ public actor NativeSFTPConnectionPool {
     public init() {}
 
     public func insert(_ connection: NativeSFTPConnection, for sessionID: UUID) {
-        connections[sessionID] = connection
+        self.connections[sessionID] = connection
     }
 
     public func connection(for sessionID: UUID) throws -> NativeSFTPConnection {
@@ -101,25 +101,25 @@ public actor NativeSFTPConnection {
     }
 
     public func close() async {
-        try? await sftpChannel.close().get()
-        try? await sftpChannel.closeFuture.get()
-        try? await channel.close().get()
-        try? await channel.closeFuture.get()
-        try? await group.shutdownGracefully()
+        try? await self.sftpChannel.close().get()
+        try? await self.sftpChannel.closeFuture.get()
+        try? await self.channel.close().get()
+        try? await self.channel.closeFuture.get()
+        try? await self.group.shutdownGracefully()
     }
 
     public func listDirectory(at path: String, preferences: FileListPreferences) async throws -> [FileItem] {
-        let handle = try await expectHandle(SFTPRequestBuilder.opendir(id: nextID(), path: path))
+        let handle = try await expectHandle(SFTPRequestBuilder.opendir(id: self.nextID(), path: path))
         var entries: [SFTPNameEntry] = []
         while true {
-            let packet = try await send(SFTPRequestBuilder.readdir(id: nextID(), handle: handle))
+            let packet = try await send(SFTPRequestBuilder.readdir(id: self.nextID(), handle: handle))
             switch packet.type {
             case .name:
-                entries.append(contentsOf: try SFTPNameParser.parseNamePacketPayload(packet.payload))
+                try entries.append(contentsOf: SFTPNameParser.parseNamePacketPayload(packet.payload))
             case .status:
                 let status = try SFTPStatus.parse(payload: packet.payload)
                 if status.code == .eof {
-                    try? await expectStatusOK(SFTPRequestBuilder.close(id: nextID(), handle: handle))
+                    try? await self.expectStatusOK(SFTPRequestBuilder.close(id: self.nextID(), handle: handle))
                     return FileItemSorter.sort(entries.map { $0.fileItem(parentPath: path) }.filter { preferences.showHiddenFiles || !$0.isHidden }, preferences: preferences)
                 }
                 if let error = status.remoteError(fallbackPath: path) {
@@ -132,11 +132,11 @@ public actor NativeSFTPConnection {
     }
 
     public func createFolder(named name: String, in path: String) async throws {
-        try await expectStatusOK(SFTPRequestBuilder.mkdir(id: nextID(), path: remoteChildPath(parent: path, name: name)))
+        try await self.expectStatusOK(SFTPRequestBuilder.mkdir(id: self.nextID(), path: self.remoteChildPath(parent: path, name: name)))
     }
 
     public func renameItem(at path: String, to newName: String) async throws {
-        try await expectStatusOK(SFTPRequestBuilder.rename(id: nextID(), oldPath: path, newPath: remoteChildPath(parent: URL(fileURLWithPath: path).deletingLastPathComponent().path, name: newName)))
+        try await self.expectStatusOK(SFTPRequestBuilder.rename(id: self.nextID(), oldPath: path, newPath: self.remoteChildPath(parent: URL(fileURLWithPath: path).deletingLastPathComponent().path, name: newName)))
     }
 
     public func deleteItem(at path: String) async throws {
@@ -146,17 +146,17 @@ public actor NativeSFTPConnection {
             let entries = try await rawDirectoryEntries(at: path)
             for entry in entries {
                 let child = entry.fileItem(parentPath: path)
-                try await deleteItem(at: child.path)
+                try await self.deleteItem(at: child.path)
             }
-            try await expectStatusOK(SFTPRequestBuilder.rmdir(id: nextID(), path: path))
+            try await self.expectStatusOK(SFTPRequestBuilder.rmdir(id: self.nextID(), path: path))
         case .file, .symbolicLink, .unknown:
-            try await expectStatusOK(SFTPRequestBuilder.remove(id: nextID(), path: path))
+            try await self.expectStatusOK(SFTPRequestBuilder.remove(id: self.nextID(), path: path))
         }
     }
 
     public func itemExists(at path: String) async throws -> Bool {
         do {
-            _ = try await stat(path: path)
+            _ = try await self.stat(path: path)
             return true
         } catch let error as NativeSFTPStatusError where error.status.code == .noSuchFile {
             return false
@@ -166,7 +166,7 @@ public actor NativeSFTPConnection {
     public func uploadFile(
         localPath: String,
         remotePath: String,
-        jobID: TransferJobID,
+        jobID _: TransferJobID,
         onProgress: @Sendable (Double, Int64?) async -> Void,
         cancellation: @Sendable () async -> Bool
     ) async throws {
@@ -176,7 +176,7 @@ public actor NativeSFTPConnection {
 
         let total = (try? FileManager.default.attributesOfItem(atPath: localPath)[.size] as? NSNumber)?.int64Value ?? 0
         let handle = try await expectHandle(SFTPRequestBuilder.open(
-            id: nextID(),
+            id: self.nextID(),
             path: remotePath,
             pflags: SFTPOpenPFlags.write | SFTPOpenPFlags.create | SFTPOpenPFlags.truncate
         ))
@@ -190,14 +190,14 @@ public actor NativeSFTPConnection {
                 }
                 let data = try fileHandle.read(upToCount: Int(Self.transferChunkSize)) ?? Data()
                 if data.isEmpty { break }
-                try await expectStatusOK(SFTPRequestBuilder.write(id: nextID(), handle: handle, offset: offset, data: data))
+                try await self.expectStatusOK(SFTPRequestBuilder.write(id: self.nextID(), handle: handle, offset: offset, data: data))
                 offset += UInt64(data.count)
-                await onProgress(progress(done: Int64(offset), total: total), speed(done: Int64(offset), started: started))
+                await onProgress(self.progress(done: Int64(offset), total: total), self.speed(done: Int64(offset), started: started))
             }
-            try await expectStatusOK(SFTPRequestBuilder.close(id: nextID(), handle: handle))
-            await onProgress(1, speed(done: Int64(offset), started: started))
+            try await self.expectStatusOK(SFTPRequestBuilder.close(id: self.nextID(), handle: handle))
+            await onProgress(1, self.speed(done: Int64(offset), started: started))
         } catch {
-            try? await expectStatusOK(SFTPRequestBuilder.close(id: nextID(), handle: handle))
+            try? await self.expectStatusOK(SFTPRequestBuilder.close(id: self.nextID(), handle: handle))
             throw error
         }
     }
@@ -205,13 +205,13 @@ public actor NativeSFTPConnection {
     public func downloadFile(
         remotePath: String,
         localPath: String,
-        jobID: TransferJobID,
+        jobID _: TransferJobID,
         onProgress: @Sendable (Double, Int64?) async -> Void,
         cancellation: @Sendable () async -> Bool
     ) async throws {
         let attrs = try await stat(path: remotePath)
         let total = attrs.size.map(Int64.init) ?? 0
-        let handle = try await expectHandle(SFTPRequestBuilder.open(id: nextID(), path: remotePath, pflags: SFTPOpenPFlags.read))
+        let handle = try await expectHandle(SFTPRequestBuilder.open(id: self.nextID(), path: remotePath, pflags: SFTPOpenPFlags.read))
 
         let localURL = URL(fileURLWithPath: localPath)
         try FileManager.default.createDirectory(at: localURL.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -226,7 +226,7 @@ public actor NativeSFTPConnection {
                 if await cancellation() || Task.isCancelled {
                     throw CancellationError()
                 }
-                let packet = try await send(SFTPRequestBuilder.read(id: nextID(), handle: handle, offset: offset, length: Self.transferChunkSize))
+                let packet = try await send(SFTPRequestBuilder.read(id: self.nextID(), handle: handle, offset: offset, length: Self.transferChunkSize))
                 switch packet.type {
                 case .data:
                     var reader = SFTPDataReader(data: packet.payload)
@@ -234,12 +234,12 @@ public actor NativeSFTPConnection {
                     if data.isEmpty { continue }
                     try fileHandle.write(contentsOf: data)
                     offset += UInt64(data.count)
-                    await onProgress(progress(done: Int64(offset), total: total), speed(done: Int64(offset), started: started))
+                    await onProgress(self.progress(done: Int64(offset), total: total), self.speed(done: Int64(offset), started: started))
                 case .status:
                     let status = try SFTPStatus.parse(payload: packet.payload)
                     if status.code == .eof {
-                        try await expectStatusOK(SFTPRequestBuilder.close(id: nextID(), handle: handle))
-                        await onProgress(1, speed(done: Int64(offset), started: started))
+                        try await self.expectStatusOK(SFTPRequestBuilder.close(id: self.nextID(), handle: handle))
+                        await onProgress(1, self.speed(done: Int64(offset), started: started))
                         return
                     }
                     if let error = status.remoteError(fallbackPath: remotePath) {
@@ -250,19 +250,19 @@ public actor NativeSFTPConnection {
                 }
             }
         } catch {
-            try? await expectStatusOK(SFTPRequestBuilder.close(id: nextID(), handle: handle))
+            try? await self.expectStatusOK(SFTPRequestBuilder.close(id: self.nextID(), handle: handle))
             throw error
         }
     }
 
     private func stat(path: String) async throws -> SFTPAttributes {
-        let packet = try await send(SFTPRequestBuilder.lstat(id: nextID(), path: path))
+        let packet = try await send(SFTPRequestBuilder.lstat(id: self.nextID(), path: path))
         switch packet.type {
         case .attrs:
             var reader = SFTPDataReader(data: packet.payload)
             return try SFTPAttributes.parse(from: &reader)
         case .status:
-            throw NativeSFTPStatusError(status: try SFTPStatus.parse(payload: packet.payload), path: path)
+            throw try NativeSFTPStatusError(status: SFTPStatus.parse(payload: packet.payload), path: path)
         default:
             throw RemoteClientError.commandFailed("Unexpected SFTP response while reading metadata for \(path).")
         }
@@ -295,12 +295,12 @@ public actor NativeSFTPConnection {
 
     func send(_ packet: SFTPPacket) async throws -> SFTPPacket {
         try Task.checkCancellation()
-        return try await handler.send(packet, on: sftpChannel).get()
+        return try await self.handler.send(packet, on: self.sftpChannel).get()
     }
 
     func nextID() -> UInt32 {
         defer { nextRequestID = nextRequestID &+ 1 }
-        return nextRequestID
+        return self.nextRequestID
     }
 
     private func remoteChildPath(parent: String, name: String) -> String {
@@ -357,41 +357,41 @@ private final class NativeSFTPChannelHandler: ChannelInboundHandler {
     func channelRead(context: ChannelHandlerContext, data: NIOAny) {
         let channelData = unwrapInboundIn(data)
         guard channelData.type == .channel else { return }
-        guard case .byteBuffer(let buffer) = channelData.data else { return }
+        guard case let .byteBuffer(buffer) = channelData.data else { return }
 
-        inboundData.append(contentsOf: buffer.readableBytesView)
+        self.inboundData.append(contentsOf: buffer.readableBytesView)
         do {
-            while inboundData.count >= 5 {
-                let decoded = try SFTPPacket.decodeOne(from: inboundData)
-                inboundData = decoded.remaining
-                dispatch(decoded.packet)
+            while self.inboundData.count >= 5 {
+                let decoded = try SFTPPacket.decodeOne(from: self.inboundData)
+                self.inboundData = decoded.remaining
+                self.dispatch(decoded.packet)
             }
         } catch SFTPPacketError.incompletePacket {
             return
         } catch {
-            failAll(error)
+            self.failAll(error)
             context.close(promise: nil)
         }
     }
 
     func errorCaught(context: ChannelHandlerContext, error: Error) {
-        failAll(error)
+        self.failAll(error)
         context.close(promise: nil)
     }
 
-    func channelInactive(context: ChannelHandlerContext) {
-        failAll(RemoteClientError.connectionFailed("The SFTP channel closed."))
+    func channelInactive(context _: ChannelHandlerContext) {
+        self.failAll(RemoteClientError.connectionFailed("The SFTP channel closed."))
     }
 
     private func dispatch(_ packet: SFTPPacket) {
         if packet.type == .version {
             var reader = SFTPDataReader(data: packet.payload)
             do {
-                versionPromise?.succeed(try reader.readUInt32())
+                try self.versionPromise?.succeed(reader.readUInt32())
             } catch {
-                versionPromise?.fail(error)
+                self.versionPromise?.fail(error)
             }
-            versionPromise = nil
+            self.versionPromise = nil
             return
         }
 
@@ -408,12 +408,12 @@ private final class NativeSFTPChannelHandler: ChannelInboundHandler {
     }
 
     private func failAll(_ error: Error) {
-        versionPromise?.fail(error)
-        versionPromise = nil
-        for promise in pending.values {
+        self.versionPromise?.fail(error)
+        self.versionPromise = nil
+        for promise in self.pending.values {
             promise.fail(error)
         }
-        pending.removeAll()
+        self.pending.removeAll()
     }
 }
 
@@ -427,16 +427,16 @@ private final class NativeSFTPConnectionErrorBox: @unchecked Sendable {
     private var storedError: Error?
 
     var error: Error? {
-        lock.lock()
+        self.lock.lock()
         defer { lock.unlock() }
-        return storedError
+        return self.storedError
     }
 
     func record(_ error: Error) {
-        lock.lock()
+        self.lock.lock()
         defer { lock.unlock() }
-        if storedError == nil {
-            storedError = error
+        if self.storedError == nil {
+            self.storedError = error
         }
     }
 }
@@ -450,7 +450,7 @@ private final class NativeSFTPErrorHandler: ChannelInboundHandler {
     }
 
     func errorCaught(context: ChannelHandlerContext, error: Error) {
-        errorBox.record(error)
+        self.errorBox.record(error)
         context.close(promise: nil)
     }
 }

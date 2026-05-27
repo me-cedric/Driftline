@@ -27,7 +27,7 @@ public protocol TransferClient: Sendable {
 
 public extension TransferClient {
     func enqueue(_ job: TransferJob, profile: ServerProfile) async throws {
-        try await enqueue(job, profile: profile, onUpdate: nil)
+        try await self.enqueue(job, profile: profile, onUpdate: nil)
     }
 }
 
@@ -42,26 +42,26 @@ public struct UnsupportedRemoteFileSystemClient: RemoteFileSystemClient {
         throw RemoteClientError.unsupportedProtocol(profile.protocolKind)
     }
 
-    public func disconnect(session: ConnectionSession) async throws {}
+    public func disconnect(session _: ConnectionSession) async throws {}
 
-    public func listDirectory(at path: String, profile: ServerProfile, session: ConnectionSession, preferences: FileListPreferences) async throws -> [FileItem] {
-        throw RemoteClientError.unsupportedProtocol(protocolKind)
+    public func listDirectory(at _: String, profile _: ServerProfile, session _: ConnectionSession, preferences _: FileListPreferences) async throws -> [FileItem] {
+        throw RemoteClientError.unsupportedProtocol(self.protocolKind)
     }
 
-    public func createFolder(named name: String, in path: String, profile: ServerProfile, session: ConnectionSession) async throws {
-        throw RemoteClientError.unsupportedProtocol(protocolKind)
+    public func createFolder(named _: String, in _: String, profile _: ServerProfile, session _: ConnectionSession) async throws {
+        throw RemoteClientError.unsupportedProtocol(self.protocolKind)
     }
 
-    public func renameItem(at path: String, to newName: String, profile: ServerProfile, session: ConnectionSession) async throws {
-        throw RemoteClientError.unsupportedProtocol(protocolKind)
+    public func renameItem(at _: String, to _: String, profile _: ServerProfile, session _: ConnectionSession) async throws {
+        throw RemoteClientError.unsupportedProtocol(self.protocolKind)
     }
 
-    public func deleteItem(at path: String, profile: ServerProfile, session: ConnectionSession) async throws {
-        throw RemoteClientError.unsupportedProtocol(protocolKind)
+    public func deleteItem(at _: String, profile _: ServerProfile, session _: ConnectionSession) async throws {
+        throw RemoteClientError.unsupportedProtocol(self.protocolKind)
     }
 
-    public func itemExists(at path: String, profile: ServerProfile, session: ConnectionSession) async throws -> Bool {
-        throw RemoteClientError.unsupportedProtocol(protocolKind)
+    public func itemExists(at _: String, profile _: ServerProfile, session _: ConnectionSession) async throws -> Bool {
+        throw RemoteClientError.unsupportedProtocol(self.protocolKind)
     }
 }
 
@@ -78,7 +78,7 @@ public enum RemoteClientError: Error, Equatable, LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case .unsupportedProtocol(let kind):
+        case let .unsupportedProtocol(kind):
             "\(kind.rawValue.uppercased()) is scaffolded but not enabled in this build."
         case .connectionFailed:
             "The connection could not be established."
@@ -86,15 +86,15 @@ public enum RemoteClientError: Error, Equatable, LocalizedError {
             "Authentication failed. Check the username, key, or password."
         case .hostFingerprintChanged:
             "The host fingerprint changed. Review the host before continuing."
-        case .hostNotTrusted(_, _, let algorithm, let fingerprint, _):
+        case let .hostNotTrusted(_, _, algorithm, fingerprint, _):
             "Trust this \(algorithm) host fingerprint before connecting: \(fingerprint)"
-        case .commandFailed(let message):
+        case let .commandFailed(message):
             message
-        case .unsupportedAuthentication(let message):
+        case let .unsupportedAuthentication(message):
             message
-        case .itemAlreadyExists(let path):
+        case let .itemAlreadyExists(path):
             "An item already exists at \(path)."
-        case .nativeBackendUnavailable(let message):
+        case let .nativeBackendUnavailable(message):
             message
         }
     }

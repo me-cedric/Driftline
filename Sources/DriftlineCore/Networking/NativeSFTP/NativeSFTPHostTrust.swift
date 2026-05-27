@@ -16,7 +16,7 @@ public enum NativeSFTPHostKeyFingerprint {
         return HostFingerprint(
             host: "",
             port: 0,
-            algorithm: displayAlgorithm(forOpenSSHKeyType: fields[0]),
+            algorithm: self.displayAlgorithm(forOpenSSHKeyType: fields[0]),
             fingerprint: "SHA256:\(fingerprint)"
         )
     }
@@ -54,7 +54,7 @@ final class NativeSFTPHostTrustDelegate: NIOSSHClientServerAuthenticationDelegat
     func validateHostKey(hostKey: NIOSSHPublicKey, validationCompletePromise: EventLoopPromise<Void>) {
         let host = host
         let port = port
-        let store = hostTrustStore
+        let store = self.hostTrustStore
         Task {
             do {
                 var fingerprint = try NativeSFTPHostKeyFingerprint.fingerprint(for: hostKey)

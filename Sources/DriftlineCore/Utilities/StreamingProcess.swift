@@ -66,7 +66,7 @@ public struct FoundationStreamingProcessExecutor: CancellableStreamingProcessExe
 
             do {
                 try process.run()
-                Task { await registry.add(process) }
+                Task { await self.registry.add(process) }
             } catch {
                 continuation.finish(throwing: error)
                 return
@@ -82,7 +82,7 @@ public struct FoundationStreamingProcessExecutor: CancellableStreamingProcessExe
     }
 
     public func cancelAll() async {
-        await registry.cancelAll()
+        await self.registry.cancelAll()
     }
 }
 
@@ -92,14 +92,14 @@ public actor StreamingProcessRegistry {
     public init() {}
 
     func add(_ process: Process) {
-        processes.append(process)
+        self.processes.append(process)
     }
 
     public func cancelAll() {
-        for process in processes where process.isRunning {
+        for process in self.processes where process.isRunning {
             process.terminate()
         }
-        processes.removeAll { !$0.isRunning }
+        self.processes.removeAll { !$0.isRunning }
     }
 }
 
@@ -109,26 +109,26 @@ private final class StreamingProcessState: @unchecked Sendable {
     private var stderr = ""
 
     var output: String {
-        lock.lock()
+        self.lock.lock()
         defer { lock.unlock() }
-        return stdout
+        return self.stdout
     }
 
     var error: String {
-        lock.lock()
+        self.lock.lock()
         defer { lock.unlock() }
-        return stderr
+        return self.stderr
     }
 
     func appendOutput(_ value: String) {
-        lock.lock()
-        stdout += value
-        lock.unlock()
+        self.lock.lock()
+        self.stdout += value
+        self.lock.unlock()
     }
 
     func appendError(_ value: String) {
-        lock.lock()
-        stderr += value
-        lock.unlock()
+        self.lock.lock()
+        self.stderr += value
+        self.lock.unlock()
     }
 }

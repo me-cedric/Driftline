@@ -55,7 +55,7 @@ public struct SystemSFTPClient: RemoteFileSystemClient {
         )
     }
 
-    public func disconnect(session: ConnectionSession) async throws {}
+    public func disconnect(session _: ConnectionSession) async throws {}
 
     public func listDirectory(at path: String, profile: ServerProfile, session: ConnectionSession, preferences: FileListPreferences) async throws -> [FileItem] {
         guard session.state == .connected else {
@@ -71,15 +71,15 @@ public struct SystemSFTPClient: RemoteFileSystemClient {
     }
 
     public func createFolder(named name: String, in path: String, profile: ServerProfile, session: ConnectionSession) async throws {
-        try await runRemoteCommand(RemoteFileCommandBuilder.createFolderCommand(name: name, in: path), profile: profile, session: session)
+        try await self.runRemoteCommand(RemoteFileCommandBuilder.createFolderCommand(name: name, in: path), profile: profile, session: session)
     }
 
     public func renameItem(at path: String, to newName: String, profile: ServerProfile, session: ConnectionSession) async throws {
-        try await runRemoteCommand(RemoteFileCommandBuilder.renameCommand(path: path, newName: newName), profile: profile, session: session)
+        try await self.runRemoteCommand(RemoteFileCommandBuilder.renameCommand(path: path, newName: newName), profile: profile, session: session)
     }
 
     public func deleteItem(at path: String, profile: ServerProfile, session: ConnectionSession) async throws {
-        try await runRemoteCommand(RemoteFileCommandBuilder.deleteCommand(path: path), profile: profile, session: session)
+        try await self.runRemoteCommand(RemoteFileCommandBuilder.deleteCommand(path: path), profile: profile, session: session)
     }
 
     public func itemExists(at path: String, profile: ServerProfile, session: ConnectionSession) async throws -> Bool {

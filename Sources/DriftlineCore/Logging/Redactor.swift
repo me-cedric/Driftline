@@ -7,10 +7,10 @@ public struct Redactor: Sendable {
 
     public func redact(_ message: String) -> String {
         var output = message
-        for key in sensitiveKeys {
+        for key in self.sensitiveKeys {
             let pattern = #"(?i)(\b\#(NSRegularExpression.escapedPattern(for: key))\s*[:=]\s*)("[^"]*"|'[^']*'|[^\s,;]+)"#
             guard let regex = try? NSRegularExpression(pattern: pattern) else { continue }
-            let range = NSRange(output.startIndex..<output.endIndex, in: output)
+            let range = NSRange(output.startIndex ..< output.endIndex, in: output)
             output = regex.stringByReplacingMatches(in: output, range: range, withTemplate: "$1<redacted>")
         }
         return output

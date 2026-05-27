@@ -2,7 +2,7 @@ import Crypto
 import Foundation
 
 #if canImport(CommonCrypto)
-import CommonCrypto
+    import CommonCrypto
 #endif
 
 enum OpenSSHKeyDecryptor {
@@ -22,11 +22,11 @@ enum OpenSSHKeyDecryptor {
 
         switch cipher {
         case "aes256-ctr":
-            return try decryptAES256CTR(blob: encryptedPrivateBlob, passphrase: passphraseData, salt: salt, rounds: rounds)
+            return try self.decryptAES256CTR(blob: encryptedPrivateBlob, passphrase: passphraseData, salt: salt, rounds: rounds)
         case "aes256-gcm@openssh.com":
-            return try decryptAES256GCM(blob: encryptedPrivateBlob, passphrase: passphraseData, salt: salt, rounds: rounds)
+            return try self.decryptAES256GCM(blob: encryptedPrivateBlob, passphrase: passphraseData, salt: salt, rounds: rounds)
         case "chacha20-poly1305@openssh.com":
-            return try decryptChaCha20Poly1305(blob: encryptedPrivateBlob, passphrase: passphraseData, salt: salt, rounds: rounds)
+            return try self.decryptChaCha20Poly1305(blob: encryptedPrivateBlob, passphrase: passphraseData, salt: salt, rounds: rounds)
         default:
             throw RemoteClientError.unsupportedAuthentication("Unsupported cipher '\(cipher)' for encrypted OpenSSH private key.")
         }
@@ -45,9 +45,9 @@ enum OpenSSHKeyDecryptor {
         let iv = keyIV.dropFirst(32).prefix(16)
 
         #if canImport(CommonCrypto)
-        return try commonCryptoAES256CTR(blob: blob, key: Data(key), iv: Data(iv))
+            return try commonCryptoAES256CTR(blob: blob, key: Data(key), iv: Data(iv))
         #else
-        throw RemoteClientError.unsupportedAuthentication("AES-256-CTR decryption is not available on this platform.")
+            throw RemoteClientError.unsupportedAuthentication("AES-256-CTR decryption is not available on this platform.")
         #endif
     }
 
@@ -101,67 +101,67 @@ enum OpenSSHKeyDecryptor {
 }
 
 #if canImport(CommonCrypto)
-private func commonCryptoAES256CTR(blob: Data, key: Data, iv: Data) throws -> Data {
-    var cryptorRef: CCCryptorRef?
-    let status = key.withUnsafeBytes { keyBytes in
-        iv.withUnsafeBytes { ivBytes in
-            CCCryptorCreateWithMode(
-                CCOperation(kCCEncrypt),
-                CCMode(kCCModeCTR),
-                CCAlgorithm(kCCAlgorithmAES),
-                CCPadding(ccNoPadding),
-                ivBytes.baseAddress,
-                keyBytes.baseAddress,
-                32,
-                nil,
-                0,
-                0,
-                CCModeOptions(kCCModeOptionCTR_BE),
-                &cryptorRef
-            )
+    private func commonCryptoAES256CTR(blob: Data, key: Data, iv: Data) throws -> Data {
+        var cryptorRef: CCCryptorRef?
+        let status = key.withUnsafeBytes { keyBytes in
+            iv.withUnsafeBytes { ivBytes in
+                CCCryptorCreateWithMode(
+                    CCOperation(kCCEncrypt),
+                    CCMode(kCCModeCTR),
+                    CCAlgorithm(kCCAlgorithmAES),
+                    CCPadding(ccNoPadding),
+                    ivBytes.baseAddress,
+                    keyBytes.baseAddress,
+                    32,
+                    nil,
+                    0,
+                    0,
+                    CCModeOptions(kCCModeOptionCTR_BE),
+                    &cryptorRef
+                )
+            }
         }
-    }
 
-    guard status == kCCSuccess, let cryptor = cryptorRef else {
-        throw RemoteClientError.unsupportedAuthentication("Passphrase is incorrect or key is corrupt")
-    }
-    defer { CCCryptorRelease(cryptor) }
+        guard status == kCCSuccess, let cryptor = cryptorRef else {
+            throw RemoteClientError.unsupportedAuthentication("Passphrase is incorrect or key is corrupt")
+        }
+        defer { CCCryptorRelease(cryptor) }
 
-    var output = Data(count: blob.count + kCCBlockSizeAES128)
-    let outputCapacity = output.count
-    var moved = 0
+        var output = Data(count: blob.count + kCCBlockSizeAES128)
+        let outputCapacity = output.count
+        var moved = 0
 
-    let updateStatus: CCCryptorStatus = blob.withUnsafeBytes { blobBytes in
-        output.withUnsafeMutableBytes { outBytes in
-            CCCryptorUpdate(
+        let updateStatus: CCCryptorStatus = blob.withUnsafeBytes { blobBytes in
+            output.withUnsafeMutableBytes { outBytes in
+                CCCryptorUpdate(
+                    cryptor,
+                    blobBytes.baseAddress,
+                    blob.count,
+                    outBytes.baseAddress,
+                    outputCapacity,
+                    &moved
+                )
+            }
+        }
+        guard updateStatus == kCCSuccess else {
+            throw RemoteClientError.unsupportedAuthentication("Passphrase is incorrect or key is corrupt")
+        }
+
+        var finalMoved = 0
+        let remaining = outputCapacity - moved
+        let finalStatus: CCCryptorStatus = output.withUnsafeMutableBytes { outBytes in
+            guard let base = outBytes.baseAddress else { return CCCryptorStatus(kCCMemoryFailure) }
+            return CCCryptorFinal(
                 cryptor,
-                blobBytes.baseAddress,
-                blob.count,
-                outBytes.baseAddress,
-                outputCapacity,
-                &moved
+                base.advanced(by: moved),
+                remaining,
+                &finalMoved
             )
         }
-    }
-    guard updateStatus == kCCSuccess else {
-        throw RemoteClientError.unsupportedAuthentication("Passphrase is incorrect or key is corrupt")
-    }
+        guard finalStatus == kCCSuccess else {
+            throw RemoteClientError.unsupportedAuthentication("Passphrase is incorrect or key is corrupt")
+        }
 
-    var finalMoved = 0
-    let remaining = outputCapacity - moved
-    let finalStatus: CCCryptorStatus = output.withUnsafeMutableBytes { outBytes in
-        guard let base = outBytes.baseAddress else { return CCCryptorStatus(kCCMemoryFailure) }
-        return CCCryptorFinal(
-            cryptor,
-            base.advanced(by: moved),
-            remaining,
-            &finalMoved
-        )
+        return output.prefix(moved + finalMoved)
     }
-    guard finalStatus == kCCSuccess else {
-        throw RemoteClientError.unsupportedAuthentication("Passphrase is incorrect or key is corrupt")
-    }
-
-    return output.prefix(moved + finalMoved)
-}
 #endif

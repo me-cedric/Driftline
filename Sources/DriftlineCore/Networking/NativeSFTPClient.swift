@@ -5,7 +5,9 @@ public enum RemoteBackendKind: String, CaseIterable, Codable, Sendable, Identifi
     case systemSSH
     case nativeSwiftExperimental
 
-    public var id: String { rawValue }
+    public var id: String {
+        rawValue
+    }
 
     public var displayName: String {
         switch self {
@@ -59,7 +61,7 @@ public struct NativeSFTPClient: RemoteFileSystemClient {
             throw RemoteClientError.unsupportedProtocol(profile.protocolKind)
         }
 
-        let connection = try await Self.makeConnection(profile: profile, credentialStore: credentialStore, hostTrustStore: hostTrustStore)
+        let connection = try await Self.makeConnection(profile: profile, credentialStore: self.credentialStore, hostTrustStore: self.hostTrustStore)
         let session = ConnectionSession(
             serverID: profile.id,
             state: .connected,
@@ -68,32 +70,32 @@ public struct NativeSFTPClient: RemoteFileSystemClient {
             remotePath: profile.remoteDefaultPath,
             connectedAt: Date()
         )
-        await connectionPool.insert(connection, for: session.id)
+        await self.connectionPool.insert(connection, for: session.id)
         return session
     }
 
     public func disconnect(session: ConnectionSession) async throws {
-        await connectionPool.remove(sessionID: session.id)
+        await self.connectionPool.remove(sessionID: session.id)
     }
 
-    public func listDirectory(at path: String, profile: ServerProfile, session: ConnectionSession, preferences: FileListPreferences) async throws -> [FileItem] {
-        try await connectionPool.connection(for: session.id).listDirectory(at: path, preferences: preferences)
+    public func listDirectory(at path: String, profile _: ServerProfile, session: ConnectionSession, preferences: FileListPreferences) async throws -> [FileItem] {
+        try await self.connectionPool.connection(for: session.id).listDirectory(at: path, preferences: preferences)
     }
 
-    public func createFolder(named name: String, in path: String, profile: ServerProfile, session: ConnectionSession) async throws {
-        try await connectionPool.connection(for: session.id).createFolder(named: name, in: path)
+    public func createFolder(named name: String, in path: String, profile _: ServerProfile, session: ConnectionSession) async throws {
+        try await self.connectionPool.connection(for: session.id).createFolder(named: name, in: path)
     }
 
-    public func renameItem(at path: String, to newName: String, profile: ServerProfile, session: ConnectionSession) async throws {
-        try await connectionPool.connection(for: session.id).renameItem(at: path, to: newName)
+    public func renameItem(at path: String, to newName: String, profile _: ServerProfile, session: ConnectionSession) async throws {
+        try await self.connectionPool.connection(for: session.id).renameItem(at: path, to: newName)
     }
 
-    public func deleteItem(at path: String, profile: ServerProfile, session: ConnectionSession) async throws {
-        try await connectionPool.connection(for: session.id).deleteItem(at: path)
+    public func deleteItem(at path: String, profile _: ServerProfile, session: ConnectionSession) async throws {
+        try await self.connectionPool.connection(for: session.id).deleteItem(at: path)
     }
 
-    public func itemExists(at path: String, profile: ServerProfile, session: ConnectionSession) async throws -> Bool {
-        try await connectionPool.connection(for: session.id).itemExists(at: path)
+    public func itemExists(at path: String, profile _: ServerProfile, session: ConnectionSession) async throws -> Bool {
+        try await self.connectionPool.connection(for: session.id).itemExists(at: path)
     }
 
     public static func makeConnection(
@@ -106,16 +108,16 @@ public struct NativeSFTPClient: RemoteFileSystemClient {
         }
 
         switch profile.authenticationMethod {
-        case .password(let reference):
+        case let .password(reference):
             guard let password = try await credentialStore.readString(reference: reference) else {
                 throw RemoteClientError.authenticationFailed
             }
-            return try await connectWithRetry(
+            return try await self.connectWithRetry(
                 profile: profile,
                 authDelegate: { NativeSFTPAuthFactory.passwordDelegate(username: profile.username, password: password) },
                 hostTrustStore: hostTrustStore
             )
-        case .privateKey(let path, let passphraseRef):
+        case let .privateKey(path, passphraseRef):
             let resolvedPassphrase: String?
             if let passphraseRef {
                 resolvedPassphrase = try await credentialStore.readString(reference: passphraseRef)
@@ -124,7 +126,7 @@ public struct NativeSFTPClient: RemoteFileSystemClient {
             }
             let contents = try String(contentsOfFile: NSString(string: path).expandingTildeInPath, encoding: .utf8)
             let key = try NativeSFTPPrivateKeyParser.parse(contents: contents, passphrase: resolvedPassphrase)
-            return try await connectWithRetry(
+            return try await self.connectWithRetry(
                 profile: profile,
                 authDelegate: { NativeSFTPAuthFactory.offerSequence(username: profile.username, methods: [.privateKey(key)]) },
                 hostTrustStore: hostTrustStore
@@ -156,7 +158,7 @@ public struct NativeSFTPClient: RemoteFileSystemClient {
                 hostTrustStore: hostTrustStore
             )
         } catch {
-            guard isTransientHandshakeClose(error) else { throw error }
+            guard self.isTransientHandshakeClose(error) else { throw error }
             try await Task.sleep(nanoseconds: 250_000_000)
             return try await NativeSFTPConnection.connect(
                 profile: profile,

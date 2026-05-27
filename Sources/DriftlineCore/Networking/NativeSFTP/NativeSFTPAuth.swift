@@ -31,17 +31,17 @@ final class NativeSFTPAuthDelegate: NIOSSHClientUserAuthenticationDelegate {
         availableMethods: NIOSSHAvailableUserAuthenticationMethods,
         nextChallengePromise: EventLoopPromise<NIOSSHUserAuthenticationOffer?>
     ) {
-        while !methods.isEmpty {
-            let method = methods.removeFirst()
+        while !self.methods.isEmpty {
+            let method = self.methods.removeFirst()
             switch method {
-            case .password(let password) where availableMethods.contains(.password):
-                nextChallengePromise.succeed(NIOSSHUserAuthenticationOffer(username: username, serviceName: "", offer: .password(.init(password: password))))
+            case let .password(password) where availableMethods.contains(.password):
+                nextChallengePromise.succeed(NIOSSHUserAuthenticationOffer(username: self.username, serviceName: "", offer: .password(.init(password: password))))
                 return
-            case .privateKey(let key) where availableMethods.contains(.publicKey):
-                nextChallengePromise.succeed(NIOSSHUserAuthenticationOffer(username: username, serviceName: "", offer: .privateKey(.init(privateKey: key))))
+            case let .privateKey(key) where availableMethods.contains(.publicKey):
+                nextChallengePromise.succeed(NIOSSHUserAuthenticationOffer(username: self.username, serviceName: "", offer: .privateKey(.init(privateKey: key))))
                 return
             case .none:
-                nextChallengePromise.succeed(NIOSSHUserAuthenticationOffer(username: username, serviceName: "", offer: .none))
+                nextChallengePromise.succeed(NIOSSHUserAuthenticationOffer(username: self.username, serviceName: "", offer: .none))
                 return
             case .password, .privateKey:
                 continue

@@ -23,65 +23,65 @@ public actor InMemoryCredentialStore: CredentialStore {
     public init() {}
 
     public func save(secret: Data, reference: CredentialReference) async throws {
-        secrets[reference] = secret
+        self.secrets[reference] = secret
     }
 
     public func read(reference: CredentialReference) async throws -> Data? {
-        secrets[reference]
+        self.secrets[reference]
     }
 
     public func delete(reference: CredentialReference) async throws {
-        secrets.removeValue(forKey: reference)
+        self.secrets.removeValue(forKey: reference)
     }
 }
 
 #if canImport(Security)
-import Security
+    import Security
 
-public actor KeychainCredentialStore: CredentialStore {
-    public init() {}
+    public actor KeychainCredentialStore: CredentialStore {
+        public init() {}
 
-    public func save(secret: Data, reference: CredentialReference) async throws {
-        var query = baseQuery(reference)
-        SecItemDelete(query as CFDictionary)
-        query[kSecValueData as String] = secret
-        query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        let status = SecItemAdd(query as CFDictionary, nil)
-        guard status == errSecSuccess else {
-            throw KeychainError.unhandledStatus(status)
+        public func save(secret: Data, reference: CredentialReference) async throws {
+            var query = self.baseQuery(reference)
+            SecItemDelete(query as CFDictionary)
+            query[kSecValueData as String] = secret
+            query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+            let status = SecItemAdd(query as CFDictionary, nil)
+            guard status == errSecSuccess else {
+                throw KeychainError.unhandledStatus(status)
+            }
+        }
+
+        public func read(reference: CredentialReference) async throws -> Data? {
+            var query = self.baseQuery(reference)
+            query[kSecReturnData as String] = true
+            query[kSecMatchLimit as String] = kSecMatchLimitOne
+            var result: AnyObject?
+            let status = SecItemCopyMatching(query as CFDictionary, &result)
+            if status == errSecItemNotFound { return nil }
+            guard status == errSecSuccess else {
+                throw KeychainError.unhandledStatus(status)
+            }
+            return result as? Data
+        }
+
+        public func delete(reference: CredentialReference) async throws {
+            let status = SecItemDelete(baseQuery(reference) as CFDictionary)
+            guard status == errSecSuccess || status == errSecItemNotFound else {
+                throw KeychainError.unhandledStatus(status)
+            }
+        }
+
+        private func baseQuery(_ reference: CredentialReference) -> [String: Any] {
+            [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: reference.service,
+                kSecAttrAccount as String: reference.account,
+            ]
         }
     }
 
-    public func read(reference: CredentialReference) async throws -> Data? {
-        var query = baseQuery(reference)
-        query[kSecReturnData as String] = true
-        query[kSecMatchLimit as String] = kSecMatchLimitOne
-        var result: AnyObject?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
-        if status == errSecItemNotFound { return nil }
-        guard status == errSecSuccess else {
-            throw KeychainError.unhandledStatus(status)
-        }
-        return result as? Data
+    public enum KeychainError: Error, Equatable {
+        case unhandledStatus(OSStatus)
     }
-
-    public func delete(reference: CredentialReference) async throws {
-        let status = SecItemDelete(baseQuery(reference) as CFDictionary)
-        guard status == errSecSuccess || status == errSecItemNotFound else {
-            throw KeychainError.unhandledStatus(status)
-        }
-    }
-
-    private func baseQuery(_ reference: CredentialReference) -> [String: Any] {
-        [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: reference.service,
-            kSecAttrAccount as String: reference.account
-        ]
-    }
-}
-
-public enum KeychainError: Error, Equatable {
-    case unhandledStatus(OSStatus)
-}
 #endif

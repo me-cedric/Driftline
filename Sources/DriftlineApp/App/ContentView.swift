@@ -6,162 +6,160 @@ struct ContentView: View {
 
     var body: some View {
         NavigationSplitView {
-            if model.preferences.showSidebar {
-                SidebarView(model: model)
-            } else {
-                EmptyView()
+            if self.model.preferences.showSidebar {
+                SidebarView(model: self.model)
             }
         } detail: {
             VStack(spacing: 0) {
-                ConnectionToolbar(model: model)
-                TabStrip(model: model)
+                ConnectionToolbar(model: self.model)
+                TabStrip(model: self.model)
                 if let message = model.statusMessage {
                     StatusBanner(message: message) {
-                        model.statusMessage = nil
+                        self.model.statusMessage = nil
                     }
                 }
                 HSplitView {
                     FileBrowserPane(
                         title: "Local",
-                        path: model.session.localPath,
-                        items: model.localItems,
-                        selection: $model.selectedFile,
-                        onOpen: { model.navigateLocal(to: $0) },
-                        onParent: { model.navigateLocalParent() },
-                        onRefresh: { Task { await model.refreshLocal() } },
-                        onCreateFolder: { model.beginCreateFolder(source: .local) },
-                        onRename: { model.beginRenameSelectedItem() },
-                        onDelete: { model.requestDeleteSelectedItem() }
+                        path: self.model.session.localPath,
+                        items: self.model.localItems,
+                        selection: self.$model.selectedFile,
+                        onOpen: { self.model.navigateLocal(to: $0) },
+                        onParent: { self.model.navigateLocalParent() },
+                        onRefresh: { Task { await self.model.refreshLocal() } },
+                        onCreateFolder: { self.model.beginCreateFolder(source: .local) },
+                        onRename: { self.model.beginRenameSelectedItem() },
+                        onDelete: { self.model.requestDeleteSelectedItem() }
                     )
-                        .frame(minWidth: 360)
+                    .frame(minWidth: 360)
                     FileBrowserPane(
                         title: "Remote",
-                        path: model.session.remotePath,
-                        items: model.remoteItems,
-                        selection: $model.selectedFile,
-                        onOpen: { model.navigateRemote(to: $0) },
-                        onParent: { model.navigateRemoteParent() },
-                        onRefresh: { Task { await model.refreshRemote() } },
-                        onCreateFolder: { model.beginCreateFolder(source: .remote) },
-                        onRename: { model.beginRenameSelectedItem() },
-                        onDelete: { model.requestDeleteSelectedItem() }
+                        path: self.model.session.remotePath,
+                        items: self.model.remoteItems,
+                        selection: self.$model.selectedFile,
+                        onOpen: { self.model.navigateRemote(to: $0) },
+                        onParent: { self.model.navigateRemoteParent() },
+                        onRefresh: { Task { await self.model.refreshRemote() } },
+                        onCreateFolder: { self.model.beginCreateFolder(source: .remote) },
+                        onRename: { self.model.beginRenameSelectedItem() },
+                        onDelete: { self.model.requestDeleteSelectedItem() }
                     )
-                        .frame(minWidth: 360)
+                    .frame(minWidth: 360)
                 }
-                if model.preferences.showTransferQueue {
-                    StatsDashboardView(stats: model.transferStats, lastConnection: model.lastConnectionDisplay)
+                if self.model.preferences.showTransferQueue {
+                    StatsDashboardView(stats: self.model.transferStats, lastConnection: self.model.lastConnectionDisplay)
                     TransferPanel(
-                        jobs: model.transferJobs,
-                        onClearCompleted: { model.clearCompletedTransfers() },
-                        onClearFailed: { model.clearFailedTransfers() },
-                        onRetryFailed: { model.retryFailedTransfers() },
-                        onCancelActive: { model.cancelActiveTransfers() },
-                        onCancelTransfer: { model.cancelTransfer(id: $0) }
+                        jobs: self.model.transferJobs,
+                        onClearCompleted: { self.model.clearCompletedTransfers() },
+                        onClearFailed: { self.model.clearFailedTransfers() },
+                        onRetryFailed: { self.model.retryFailedTransfers() },
+                        onCancelActive: { self.model.cancelActiveTransfers() },
+                        onCancelTransfer: { self.model.cancelTransfer(id: $0) }
                     )
-                        .frame(height: 170)
+                    .frame(height: 170)
                 }
             }
             .toolbar {
                 ToolbarItemGroup {
-                    Button { Task { await model.refreshLocal() } } label: {
+                    Button { Task { await self.model.refreshLocal() } } label: {
                         Label("Refresh", systemImage: "arrow.clockwise")
                     }
                     .accessibilityHint("Refreshes the local file list.")
-                    Button { Task { await model.refreshRemote() } } label: {
+                    Button { Task { await self.model.refreshRemote() } } label: {
                         Label("Refresh Remote", systemImage: "network")
                     }
                     .accessibilityHint("Refreshes the remote file list.")
-                    Button { model.uploadSelectedItem() } label: {
+                    Button { self.model.uploadSelectedItem() } label: {
                         Label("Upload", systemImage: "arrow.up.circle")
                     }
-                    .disabled(model.selectedFile?.source != .local || model.session.state != .connected)
+                    .disabled(self.model.selectedFile?.source != .local || self.model.session.state != .connected)
                     .accessibilityHint("Uploads the selected local item to the current remote folder.")
-                    Button { model.downloadSelectedItem() } label: {
+                    Button { self.model.downloadSelectedItem() } label: {
                         Label("Download", systemImage: "arrow.down.circle")
                     }
-                    .disabled(model.selectedFile?.source != .remote || model.session.state != .connected)
+                    .disabled(self.model.selectedFile?.source != .remote || self.model.session.state != .connected)
                     .accessibilityHint("Downloads the selected remote item to the current local folder.")
-                    Button { model.beginCreateFolder(source: model.selectedFile?.source ?? .local) } label: {
+                    Button { self.model.beginCreateFolder(source: self.model.selectedFile?.source ?? .local) } label: {
                         Label("New Folder", systemImage: "folder.badge.plus")
                     }
-                    Button { model.showViewOptions.toggle() } label: {
+                    Button { self.model.showViewOptions.toggle() } label: {
                         Label("View Options", systemImage: "slider.horizontal.3")
                     }
-                    .popover(isPresented: $model.showViewOptions) {
-                        ViewOptionsView(preferences: $model.preferences) {
-                            model.savePreferences()
+                    .popover(isPresented: self.$model.showViewOptions) {
+                        ViewOptionsView(preferences: self.$model.preferences) {
+                            self.model.savePreferences()
                             Task {
-                                await model.refreshLocal()
-                                await model.refreshRemote()
+                                await self.model.refreshLocal()
+                                await self.model.refreshRemote()
                             }
                         }
                     }
-                    Button { model.preferences.showInspector.toggle() } label: {
+                    Button { self.model.preferences.showInspector.toggle() } label: {
                         Label("Inspector", systemImage: "sidebar.right")
                     }
                 }
             }
-            .inspector(isPresented: $model.preferences.showInspector) {
-                InspectorView(file: model.selectedFile, session: model.session)
+            .inspector(isPresented: self.$model.preferences.showInspector) {
+                InspectorView(file: self.model.selectedFile, session: self.model.session)
                     .inspectorColumnWidth(min: 260, ideal: 300, max: 380)
             }
-            .sheet(item: $model.profileDraft) { draft in
+            .sheet(item: self.$model.profileDraft) { draft in
                 ServerProfileEditorView(
                     draft: Binding(
-                        get: { model.profileDraft ?? draft },
-                        set: { model.profileDraft = $0 }
+                        get: { self.model.profileDraft ?? draft },
+                        set: { self.model.profileDraft = $0 }
                     ),
-                    savesAndConnects: model.connectAfterSavingDraft,
-                    errorMessage: model.profileEditorError,
+                    savesAndConnects: self.model.connectAfterSavingDraft,
+                    errorMessage: self.model.profileEditorError,
                     onCancel: {
-                        model.profileDraft = nil
-                        model.profileEditorError = nil
-                        model.connectAfterSavingDraft = false
+                        self.model.profileDraft = nil
+                        self.model.profileEditorError = nil
+                        self.model.connectAfterSavingDraft = false
                     },
                     onSave: {
-                        model.saveProfileDraft()
+                        self.model.saveProfileDraft()
                     }
                 )
             }
-            .sheet(item: $model.pendingHostTrust) { trust in
+            .sheet(item: self.$model.pendingHostTrust) { trust in
                 HostTrustPromptView(
                     trust: trust,
-                    onCancel: { model.pendingHostTrust = nil },
-                    onTrust: { model.trustPendingHostAndReconnect() }
+                    onCancel: { self.model.pendingHostTrust = nil },
+                    onTrust: { self.model.trustPendingHostAndReconnect() }
                 )
             }
-            .sheet(item: $model.fileOperationPrompt) { prompt in
+            .sheet(item: self.$model.fileOperationPrompt) { prompt in
                 FileOperationPromptView(
                     title: prompt.title,
-                    text: $model.fileOperationText,
+                    text: self.$model.fileOperationText,
                     onCancel: {
-                        model.fileOperationPrompt = nil
-                        model.fileOperationText = ""
+                        self.model.fileOperationPrompt = nil
+                        self.model.fileOperationText = ""
                     },
                     onCommit: {
-                        model.commitFileOperationPrompt()
+                        self.model.commitFileOperationPrompt()
                     }
                 )
             }
             .alert("Delete Item?", isPresented: Binding(
-                get: { model.pendingDeleteItem != nil },
-                set: { if !$0 { model.pendingDeleteItem = nil } }
+                get: { self.model.pendingDeleteItem != nil },
+                set: { if !$0 { self.model.pendingDeleteItem = nil } }
             )) {
-                Button("Cancel", role: .cancel) { model.pendingDeleteItem = nil }
-                Button("Delete", role: .destructive) { model.deletePendingItem() }
+                Button("Cancel", role: .cancel) { self.model.pendingDeleteItem = nil }
+                Button("Delete", role: .destructive) { self.model.deletePendingItem() }
             } message: {
-                Text(model.pendingDeleteItem?.name ?? "This item will be deleted.")
+                Text(self.model.pendingDeleteItem?.name ?? "This item will be deleted.")
             }
-            .sheet(item: $model.pendingTransferConflict) { conflict in
+            .sheet(item: self.$model.pendingTransferConflict) { conflict in
                 TransferConflictView(
                     conflict: conflict,
-                    renameText: $model.conflictRenameText,
-                    onSkip: { model.skipPendingConflict() },
-                    onOverwrite: { model.overwritePendingConflict() },
-                    onRename: { model.renameAndRunPendingConflict() }
+                    renameText: self.$model.conflictRenameText,
+                    onSkip: { self.model.skipPendingConflict() },
+                    onOverwrite: { self.model.overwritePendingConflict() },
+                    onRename: { self.model.renameAndRunPendingConflict() }
                 )
             }
-            .sheet(isPresented: $model.showAbout) {
+            .sheet(isPresented: self.$model.showAbout) {
                 AboutView()
             }
         }
@@ -172,26 +170,26 @@ struct SidebarView: View {
     @Bindable var model: AppModel
 
     var body: some View {
-        List(selection: $model.selectedSidebarItem) {
+        List(selection: self.$model.selectedSidebarItem) {
             Section("Driftline") {
                 Button {
-                    model.beginQuickConnect()
+                    self.model.beginQuickConnect()
                 } label: {
                     Label("New Connection", systemImage: "plus.circle")
                 }
                 Button {
-                    model.beginCreatingProfile()
+                    self.model.beginCreatingProfile()
                 } label: {
                     Label("Save Server", systemImage: "server.rack")
                 }
             }
             Section("Saved Servers") {
-                if model.profiles.isEmpty {
+                if self.model.profiles.isEmpty {
                     SidebarEmptyRow("No saved servers")
                 } else {
-                    ForEach(model.profiles) { profile in
+                    ForEach(self.model.profiles) { profile in
                         Button {
-                            model.selectedSidebarItem = profile.id.rawValue.uuidString
+                            self.model.selectedSidebarItem = profile.id.rawValue.uuidString
                         } label: {
                             SidebarProfileRow(profile: profile)
                         }
@@ -199,35 +197,35 @@ struct SidebarView: View {
                         .tag(profile.id.rawValue.uuidString)
                         .contextMenu {
                             Button("Connect") {
-                                model.selectedSidebarItem = profile.id.rawValue.uuidString
-                                model.connectToSelectedServer()
+                                self.model.selectedSidebarItem = profile.id.rawValue.uuidString
+                                self.model.connectToSelectedServer()
                             }
                             Button("Edit") {
-                                model.selectedSidebarItem = profile.id.rawValue.uuidString
-                                model.beginEditingSelectedProfile()
+                                self.model.selectedSidebarItem = profile.id.rawValue.uuidString
+                                self.model.beginEditingSelectedProfile()
                             }
                             Button("Duplicate") {
-                                model.selectedSidebarItem = profile.id.rawValue.uuidString
-                                model.duplicateSelectedProfile()
+                                self.model.selectedSidebarItem = profile.id.rawValue.uuidString
+                                self.model.duplicateSelectedProfile()
                             }
                             Divider()
                             Button("Delete", role: .destructive) {
-                                model.selectedSidebarItem = profile.id.rawValue.uuidString
-                                model.deleteSelectedProfile()
+                                self.model.selectedSidebarItem = profile.id.rawValue.uuidString
+                                self.model.deleteSelectedProfile()
                             }
                         }
                     }
                 }
             }
             Section("Favorites") {
-                let favorites = model.profiles.filter(\.isFavorite)
+                let favorites = self.model.profiles.filter(\.isFavorite)
                 if favorites.isEmpty {
                     SidebarEmptyRow("Mark servers as favorites")
                 } else {
                     ForEach(favorites) { profile in
                         Button {
-                            model.selectedSidebarItem = profile.id.rawValue.uuidString
-                            model.connectToSelectedServer()
+                            self.model.selectedSidebarItem = profile.id.rawValue.uuidString
+                            self.model.connectToSelectedServer()
                         } label: {
                             Label(profile.displayName, systemImage: "star.fill")
                         }
@@ -235,12 +233,12 @@ struct SidebarView: View {
                 }
             }
             Section("Bookmarks") {
-                if model.bookmarks.isEmpty {
+                if self.model.bookmarks.isEmpty {
                     SidebarEmptyRow("No bookmarks saved")
                 } else {
-                    ForEach(model.bookmarks) { bookmark in
+                    ForEach(self.model.bookmarks) { bookmark in
                         Button {
-                            model.openBookmark(bookmark)
+                            self.model.openBookmark(bookmark)
                         } label: {
                             Label(bookmark.name, systemImage: "bookmark")
                         }
@@ -248,12 +246,12 @@ struct SidebarView: View {
                 }
             }
             Section("Recent") {
-                if model.recents.isEmpty {
+                if self.model.recents.isEmpty {
                     SidebarEmptyRow("No recent connections")
                 } else {
-                    ForEach(model.recents) { recent in
+                    ForEach(self.model.recents) { recent in
                         Button {
-                            model.openRecent(recent)
+                            self.model.openRecent(recent)
                         } label: {
                             Label(recent.displayName, systemImage: "clock")
                         }
@@ -271,32 +269,32 @@ struct ConnectionToolbar: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            ConnectionStatusPill(state: model.session.state)
-            Text(model.activeProfile?.displayName ?? "No Server Selected")
+            ConnectionStatusPill(state: self.model.session.state)
+            Text(self.model.activeProfile?.displayName ?? "No Server Selected")
                 .font(.headline)
                 .lineLimit(1)
                 .frame(minWidth: 120, alignment: .leading)
-            Text(model.session.protocolKind?.rawValue.uppercased() ?? "SFTP")
+            Text(self.model.session.protocolKind?.rawValue.uppercased() ?? "SFTP")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.primary.opacity(0.72))
             Spacer()
-            Button(model.isConnecting ? "Connecting..." : "Connect") { model.connectToSelectedServer() }
+            Button(self.model.isConnecting ? "Connecting..." : "Connect") { self.model.connectToSelectedServer() }
                 .buttonStyle(.borderedProminent)
-                .disabled(model.isConnecting)
+                .disabled(self.model.isConnecting)
                 .accessibilityHint("Connects to the selected saved server.")
-            Button("New") { model.beginQuickConnect() }
+            Button("New") { self.model.beginQuickConnect() }
                 .accessibilityHint("Opens a new connection form with credentials.")
-            Button("Edit Server") { model.beginEditingSelectedProfile() }
-                .disabled(model.selectedProfile == nil)
-            Button("Favorite") { model.toggleSelectedFavorite() }
-                .disabled(model.selectedProfile == nil)
-            Button("Bookmark") { model.saveCurrentConnectionAsBookmark() }
-                .disabled(model.activeProfile == nil || model.session.state != .connected)
-            Button("Terminal") { model.openTerminalSession() }
-                .disabled(model.activeProfile == nil)
+            Button("Edit Server") { self.model.beginEditingSelectedProfile() }
+                .disabled(self.model.selectedProfile == nil)
+            Button("Favorite") { self.model.toggleSelectedFavorite() }
+                .disabled(self.model.selectedProfile == nil)
+            Button("Bookmark") { self.model.saveCurrentConnectionAsBookmark() }
+                .disabled(self.model.activeProfile == nil || self.model.session.state != .connected)
+            Button("Terminal") { self.model.openTerminalSession() }
+                .disabled(self.model.activeProfile == nil)
                 .accessibilityHint("Opens an SSH session in Terminal.")
-            Button("Disconnect") { model.disconnect() }
-                .disabled(model.session.state == .disconnected)
+            Button("Disconnect") { self.model.disconnect() }
+                .disabled(self.model.session.state == .disconnected)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -310,15 +308,15 @@ struct SidebarProfileRow: View {
     var body: some View {
         Label {
             VStack(alignment: .leading, spacing: 1) {
-                Text(profile.displayName)
+                Text(self.profile.displayName)
                     .lineLimit(1)
-                Text("\(profile.username)@\(profile.host):\(profile.port)")
+                Text("\(self.profile.username)@\(self.profile.host):\(self.profile.port)")
                     .font(.caption)
                     .foregroundStyle(.primary.opacity(0.62))
                     .lineLimit(1)
             }
         } icon: {
-            Image(systemName: profile.isFavorite ? "star.fill" : "network")
+            Image(systemName: self.profile.isFavorite ? "star.fill" : "network")
         }
     }
 }
@@ -331,7 +329,7 @@ struct SidebarEmptyRow: View {
     }
 
     var body: some View {
-        Text(text)
+        Text(self.text)
             .font(.caption)
             .foregroundStyle(.primary.opacity(0.55))
             .padding(.vertical, 4)
@@ -345,10 +343,10 @@ struct StatusBanner: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "info.circle")
-            Text(message)
+            Text(self.message)
                 .lineLimit(2)
             Spacer()
-            Button(action: onDismiss) {
+            Button(action: self.onDismiss) {
                 Image(systemName: "xmark")
             }
             .buttonStyle(.borderless)
@@ -365,9 +363,9 @@ struct TabStrip: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            ForEach(model.tabs) { tab in
+            ForEach(self.model.tabs) { tab in
                 Button {
-                    model.selectTab(tab.id)
+                    self.model.selectTab(tab.id)
                 } label: {
                     Text(tab.title)
                         .lineLimit(1)
@@ -375,9 +373,9 @@ struct TabStrip: View {
                         .padding(.vertical, 6)
                 }
                 .buttonStyle(.borderless)
-                .background(model.selectedTabID == tab.id ? .regularMaterial : .thinMaterial, in: RoundedRectangle(cornerRadius: 7))
+                .background(self.model.selectedTabID == tab.id ? .regularMaterial : .thinMaterial, in: RoundedRectangle(cornerRadius: 7))
             }
-            Button { model.newTab() } label: {
+            Button { self.model.newTab() } label: {
                 Image(systemName: "plus")
             }
             .buttonStyle(.borderless)

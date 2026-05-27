@@ -5,18 +5,18 @@ public enum RsyncProgressParser {
     private static let speedRegex = try? NSRegularExpression(pattern: #"(?m)\s([0-9]+(?:\.[0-9]+)?)([kKmMgG]?B)/s"#)
 
     public static func progress(from chunk: String) -> (progress: Double, bytesPerSecond: Int64?)? {
-        let range = NSRange(chunk.startIndex..<chunk.endIndex, in: chunk)
+        let range = NSRange(chunk.startIndex ..< chunk.endIndex, in: chunk)
         guard let percentMatch = percentRegex?.matches(in: chunk, range: range).last,
               let percentRange = Range(percentMatch.range(at: 1), in: chunk),
               let percent = Double(chunk[percentRange])
         else { return nil }
 
-        let speed = parseSpeed(from: chunk)
+        let speed = self.parseSpeed(from: chunk)
         return (min(max(percent / 100, 0), 1), speed)
     }
 
     private static func parseSpeed(from chunk: String) -> Int64? {
-        let range = NSRange(chunk.startIndex..<chunk.endIndex, in: chunk)
+        let range = NSRange(chunk.startIndex ..< chunk.endIndex, in: chunk)
         guard let match = speedRegex?.matches(in: chunk, range: range).last,
               let valueRange = Range(match.range(at: 1), in: chunk),
               let unitRange = Range(match.range(at: 2), in: chunk),
@@ -25,7 +25,7 @@ public enum RsyncProgressParser {
 
         let multiplier: Double
         switch chunk[unitRange].lowercased() {
-        case "kb": multiplier = 1_000
+        case "kb": multiplier = 1000
         case "mb": multiplier = 1_000_000
         case "gb": multiplier = 1_000_000_000
         default: multiplier = 1
@@ -37,7 +37,7 @@ public enum RsyncProgressParser {
 public enum RsyncCommandBuilder {
     public static func arguments(for job: TransferJob, profile: ServerProfile) throws -> [String] {
         let sshArguments = try SSHCommandBuilder.baseArguments(for: profile)
-        let sshCommand = ([ "ssh" ] + sshArguments).map(TerminalCommand.shellEscaped).joined(separator: " ")
+        let sshCommand = (["ssh"] + sshArguments).map(TerminalCommand.shellEscaped).joined(separator: " ")
         var arguments = ["-az", "--progress", "--human-readable", "-e", sshCommand]
 
         switch job.direction {
@@ -66,19 +66,19 @@ public actor SystemRsyncTransferClient: TransferClient {
         var current = job
         current.status = .running(progress: 0, bytesPerSecond: nil)
         current.startedAt = Date()
-        upsert(current)
+        self.upsert(current)
         await onUpdate?(current)
 
         let arguments = try RsyncCommandBuilder.arguments(for: job, profile: profile)
-        for try await event in streamingExecutor.stream(executable: "/usr/bin/rsync", arguments: arguments, timeout: 60 * 60) {
+        for try await event in self.streamingExecutor.stream(executable: "/usr/bin/rsync", arguments: arguments, timeout: 60 * 60) {
             switch event {
-            case .standardOutput(let chunk), .standardError(let chunk):
+            case let .standardOutput(chunk), let .standardError(chunk):
                 if let parsed = RsyncProgressParser.progress(from: chunk) {
                     current.status = .running(progress: parsed.progress, bytesPerSecond: parsed.bytesPerSecond)
-                    upsert(current)
+                    self.upsert(current)
                     await onUpdate?(current)
                 }
-            case .finished(let result):
+            case let .finished(result):
                 current.finishedAt = Date()
                 if result.exitCode == 0 {
                     current.status = .succeeded
@@ -86,35 +86,35 @@ public actor SystemRsyncTransferClient: TransferClient {
                     let message = Redactor().redact(result.standardError.trimmingCharacters(in: .whitespacesAndNewlines))
                     current.status = .failed(message: message.isEmpty ? "Transfer failed." : message)
                 }
-                upsert(current)
+                self.upsert(current)
                 await onUpdate?(current)
             }
         }
     }
 
     public func cancel(id: TransferJobID) async throws {
-        await cancellableExecutor?.cancelAll()
+        await self.cancellableExecutor?.cancelAll()
         guard let index = storedJobs.firstIndex(where: { $0.id == id }) else { return }
-        storedJobs[index].status = .cancelled
-        storedJobs[index].finishedAt = Date()
+        self.storedJobs[index].status = .cancelled
+        self.storedJobs[index].finishedAt = Date()
     }
 
     public func retry(id: TransferJobID) async throws {
         guard let index = storedJobs.firstIndex(where: { $0.id == id }) else { return }
-        storedJobs[index].status = .queued
-        storedJobs[index].startedAt = nil
-        storedJobs[index].finishedAt = nil
+        self.storedJobs[index].status = .queued
+        self.storedJobs[index].startedAt = nil
+        self.storedJobs[index].finishedAt = nil
     }
 
     public func jobs() async -> [TransferJob] {
-        storedJobs
+        self.storedJobs
     }
 
     private func upsert(_ job: TransferJob) {
         if let index = storedJobs.firstIndex(where: { $0.id == job.id }) {
-            storedJobs[index] = job
+            self.storedJobs[index] = job
         } else {
-            storedJobs.append(job)
+            self.storedJobs.append(job)
         }
     }
 }

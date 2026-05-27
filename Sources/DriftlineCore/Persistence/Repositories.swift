@@ -14,17 +14,17 @@ public actor InMemoryServerProfileRepository: ServerProfileRepository {
     }
 
     public func list() async throws -> [ServerProfile] {
-        profiles.values.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+        self.profiles.values.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
     }
 
     public func save(_ profile: ServerProfile) async throws {
         var updated = profile
         updated.updatedAt = Date()
-        profiles[updated.id] = updated
+        self.profiles[updated.id] = updated
     }
 
     public func delete(id: ServerProfileID) async throws {
-        profiles.removeValue(forKey: id)
+        self.profiles.removeValue(forKey: id)
     }
 }
 
@@ -49,13 +49,13 @@ public actor JSONServerProfileRepository: ServerProfileRepository {
         } else {
             profiles.append(updated)
         }
-        try await store.save(profiles)
+        try await self.store.save(profiles)
     }
 
     public func delete(id: ServerProfileID) async throws {
         var profiles = try await store.load(default: [])
         profiles.removeAll { $0.id == id }
-        try await store.save(profiles)
+        try await self.store.save(profiles)
     }
 }
 
@@ -71,15 +71,15 @@ public actor InMemoryTransferHistoryRepository: TransferHistoryRepository {
     public init() {}
 
     public func append(_ job: TransferJob) async throws {
-        jobs.append(job)
+        self.jobs.append(job)
     }
 
     public func list(limit: Int) async throws -> [TransferJob] {
-        Array(jobs.suffix(limit).reversed())
+        Array(self.jobs.suffix(limit).reversed())
     }
 
     public func clear(where shouldClear: @Sendable (TransferJob) -> Bool) async throws {
-        jobs.removeAll(where: shouldClear)
+        self.jobs.removeAll(where: shouldClear)
     }
 }
 
@@ -93,7 +93,7 @@ public actor JSONTransferHistoryRepository: TransferHistoryRepository {
     public func append(_ job: TransferJob) async throws {
         var jobs = try await store.load(default: [])
         jobs.append(job)
-        try await store.save(jobs)
+        try await self.store.save(jobs)
     }
 
     public func list(limit: Int) async throws -> [TransferJob] {
@@ -104,7 +104,7 @@ public actor JSONTransferHistoryRepository: TransferHistoryRepository {
     public func clear(where shouldClear: @Sendable (TransferJob) -> Bool) async throws {
         var jobs = try await store.load(default: [])
         jobs.removeAll(where: shouldClear)
-        try await store.save(jobs)
+        try await self.store.save(jobs)
     }
 }
 
@@ -121,11 +121,11 @@ public actor JSONViewPreferencesRepository: ViewPreferencesRepository {
     }
 
     public func load() async throws -> ViewPreferences {
-        try await store.load(default: ViewPreferences())
+        try await self.store.load(default: ViewPreferences())
     }
 
     public func save(_ preferences: ViewPreferences) async throws {
-        try await store.save(preferences)
+        try await self.store.save(preferences)
     }
 }
 
@@ -143,7 +143,7 @@ public actor JSONServerBookmarkRepository: ServerBookmarkRepository {
     }
 
     public func list() async throws -> [ServerBookmark] {
-        try await store.load(default: []).sorted {
+        try await self.store.load(default: []).sorted {
             ($0.lastUsedAt ?? $0.createdAt) > ($1.lastUsedAt ?? $1.createdAt)
         }
     }
@@ -155,13 +155,13 @@ public actor JSONServerBookmarkRepository: ServerBookmarkRepository {
         } else {
             bookmarks.append(bookmark)
         }
-        try await store.save(bookmarks)
+        try await self.store.save(bookmarks)
     }
 
     public func delete(id: UUID) async throws {
         var bookmarks = try await store.load(default: [])
         bookmarks.removeAll { $0.id == id }
-        try await store.save(bookmarks)
+        try await self.store.save(bookmarks)
     }
 }
 
@@ -187,6 +187,6 @@ public actor JSONRecentServerRepository: RecentServerRepository {
         recents.removeAll { $0.profileID == recent.profileID }
         recents.insert(recent, at: 0)
         recents = Array(recents.prefix(limit))
-        try await store.save(recents)
+        try await self.store.save(recents)
     }
 }

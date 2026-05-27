@@ -1,0 +1,13 @@
+# SwiftFormat configuration for Driftline
+
+--indent 4
+--trimwhitespace always
+--allman false
+--self insert
+--stripunusedargs always
+--redundanttype inferred
+--semicolons never
+--commas always
+--exponentcase lowercase
+--hexliteralcase lowercase
+--ranges spaced

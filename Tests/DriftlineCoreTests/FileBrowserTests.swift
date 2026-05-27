@@ -1,12 +1,12 @@
-import XCTest
 @testable import DriftlineCore
+import XCTest
 
 final class FileBrowserTests: XCTestCase {
     func testSorterPlacesFoldersFirstThenNames() {
         let items = [
             FileItem(name: "z.txt", path: "/z.txt", kind: .file, source: .local),
             FileItem(name: "Alpha", path: "/Alpha", kind: .folder, source: .local),
-            FileItem(name: "a.txt", path: "/a.txt", kind: .file, source: .local)
+            FileItem(name: "a.txt", path: "/a.txt", kind: .file, source: .local),
         ]
 
         let sorted = FileItemSorter.sort(items, preferences: FileListPreferences())

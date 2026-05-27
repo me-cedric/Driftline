@@ -1,5 +1,5 @@
-import XCTest
 @testable import DriftlineCore
+import XCTest
 
 final class TransferClientTests: XCTestCase {
     func testSCPUploadCommandUsesUppercasePortAndRemoteDestination() throws {
@@ -49,7 +49,7 @@ final class TransferClientTests: XCTestCase {
         try await client.enqueue(job, profile: profile)
         let jobs = await client.jobs()
 
-        guard case .failed(let message) = jobs.first?.status else {
+        guard case let .failed(message) = jobs.first?.status else {
             return XCTFail("Expected failed transfer")
         }
         XCTAssertFalse(message.contains("hunter2"))
@@ -58,7 +58,7 @@ final class TransferClientTests: XCTestCase {
 }
 
 private actor RecordingTransferProcessExecutor: SystemProcessExecuting {
-    struct Invocation: Sendable {
+    struct Invocation {
         var executable: String
         var arguments: [String]
     }
@@ -70,12 +70,12 @@ private actor RecordingTransferProcessExecutor: SystemProcessExecuting {
         self.result = result
     }
 
-    func run(executable: String, arguments: [String], timeout: TimeInterval) async throws -> ProcessResult {
-        invocation = Invocation(executable: executable, arguments: arguments)
-        return result
+    func run(executable: String, arguments: [String], timeout _: TimeInterval) async throws -> ProcessResult {
+        self.invocation = Invocation(executable: executable, arguments: arguments)
+        return self.result
     }
 
     func recordedInvocation() -> Invocation? {
-        invocation
+        self.invocation
     }
 }

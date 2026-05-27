@@ -1,5 +1,5 @@
-import XCTest
 @testable import DriftlineCore
+import XCTest
 
 final class EncryptedProfileExporterTests: XCTestCase {
     private let password = "secret"
@@ -25,8 +25,8 @@ final class EncryptedProfileExporterTests: XCTestCase {
 
     func testExportAndImportRoundTrip() throws {
         let profiles = [makeProfile(displayName: "Alpha"), makeProfile(displayName: "Beta")]
-        let data = try EncryptedProfileExporter.export(profiles: profiles, password: password)
-        let imported = try EncryptedProfileExporter.import(data: data, password: password)
+        let data = try EncryptedProfileExporter.export(profiles: profiles, password: self.password)
+        let imported = try EncryptedProfileExporter.import(data: data, password: self.password)
 
         XCTAssertEqual(imported.count, 2)
         XCTAssertEqual(imported[0].displayName, "Alpha")
@@ -38,7 +38,7 @@ final class EncryptedProfileExporterTests: XCTestCase {
 
     func testWrongPasswordThrows() throws {
         let profiles = [makeProfile(displayName: "Alpha")]
-        let data = try EncryptedProfileExporter.export(profiles: profiles, password: password)
+        let data = try EncryptedProfileExporter.export(profiles: profiles, password: self.password)
 
         XCTAssertThrowsError(try EncryptedProfileExporter.import(data: data, password: "wrong")) { error in
             XCTAssertEqual(error as? EncryptedProfileError, .wrongPassword)
@@ -46,14 +46,14 @@ final class EncryptedProfileExporterTests: XCTestCase {
     }
 
     func testEmptyProfileListExportsAndImports() throws {
-        let data = try EncryptedProfileExporter.export(profiles: [], password: password)
-        let imported = try EncryptedProfileExporter.import(data: data, password: password)
+        let data = try EncryptedProfileExporter.export(profiles: [], password: self.password)
+        let imported = try EncryptedProfileExporter.import(data: data, password: self.password)
         XCTAssertTrue(imported.isEmpty)
     }
 
     func testExportedDataIsValidJSON() throws {
         let profiles = [makeProfile(displayName: "Alpha")]
-        let data = try EncryptedProfileExporter.export(profiles: profiles, password: password)
+        let data = try EncryptedProfileExporter.export(profiles: profiles, password: self.password)
         let json = try XCTUnwrap(try? JSONSerialization.jsonObject(with: data) as? [String: Any])
         XCTAssertEqual(json["version"] as? Int, 1)
         XCTAssertNotNil(json["salt"])

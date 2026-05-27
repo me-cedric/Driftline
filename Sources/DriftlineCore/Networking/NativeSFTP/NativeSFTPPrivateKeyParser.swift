@@ -5,10 +5,10 @@ import NIOSSH
 public enum NativeSFTPPrivateKeyParser {
     public static func parse(contents: String, passphrase: String? = nil) throws -> NIOSSHPrivateKey {
         if contents.contains("BEGIN OPENSSH PRIVATE KEY") {
-            return try parseOpenSSH(contents: contents, passphrase: passphrase)
+            return try self.parseOpenSSH(contents: contents, passphrase: passphrase)
         }
         if contents.contains("BEGIN PRIVATE KEY") || contents.contains("BEGIN EC PRIVATE KEY") {
-            return try parsePEM(contents: contents)
+            return try self.parsePEM(contents: contents)
         }
         throw RemoteClientError.unsupportedAuthentication("Unsupported private key format. Use an unencrypted OpenSSH Ed25519 key or an ECDSA PEM key.")
     }
@@ -64,7 +64,7 @@ public enum NativeSFTPPrivateKeyParser {
                 kdfOptions: kdfOptions,
                 passphrase: phrase
             )
-            return try parsePrivateBlob(decryptedBlob)
+            return try self.parsePrivateBlob(decryptedBlob)
         }
 
         let keyCount = try reader.readUInt32()
@@ -74,7 +74,7 @@ public enum NativeSFTPPrivateKeyParser {
         _ = try reader.readBinaryString()
 
         let privateBlob = try reader.readBinaryString()
-        return try parsePrivateBlob(privateBlob)
+        return try self.parsePrivateBlob(privateBlob)
     }
 
     private static func parsePrivateBlob(_ blob: Data) throws -> NIOSSHPrivateKey {

@@ -1,7 +1,10 @@
 import Foundation
 
 public struct HostTrustRecord: Identifiable, Hashable, Codable, Sendable {
-    public var id: String { "\(host):\(port):\(algorithm)" }
+    public var id: String {
+        "\(self.host):\(self.port):\(self.algorithm)"
+    }
+
     public var host: String
     public var port: Int
     public var algorithm: String
@@ -54,7 +57,7 @@ public actor InMemoryHostTrustStore: HostTrustStore {
     }
 
     public func trust(_ record: HostTrustRecord) async throws {
-        records[record.id] = record
+        self.records[record.id] = record
     }
 }
 
@@ -80,7 +83,7 @@ public actor JSONHostTrustStore: HostTrustStore {
         var records = try await store.load(default: [])
         records.removeAll { $0.id == record.id }
         records.append(record)
-        try await store.save(records)
+        try await self.store.save(records)
     }
 }
 
@@ -113,16 +116,16 @@ public actor ManagedKnownHostsFile {
 
     public func trust(_ record: HostTrustRecord) throws {
         guard let line = record.knownHostsLine?.trimmingCharacters(in: .whitespacesAndNewlines), !line.isEmpty else { return }
-        let directory = url.deletingLastPathComponent()
+        let directory = self.url.deletingLastPathComponent()
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let existing = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+        let existing = (try? String(contentsOf: self.url, encoding: .utf8)) ?? ""
         let filtered = existing
             .split(separator: "\n", omittingEmptySubsequences: false)
-            .filter { !$0.hasPrefix(knownHostsPrefix(host: record.host, port: record.port)) && !$0.hasPrefix(record.host + " ") }
+            .filter { !$0.hasPrefix(self.knownHostsPrefix(host: record.host, port: record.port)) && !$0.hasPrefix(record.host + " ") }
             .joined(separator: "\n")
         let next = ([filtered.trimmingCharacters(in: .whitespacesAndNewlines), line].filter { !$0.isEmpty }).joined(separator: "\n") + "\n"
-        try next.write(to: url, atomically: true, encoding: .utf8)
-        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+        try next.write(to: self.url, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: self.url.path)
     }
 
     private func knownHostsPrefix(host: String, port: Int) -> String {

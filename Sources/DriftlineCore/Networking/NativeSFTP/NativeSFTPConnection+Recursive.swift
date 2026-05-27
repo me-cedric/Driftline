@@ -24,7 +24,7 @@ extension NativeSFTPConnection {
         for entry in entries {
             if await cancellation() || Task.isCancelled { throw CancellationError() }
 
-            let relative = relativePath(from: localURL, to: entry)
+            let relative = self.relativePath(from: localURL, to: entry)
             let remoteEntry = remotePath + relative.replacingOccurrences(of: "\\", with: "/")
 
             let entryIsDir = (try? entry.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
@@ -149,7 +149,7 @@ extension NativeSFTPConnection {
             let packet = try await self.send(SFTPRequestBuilder.readdir(id: nextID(), handle: handle))
             switch packet.type {
             case .name:
-                entries.append(contentsOf: try SFTPNameParser.parseNamePacketPayload(packet.payload))
+                try entries.append(contentsOf: SFTPNameParser.parseNamePacketPayload(packet.payload))
             case .status:
                 let status = try SFTPStatus.parse(payload: packet.payload)
                 if status.code == .eof {

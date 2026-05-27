@@ -1,5 +1,5 @@
-import XCTest
 @testable import DriftlineCore
+import XCTest
 
 final class HostFingerprintTests: XCTestCase {
     func testSystemHostFingerprintProviderParsesSSHKeygenOutput() {
@@ -22,7 +22,7 @@ final class HostFingerprintTests: XCTestCase {
         do {
             _ = try await client.connect(to: profile)
             XCTFail("Expected host trust error")
-        } catch RemoteClientError.hostNotTrusted(let host, let port, let algorithm, let fingerprint, _) {
+        } catch let RemoteClientError.hostNotTrusted(host, port, algorithm, fingerprint, _) {
             XCTAssertEqual(host, "example.com")
             XCTAssertEqual(port, 22)
             XCTAssertEqual(algorithm, "ED25519")
@@ -37,7 +37,7 @@ final class HostFingerprintTests: XCTestCase {
 
     func testSystemSFTPClientBlocksChangedHostFingerprint() async throws {
         let trustStore = InMemoryHostTrustStore(records: [
-            HostTrustRecord(host: "example.com", port: 22, algorithm: "ED25519", fingerprint: "SHA256:old")
+            HostTrustRecord(host: "example.com", port: 22, algorithm: "ED25519", fingerprint: "SHA256:old"),
         ])
         let fingerprintProvider = StaticHostFingerprintProvider(fingerprint: HostFingerprint(host: "example.com", port: 22, algorithm: "ED25519", fingerprint: "SHA256:new"))
         let client = SystemSFTPClient(hostTrustStore: trustStore, hostFingerprintProvider: fingerprintProvider)
@@ -52,16 +52,16 @@ final class HostFingerprintTests: XCTestCase {
 private struct StaticHostFingerprintProvider: HostFingerprintProviding {
     var fingerprint: HostFingerprint
 
-    func fingerprint(host: String, port: Int) async throws -> HostFingerprint {
-        fingerprint
+    func fingerprint(host _: String, port _: Int) async throws -> HostFingerprint {
+        self.fingerprint
     }
 }
 
 private struct RecordingHostProcessExecutor: SystemProcessExecuting {
     var results: [ProcessResult]
 
-    func run(executable: String, arguments: [String], timeout: TimeInterval) async throws -> ProcessResult {
-        results.first ?? ProcessResult(exitCode: 0, standardOutput: "", standardError: "")
+    func run(executable _: String, arguments _: [String], timeout _: TimeInterval) async throws -> ProcessResult {
+        self.results.first ?? ProcessResult(exitCode: 0, standardOutput: "", standardError: "")
     }
 }
 

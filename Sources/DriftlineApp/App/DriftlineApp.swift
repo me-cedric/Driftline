@@ -9,29 +9,29 @@ struct DriftlineApp: App {
 
     var body: some Scene {
         WindowGroup("Driftline", id: "main") {
-            ContentView(model: model)
+            ContentView(model: self.model)
                 .frame(minWidth: 1180, minHeight: 720)
         }
         .commands {
-            DriftlineCommands(model: model)
+            DriftlineCommands(model: self.model)
         }
 
         Settings {
-            SettingsView(preferences: $model.preferences)
-                .onChange(of: model.preferences) { _, _ in
-                    model.savePreferences()
+            SettingsView(preferences: self.$model.preferences)
+                .onChange(of: self.model.preferences) { _, _ in
+                    self.model.savePreferences()
                 }
         }
     }
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    func applicationDidFinishLaunching(_ notification: Notification) {
+    func applicationDidFinishLaunching(_: Notification) {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+    func applicationShouldTerminateAfterLastWindowClosed(_: NSApplication) -> Bool {
         true
     }
 }
@@ -66,7 +66,7 @@ final class AppModel: @unchecked Sendable {
     var profiles: [ServerProfile] = []
     var session = ConnectionSession(state: .disconnected, protocolKind: .sftp)
     var transferStats: TransferStats {
-        TransferStatsCalculator.calculate(from: transferJobs)
+        TransferStatsCalculator.calculate(from: self.transferJobs)
     }
 
     var lastConnectionDisplay: String {
@@ -117,23 +117,23 @@ final class AppModel: @unchecked Sendable {
         self.knownHostsFile = knownHostsFile
         self.terminalLauncher = terminalLauncher
         self.credentialStore = credentialStore
-        selectedTabID = tabs.first?.id
-        Task { await loadInitialState() }
+        self.selectedTabID = self.tabs.first?.id
+        Task { await self.loadInitialState() }
     }
 
     func loadInitialState() async {
         do {
-            preferences = try await preferencesRepository.load()
-            profiles = try await profileRepository.list()
-            bookmarks = try await bookmarkRepository.list()
-            recents = try await recentRepository.list(limit: 10)
-            transferJobs = try await transferHistoryRepository.list(limit: 100)
-            consumeLaunchRequest()
-            await refreshLocal()
+            self.preferences = try await self.preferencesRepository.load()
+            self.profiles = try await self.profileRepository.list()
+            self.bookmarks = try await self.bookmarkRepository.list()
+            self.recents = try await self.recentRepository.list(limit: 10)
+            self.transferJobs = try await self.transferHistoryRepository.list(limit: 100)
+            self.consumeLaunchRequest()
+            await self.refreshLocal()
         } catch {
-            session.lastErrorMessage = error.localizedDescription
-            statusMessage = error.localizedDescription
-            await refreshLocal()
+            self.session.lastErrorMessage = error.localizedDescription
+            self.statusMessage = error.localizedDescription
+            await self.refreshLocal()
         }
     }
 
@@ -141,35 +141,35 @@ final class AppModel: @unchecked Sendable {
         let args = CommandLine.arguments
         if let index = args.firstIndex(of: "--driftline-open"), args.indices.contains(index + 1) {
             if args.contains("--driftline-new-tab") {
-                newTab()
+                self.newTab()
             }
-            session.localPath = args[index + 1]
+            self.session.localPath = args[index + 1]
             return
         }
         if let request = try? CLIRequestStore.consume() {
             if request.openInNewTab {
-                newTab()
+                self.newTab()
             }
-            session.localPath = request.localPath
+            self.session.localPath = request.localPath
         }
     }
 
     func refreshLocal() async {
         do {
-            localItems = try await localFileSystem.listDirectory(at: session.localPath, preferences: preferences.fileList)
-            saveActiveTabSnapshot()
+            self.localItems = try await self.localFileSystem.listDirectory(at: self.session.localPath, preferences: self.preferences.fileList)
+            self.saveActiveTabSnapshot()
         } catch {
-            localItems = []
-            session.lastErrorMessage = error.localizedDescription
-            statusMessage = error.localizedDescription
+            self.localItems = []
+            self.session.lastErrorMessage = error.localizedDescription
+            self.statusMessage = error.localizedDescription
         }
     }
 
     func navigateLocal(to item: FileItem) {
         guard item.source == .local else { return }
         if item.kind == .folder {
-            session.localPath = item.path
-            Task { await refreshLocal() }
+            self.session.localPath = item.path
+            Task { await self.refreshLocal() }
         } else {
             NSWorkspace.shared.open(URL(fileURLWithPath: item.path))
         }
@@ -177,69 +177,69 @@ final class AppModel: @unchecked Sendable {
 
     func navigateRemote(to item: FileItem) {
         guard item.source == .remote, item.kind == .folder else { return }
-        session.remotePath = item.path
-        Task { await refreshRemote() }
+        self.session.remotePath = item.path
+        Task { await self.refreshRemote() }
     }
 
     func navigateLocalParent() {
         let parent = URL(fileURLWithPath: session.localPath).deletingLastPathComponent().path
-        guard parent != session.localPath else { return }
-        session.localPath = parent
-        Task { await refreshLocal() }
+        guard parent != self.session.localPath else { return }
+        self.session.localPath = parent
+        Task { await self.refreshLocal() }
     }
 
     func navigateRemoteParent() {
-        guard session.remotePath != "/" else { return }
+        guard self.session.remotePath != "/" else { return }
         let parent = URL(fileURLWithPath: session.remotePath).deletingLastPathComponent().path
-        session.remotePath = parent.isEmpty ? "/" : parent
-        Task { await refreshRemote() }
+        self.session.remotePath = parent.isEmpty ? "/" : parent
+        Task { await self.refreshRemote() }
     }
 
     func beginQuickConnect() {
-        connectAfterSavingDraft = true
-        beginCreatingProfile()
+        self.connectAfterSavingDraft = true
+        self.beginCreatingProfile()
     }
 
     func connectToSelectedServer() {
-        Task { await connectSelectedServer() }
+        Task { await self.connectSelectedServer() }
     }
 
     func connectSelectedServer() async {
         guard let profile = selectedProfile else {
-            statusMessage = "Select a saved server or create a new connection."
-            beginQuickConnect()
+            self.statusMessage = "Select a saved server or create a new connection."
+            self.beginQuickConnect()
             return
         }
-        await connect(profile)
+        await self.connect(profile)
     }
 
     private func connect(_ profile: ServerProfile) async {
-        isConnecting = true
-        session = ConnectionSession(serverID: profile.id, state: .connecting, protocolKind: profile.protocolKind, localPath: profile.localDefaultPath, remotePath: profile.remoteDefaultPath)
+        self.isConnecting = true
+        self.session = ConnectionSession(serverID: profile.id, state: .connecting, protocolKind: profile.protocolKind, localPath: profile.localDefaultPath, remotePath: profile.remoteDefaultPath)
         do {
-            let client = remoteClientForCurrentPreference()
-            session = try await client.connect(to: profile)
-            remoteItems = try await client.listDirectory(at: session.remotePath, profile: profile, session: session, preferences: preferences.fileList)
-            try await recentRepository.record(RecentServer(
+            let client = self.remoteClientForCurrentPreference()
+            self.session = try await client.connect(to: profile)
+            self.remoteItems = try await client.listDirectory(at: self.session.remotePath, profile: profile, session: self.session, preferences: self.preferences.fileList)
+            try await self.recentRepository.record(RecentServer(
                 profileID: profile.id,
                 displayName: profile.displayName,
                 host: profile.host,
                 protocolKind: profile.protocolKind,
-                localPath: session.localPath,
-                remotePath: session.remotePath
+                localPath: self.session.localPath,
+                remotePath: self.session.remotePath
             ), limit: 10)
-            recents = try await recentRepository.list(limit: 10)
-            saveActiveTabSnapshot()
-            isConnecting = false
+            self.recents = try await self.recentRepository.list(limit: 10)
+            self.saveActiveTabSnapshot()
+            self.isConnecting = false
         } catch {
-            remoteItems = []
-            if case RemoteClientError.hostNotTrusted(let host, let port, let algorithm, let fingerprint, let knownHostsLine) = error {
-                pendingHostTrust = PendingHostTrust(host: host, port: port, algorithm: algorithm, fingerprint: fingerprint, knownHostsLine: knownHostsLine)
+            self.remoteItems = []
+            if case let RemoteClientError.hostNotTrusted(host, port, algorithm, fingerprint, knownHostsLine) = error {
+                self.pendingHostTrust = PendingHostTrust(host: host, port: port, algorithm: algorithm, fingerprint: fingerprint, knownHostsLine: knownHostsLine)
             }
-            session.state = .failed(message: error.localizedDescription)
-            session.lastErrorMessage = error.localizedDescription
-            statusMessage = error.localizedDescription
-            isConnecting = false
+            self.session.state = .failed(message: error.localizedDescription)
+            self.session.lastErrorMessage = error.localizedDescription
+            self.statusMessage = error.localizedDescription
+            self.isConnecting = false
         }
     }
 
@@ -254,12 +254,12 @@ final class AppModel: @unchecked Sendable {
                     fingerprint: pendingHostTrust.fingerprint,
                     knownHostsLine: pendingHostTrust.knownHostsLine
                 )
-                try await hostTrustStore.trust(record)
-                try await knownHostsFile.trust(record)
+                try await self.hostTrustStore.trust(record)
+                try await self.knownHostsFile.trust(record)
                 self.pendingHostTrust = nil
-                await connectSelectedServer()
+                await self.connectSelectedServer()
             } catch {
-                session.lastErrorMessage = error.localizedDescription
+                self.session.lastErrorMessage = error.localizedDescription
             }
         }
     }
@@ -267,30 +267,30 @@ final class AppModel: @unchecked Sendable {
     func refreshRemote() async {
         guard let profile = activeProfile, session.state == .connected else { return }
         do {
-            remoteItems = try await remoteClientForCurrentPreference().listDirectory(at: session.remotePath, profile: profile, session: session, preferences: preferences.fileList)
-            saveActiveTabSnapshot()
+            self.remoteItems = try await self.remoteClientForCurrentPreference().listDirectory(at: self.session.remotePath, profile: profile, session: self.session, preferences: self.preferences.fileList)
+            self.saveActiveTabSnapshot()
         } catch {
-            session.state = .failed(message: error.localizedDescription)
-            session.lastErrorMessage = error.localizedDescription
-            statusMessage = error.localizedDescription
+            self.session.state = .failed(message: error.localizedDescription)
+            self.session.lastErrorMessage = error.localizedDescription
+            self.statusMessage = error.localizedDescription
         }
     }
 
     func disconnect() {
-        session.state = .disconnected
-        remoteItems = []
+        self.session.state = .disconnected
+        self.remoteItems = []
     }
 
     func savePreferences() {
-        let current = preferences
+        let current = self.preferences
         Task {
-            try? await preferencesRepository.save(current)
+            try? await self.preferencesRepository.save(current)
         }
     }
 
     var selectedProfile: ServerProfile? {
         guard let selectedSidebarItem else { return nil }
-        return profiles.first { $0.id.rawValue.uuidString == selectedSidebarItem }
+        return self.profiles.first { $0.id.rawValue.uuidString == selectedSidebarItem }
     }
 
     func toggleSelectedFavorite() {
@@ -298,11 +298,11 @@ final class AppModel: @unchecked Sendable {
         selectedProfile.isFavorite.toggle()
         Task {
             do {
-                try await profileRepository.save(selectedProfile)
-                profiles = try await profileRepository.list()
-                statusMessage = selectedProfile.isFavorite ? "Added to favorites." : "Removed from favorites."
+                try await self.profileRepository.save(selectedProfile)
+                self.profiles = try await self.profileRepository.list()
+                self.statusMessage = selectedProfile.isFavorite ? "Added to favorites." : "Removed from favorites."
             } catch {
-                statusMessage = error.localizedDescription
+                self.statusMessage = error.localizedDescription
             }
         }
     }
@@ -311,60 +311,60 @@ final class AppModel: @unchecked Sendable {
         guard let profile = activeProfile else { return }
         let bookmark = ServerBookmark(
             profileID: profile.id,
-            name: "\(profile.displayName): \(session.remotePath)",
-            localPath: session.localPath,
-            remotePath: session.remotePath
+            name: "\(profile.displayName): \(self.session.remotePath)",
+            localPath: self.session.localPath,
+            remotePath: self.session.remotePath
         )
         Task {
             do {
-                try await bookmarkRepository.save(bookmark)
-                bookmarks = try await bookmarkRepository.list()
-                statusMessage = "Saved bookmark."
+                try await self.bookmarkRepository.save(bookmark)
+                self.bookmarks = try await self.bookmarkRepository.list()
+                self.statusMessage = "Saved bookmark."
             } catch {
-                statusMessage = error.localizedDescription
+                self.statusMessage = error.localizedDescription
             }
         }
     }
 
     func openBookmark(_ bookmark: ServerBookmark) {
-        guard profiles.contains(where: { $0.id == bookmark.profileID }) else { return }
-        selectedSidebarItem = bookmark.profileID.rawValue.uuidString
-        session.localPath = bookmark.localPath
-        session.remotePath = bookmark.remotePath
+        guard self.profiles.contains(where: { $0.id == bookmark.profileID }) else { return }
+        self.selectedSidebarItem = bookmark.profileID.rawValue.uuidString
+        self.session.localPath = bookmark.localPath
+        self.session.remotePath = bookmark.remotePath
         Task {
-            await refreshLocal()
-            await connectSelectedServer()
+            await self.refreshLocal()
+            await self.connectSelectedServer()
         }
     }
 
     func openRecent(_ recent: RecentServer) {
-        selectedSidebarItem = recent.profileID.rawValue.uuidString
-        session.localPath = recent.localPath
-        session.remotePath = recent.remotePath
+        self.selectedSidebarItem = recent.profileID.rawValue.uuidString
+        self.session.localPath = recent.localPath
+        self.session.remotePath = recent.remotePath
         Task {
-            await refreshLocal()
-            await connectSelectedServer()
+            await self.refreshLocal()
+            await self.connectSelectedServer()
         }
     }
 
     func reconnectLastServer() {
         if let recent = recents.first {
-            openRecent(recent)
+            self.openRecent(recent)
         } else {
-            beginQuickConnect()
+            self.beginQuickConnect()
         }
     }
 
     func beginCreatingProfile() {
-        connectAfterSavingDraft = false
-        profileEditorError = nil
-        profileDraft = ServerProfileDraft()
+        self.connectAfterSavingDraft = false
+        self.profileEditorError = nil
+        self.profileDraft = ServerProfileDraft()
     }
 
     func beginEditingSelectedProfile() {
         guard let selectedProfile else { return }
-        profileEditorError = nil
-        profileDraft = ServerProfileDraft(profile: selectedProfile)
+        self.profileEditorError = nil
+        self.profileDraft = ServerProfileDraft(profile: selectedProfile)
     }
 
     func saveProfileDraft() {
@@ -374,34 +374,34 @@ final class AppModel: @unchecked Sendable {
             try ServerProfileValidator.validate(profile)
             Task {
                 do {
-                    try await saveCredentialSecrets(from: draft, profile: profile)
-                    try await profileRepository.save(profile)
-                    profiles = try await profileRepository.list()
-                    selectedSidebarItem = profile.id.rawValue.uuidString
-                    profileDraft = nil
-                    profileEditorError = nil
-                    if connectAfterSavingDraft {
-                        connectAfterSavingDraft = false
-                        await connect(profile)
+                    try await self.saveCredentialSecrets(from: draft, profile: profile)
+                    try await self.profileRepository.save(profile)
+                    self.profiles = try await self.profileRepository.list()
+                    self.selectedSidebarItem = profile.id.rawValue.uuidString
+                    self.profileDraft = nil
+                    self.profileEditorError = nil
+                    if self.connectAfterSavingDraft {
+                        self.connectAfterSavingDraft = false
+                        await self.connect(profile)
                     }
                 } catch {
-                    profileEditorError = error.localizedDescription
+                    self.profileEditorError = error.localizedDescription
                 }
             }
         } catch {
-            profileEditorError = error.localizedDescription
+            self.profileEditorError = error.localizedDescription
         }
     }
 
     private func saveCredentialSecrets(from draft: ServerProfileDraft, profile: ServerProfile) async throws {
         switch profile.authenticationMethod {
-        case .password(let reference):
+        case let .password(reference):
             if !draft.password.isEmpty {
-                try await credentialStore.saveString(draft.password, reference: reference)
+                try await self.credentialStore.saveString(draft.password, reference: reference)
             }
-        case .privateKey(_, let passphraseReference):
+        case let .privateKey(_, passphraseReference):
             if let passphraseReference, !draft.passphrase.isEmpty {
-                try await credentialStore.saveString(draft.passphrase, reference: passphraseReference)
+                try await self.credentialStore.saveString(draft.passphrase, reference: passphraseReference)
             }
         case .agent, .none:
             break
@@ -413,11 +413,11 @@ final class AppModel: @unchecked Sendable {
         let copy = selectedProfile.duplicated()
         Task {
             do {
-                try await profileRepository.save(copy)
-                profiles = try await profileRepository.list()
-                selectedSidebarItem = copy.id.rawValue.uuidString
+                try await self.profileRepository.save(copy)
+                self.profiles = try await self.profileRepository.list()
+                self.selectedSidebarItem = copy.id.rawValue.uuidString
             } catch {
-                session.lastErrorMessage = error.localizedDescription
+                self.session.lastErrorMessage = error.localizedDescription
             }
         }
     }
@@ -426,55 +426,55 @@ final class AppModel: @unchecked Sendable {
         guard let selectedProfile else { return }
         Task {
             do {
-                try await profileRepository.delete(id: selectedProfile.id)
-                profiles = try await profileRepository.list()
-                    selectedSidebarItem = nil
-                if session.serverID == selectedProfile.id {
-                    disconnect()
+                try await self.profileRepository.delete(id: selectedProfile.id)
+                self.profiles = try await self.profileRepository.list()
+                self.selectedSidebarItem = nil
+                if self.session.serverID == selectedProfile.id {
+                    self.disconnect()
                 }
             } catch {
-                session.lastErrorMessage = error.localizedDescription
+                self.session.lastErrorMessage = error.localizedDescription
             }
         }
     }
 
     func beginCreateFolder(source: FileSource) {
-        fileOperationText = "New Folder"
-        fileOperationPrompt = FileOperationPrompt(kind: .createFolder, source: source)
+        self.fileOperationText = "New Folder"
+        self.fileOperationPrompt = FileOperationPrompt(kind: .createFolder, source: source)
     }
 
     func beginRenameSelectedItem() {
         guard let selectedFile else { return }
-        fileOperationText = selectedFile.name
-        fileOperationPrompt = FileOperationPrompt(kind: .rename(selectedFile), source: selectedFile.source)
+        self.fileOperationText = selectedFile.name
+        self.fileOperationPrompt = FileOperationPrompt(kind: .rename(selectedFile), source: selectedFile.source)
     }
 
     func requestDeleteSelectedItem() {
         guard let selectedFile else { return }
-        if preferences.confirmBeforeDelete {
-            pendingDeleteItem = selectedFile
+        if self.preferences.confirmBeforeDelete {
+            self.pendingDeleteItem = selectedFile
         } else {
-            deleteItem(selectedFile)
+            self.deleteItem(selectedFile)
         }
     }
 
     func commitFileOperationPrompt() {
         guard let prompt = fileOperationPrompt else { return }
-        let value = fileOperationText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let value = self.fileOperationText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else { return }
         switch prompt.kind {
         case .createFolder:
-            createFolder(named: value, source: prompt.source)
-        case .rename(let item):
-            renameItem(item, to: value)
+            self.createFolder(named: value, source: prompt.source)
+        case let .rename(item):
+            self.renameItem(item, to: value)
         }
-        fileOperationPrompt = nil
-        fileOperationText = ""
+        self.fileOperationPrompt = nil
+        self.fileOperationText = ""
     }
 
     func deletePendingItem() {
         guard let pendingDeleteItem else { return }
-        deleteItem(pendingDeleteItem)
+        self.deleteItem(pendingDeleteItem)
         self.pendingDeleteItem = nil
     }
 
@@ -483,15 +483,15 @@ final class AppModel: @unchecked Sendable {
             do {
                 switch source {
                 case .local:
-                    try await localFileSystem.createFolder(named: name, in: session.localPath)
-                    await refreshLocal()
+                    try await self.localFileSystem.createFolder(named: name, in: self.session.localPath)
+                    await self.refreshLocal()
                 case .remote:
                     guard let profile = activeProfile else { return }
-                    try await remoteClientForCurrentPreference().createFolder(named: name, in: session.remotePath, profile: profile, session: session)
-                    await refreshRemote()
+                    try await self.remoteClientForCurrentPreference().createFolder(named: name, in: self.session.remotePath, profile: profile, session: self.session)
+                    await self.refreshRemote()
                 }
             } catch {
-                session.lastErrorMessage = error.localizedDescription
+                self.session.lastErrorMessage = error.localizedDescription
             }
         }
     }
@@ -501,15 +501,15 @@ final class AppModel: @unchecked Sendable {
             do {
                 switch item.source {
                 case .local:
-                    try await localFileSystem.renameItem(at: item.path, to: newName)
-                    await refreshLocal()
+                    try await self.localFileSystem.renameItem(at: item.path, to: newName)
+                    await self.refreshLocal()
                 case .remote:
                     guard let profile = activeProfile else { return }
-                    try await remoteClientForCurrentPreference().renameItem(at: item.path, to: newName, profile: profile, session: session)
-                    await refreshRemote()
+                    try await self.remoteClientForCurrentPreference().renameItem(at: item.path, to: newName, profile: profile, session: self.session)
+                    await self.refreshRemote()
                 }
             } catch {
-                session.lastErrorMessage = error.localizedDescription
+                self.session.lastErrorMessage = error.localizedDescription
             }
         }
     }
@@ -519,17 +519,17 @@ final class AppModel: @unchecked Sendable {
             do {
                 switch item.source {
                 case .local:
-                    try await localFileSystem.deleteItem(at: item.path)
-                    selectedFile = nil
-                    await refreshLocal()
+                    try await self.localFileSystem.deleteItem(at: item.path)
+                    self.selectedFile = nil
+                    await self.refreshLocal()
                 case .remote:
                     guard let profile = activeProfile else { return }
-                    try await remoteClientForCurrentPreference().deleteItem(at: item.path, profile: profile, session: session)
-                    selectedFile = nil
-                    await refreshRemote()
+                    try await self.remoteClientForCurrentPreference().deleteItem(at: item.path, profile: profile, session: self.session)
+                    self.selectedFile = nil
+                    await self.refreshRemote()
                 }
             } catch {
-                session.lastErrorMessage = error.localizedDescription
+                self.session.lastErrorMessage = error.localizedDescription
             }
         }
     }
@@ -540,7 +540,7 @@ final class AppModel: @unchecked Sendable {
               selectedFile.source == .local,
               session.state == .connected
         else { return }
-        let destination = remotePathAppending(session.remotePath, selectedFile.name)
+        let destination = self.remotePathAppending(self.session.remotePath, selectedFile.name)
         let job = TransferJob(
             direction: .upload,
             sourcePath: selectedFile.path,
@@ -550,12 +550,12 @@ final class AppModel: @unchecked Sendable {
             serverName: profile.displayName,
             protocolKind: profile.protocolKind
         )
-        if preferences.confirmBeforeOverwrite, remoteItems.contains(where: { $0.path == destination }) {
-            pendingTransferConflict = TransferConflict(job: job, profile: profile, existingPath: destination)
-            conflictRenameText = suggestedConflictName(for: selectedFile.name)
+        if self.preferences.confirmBeforeOverwrite, self.remoteItems.contains(where: { $0.path == destination }) {
+            self.pendingTransferConflict = TransferConflict(job: job, profile: profile, existingPath: destination)
+            self.conflictRenameText = self.suggestedConflictName(for: selectedFile.name)
             return
         }
-        enqueueTransfer(job, profile: profile)
+        self.enqueueTransfer(job, profile: profile)
     }
 
     func openTerminalSession() {
@@ -563,9 +563,9 @@ final class AppModel: @unchecked Sendable {
         Task {
             do {
                 let command = try TerminalCommandFactory.sshCommand(for: profile)
-                try await terminalLauncher.launch(command)
+                try await self.terminalLauncher.launch(command)
             } catch {
-                session.lastErrorMessage = error.localizedDescription
+                self.session.lastErrorMessage = error.localizedDescription
             }
         }
     }
@@ -586,36 +586,36 @@ final class AppModel: @unchecked Sendable {
             serverName: profile.displayName,
             protocolKind: profile.protocolKind
         )
-        if preferences.confirmBeforeOverwrite, FileManager.default.fileExists(atPath: destination) {
-            pendingTransferConflict = TransferConflict(job: job, profile: profile, existingPath: destination)
-            conflictRenameText = suggestedConflictName(for: selectedFile.name)
+        if self.preferences.confirmBeforeOverwrite, FileManager.default.fileExists(atPath: destination) {
+            self.pendingTransferConflict = TransferConflict(job: job, profile: profile, existingPath: destination)
+            self.conflictRenameText = self.suggestedConflictName(for: selectedFile.name)
             return
         }
-        enqueueTransfer(job, profile: profile)
+        self.enqueueTransfer(job, profile: profile)
     }
 
     private func enqueueTransfer(_ job: TransferJob, profile: ServerProfile) {
         var queued = job
         queued.status = .queued
-        transferProfiles[queued.id] = profile
-        replaceTransferJob(queued)
-        processTransferQueue()
+        self.transferProfiles[queued.id] = profile
+        self.replaceTransferJob(queued)
+        self.processTransferQueue()
     }
 
     private func processTransferQueue() {
-        let runningCount = transferJobs.filter(\.isRunning).count
+        let runningCount = self.transferJobs.filter(\.isRunning).count
         let capacity = max(preferences.transferConcurrency - runningCount, 0)
         guard capacity > 0 else { return }
 
-        let queuedJobs = transferJobs.filter(\.isQueued).prefix(capacity)
+        let queuedJobs = self.transferJobs.filter(\.isQueued).prefix(capacity)
         for job in queuedJobs {
             guard let profile = transferProfiles[job.id] else { continue }
             var starting = job
             starting.status = .running(progress: 0, bytesPerSecond: nil)
             starting.startedAt = Date()
-            replaceTransferJob(starting)
+            self.replaceTransferJob(starting)
             Task {
-                await runTransfer(starting, profile: profile)
+                await self.runTransfer(starting, profile: profile)
             }
         }
     }
@@ -623,57 +623,57 @@ final class AppModel: @unchecked Sendable {
     private func runTransfer(_ job: TransferJob, profile: ServerProfile) async {
         do {
             let updateModel = self
-            let client = transferClientForCurrentPreference()
+            let client = self.transferClientForCurrentPreference()
             try await client.enqueue(job, profile: profile) { [updateModel] updated in
                 await MainActor.run {
                     updateModel.replaceTransferJob(updated)
                 }
             }
-            transferJobs = await client.jobs().reversed()
+            self.transferJobs = await client.jobs().reversed()
             if let completed = transferJobs.first(where: { $0.id == job.id }) {
-                try? await transferHistoryRepository.append(completed)
+                try? await self.transferHistoryRepository.append(completed)
             }
-            transferProfiles[job.id] = nil
-            await refreshLocal()
-            await refreshRemote()
+            self.transferProfiles[job.id] = nil
+            await self.refreshLocal()
+            await self.refreshRemote()
         } catch {
             var failed = job
             failed.status = .failed(message: error.localizedDescription)
             failed.finishedAt = Date()
-            transferJobs.removeAll { $0.id == job.id }
-            transferJobs.insert(failed, at: 0)
-            transferProfiles[job.id] = nil
-            try? await transferHistoryRepository.append(failed)
+            self.transferJobs.removeAll { $0.id == job.id }
+            self.transferJobs.insert(failed, at: 0)
+            self.transferProfiles[job.id] = nil
+            try? await self.transferHistoryRepository.append(failed)
         }
-        processTransferQueue()
+        self.processTransferQueue()
     }
 
     func skipPendingConflict() {
-        pendingTransferConflict = nil
-        conflictRenameText = ""
+        self.pendingTransferConflict = nil
+        self.conflictRenameText = ""
     }
 
     func overwritePendingConflict() {
         guard let conflict = pendingTransferConflict else { return }
-        pendingTransferConflict = nil
-        conflictRenameText = ""
-        enqueueTransfer(conflict.job, profile: conflict.profile)
+        self.pendingTransferConflict = nil
+        self.conflictRenameText = ""
+        self.enqueueTransfer(conflict.job, profile: conflict.profile)
     }
 
     func renameAndRunPendingConflict() {
         guard let conflict = pendingTransferConflict else { return }
-        let name = conflictRenameText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = self.conflictRenameText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { return }
         var renamed = conflict.job
         switch renamed.direction {
         case .upload:
-            renamed.destinationPath = remotePathAppending(session.remotePath, name)
+            renamed.destinationPath = self.remotePathAppending(self.session.remotePath, name)
         case .download:
-            renamed.destinationPath = URL(fileURLWithPath: session.localPath).appendingPathComponent(name).path
+            renamed.destinationPath = URL(fileURLWithPath: self.session.localPath).appendingPathComponent(name).path
         }
-        pendingTransferConflict = nil
-        conflictRenameText = ""
-        enqueueTransfer(renamed, profile: conflict.profile)
+        self.pendingTransferConflict = nil
+        self.conflictRenameText = ""
+        self.enqueueTransfer(renamed, profile: conflict.profile)
     }
 
     private func suggestedConflictName(for original: String) -> String {
@@ -690,53 +690,53 @@ final class AppModel: @unchecked Sendable {
 
     private func replaceTransferJob(_ job: TransferJob) {
         if let index = transferJobs.firstIndex(where: { $0.id == job.id }) {
-            transferJobs[index] = job
+            self.transferJobs[index] = job
         } else {
-            transferJobs.insert(job, at: 0)
+            self.transferJobs.insert(job, at: 0)
         }
     }
 
     private func saveActiveTabSnapshot() {
         guard let selectedTabID, let index = tabs.firstIndex(where: { $0.id == selectedTabID }) else { return }
-        tabs[index].session = session
-        tabs[index].localItems = localItems
-        tabs[index].remoteItems = remoteItems
-        tabs[index].selectedFile = selectedFile
+        self.tabs[index].session = self.session
+        self.tabs[index].localItems = self.localItems
+        self.tabs[index].remoteItems = self.remoteItems
+        self.tabs[index].selectedFile = self.selectedFile
         if let profile = selectedProfile {
-            tabs[index].title = profile.displayName
-        } else if session.remotePath != "/" {
-            tabs[index].title = session.remotePath
+            self.tabs[index].title = profile.displayName
+        } else if self.session.remotePath != "/" {
+            self.tabs[index].title = self.session.remotePath
         } else {
-            tabs[index].title = "New Connection"
+            self.tabs[index].title = "New Connection"
         }
     }
 
     func selectTab(_ tabID: WorkspaceTab.ID) {
-        saveActiveTabSnapshot()
+        self.saveActiveTabSnapshot()
         guard let tab = tabs.first(where: { $0.id == tabID }) else { return }
-        selectedTabID = tabID
-        session = tab.session
-        localItems = tab.localItems
-        remoteItems = tab.remoteItems
-        selectedFile = tab.selectedFile
+        self.selectedTabID = tabID
+        self.session = tab.session
+        self.localItems = tab.localItems
+        self.remoteItems = tab.remoteItems
+        self.selectedFile = tab.selectedFile
     }
 
     func clearCompletedTransfers() {
-        transferJobs.removeAll { job in
+        self.transferJobs.removeAll { job in
             if case .succeeded = job.status { return true }
             return false
         }
     }
 
     func clearFailedTransfers() {
-        transferJobs.removeAll { job in
+        self.transferJobs.removeAll { job in
             if case .failed = job.status { return true }
             return false
         }
     }
 
     func retryFailedTransfers() {
-        let failedJobs = transferJobs.filter { job in
+        let failedJobs = self.transferJobs.filter { job in
             if case .failed = job.status { return true }
             return false
         }
@@ -745,16 +745,16 @@ final class AppModel: @unchecked Sendable {
             job.status = .queued
             job.startedAt = nil
             job.finishedAt = nil
-            enqueueTransfer(job, profile: profile)
+            self.enqueueTransfer(job, profile: profile)
         }
     }
 
     func cancelActiveTransfers() {
-        let activeIDs = transferJobs.compactMap { job -> TransferJobID? in
+        let activeIDs = self.transferJobs.compactMap { job -> TransferJobID? in
             if case .running = job.status { return job.id }
             return nil
         }
-        transferJobs = transferJobs.map { job in
+        self.transferJobs = self.transferJobs.map { job in
             guard case .running = job.status else { return job }
             var cancelled = job
             cancelled.status = .cancelled
@@ -763,26 +763,26 @@ final class AppModel: @unchecked Sendable {
         }
         Task {
             for id in activeIDs {
-                try? await transferClientForCurrentPreference().cancel(id: id)
+                try? await self.transferClientForCurrentPreference().cancel(id: id)
             }
         }
-        processTransferQueue()
+        self.processTransferQueue()
     }
 
     func cancelTransfer(id: TransferJobID) {
         guard let index = transferJobs.firstIndex(where: { $0.id == id }) else { return }
-        switch transferJobs[index].status {
+        switch self.transferJobs[index].status {
         case .queued:
-            transferJobs[index].status = .cancelled
-            transferJobs[index].finishedAt = Date()
-            transferProfiles[id] = nil
-            processTransferQueue()
+            self.transferJobs[index].status = .cancelled
+            self.transferJobs[index].finishedAt = Date()
+            self.transferProfiles[id] = nil
+            self.processTransferQueue()
         case .running:
-            transferJobs[index].status = .cancelled
-            transferJobs[index].finishedAt = Date()
-            transferProfiles[id] = nil
+            self.transferJobs[index].status = .cancelled
+            self.transferJobs[index].finishedAt = Date()
+            self.transferProfiles[id] = nil
             Task {
-                try? await transferClientForCurrentPreference().cancel(id: id)
+                try? await self.transferClientForCurrentPreference().cancel(id: id)
                 await MainActor.run {
                     self.processTransferQueue()
                 }
@@ -793,17 +793,17 @@ final class AppModel: @unchecked Sendable {
     }
 
     func newTab() {
-        saveActiveTabSnapshot()
+        self.saveActiveTabSnapshot()
         let tab = WorkspaceTab()
-        tabs.append(tab)
-        selectTab(tab.id)
+        self.tabs.append(tab)
+        self.selectTab(tab.id)
     }
 
     func closeSelectedTab() {
-        guard tabs.count > 1, let selectedTabID else { return }
-        tabs.removeAll { $0.id == selectedTabID }
+        guard self.tabs.count > 1, let selectedTabID else { return }
+        self.tabs.removeAll { $0.id == selectedTabID }
         if let first = tabs.first {
-            selectTab(first.id)
+            self.selectTab(first.id)
         }
     }
 
@@ -812,26 +812,26 @@ final class AppModel: @unchecked Sendable {
             return selectedProfile
         }
         if let serverID = session.serverID {
-            return profiles.first { $0.id == serverID }
+            return self.profiles.first { $0.id == serverID }
         }
         return nil
     }
 
     private func remoteClientForCurrentPreference() -> RemoteFileSystemClient {
-        switch preferences.remoteBackendKind {
+        switch self.preferences.remoteBackendKind {
         case .systemSSH:
-            remoteFileSystem
+            self.remoteFileSystem
         case .nativeSwiftExperimental:
-            nativeRemoteFileSystem
+            self.nativeRemoteFileSystem
         }
     }
 
     private func transferClientForCurrentPreference() -> TransferClient {
-        switch preferences.remoteBackendKind {
+        switch self.preferences.remoteBackendKind {
         case .systemSSH:
-            transferClient
+            self.transferClient
         case .nativeSwiftExperimental:
-            nativeTransferClient
+            self.nativeTransferClient
         }
     }
 }
@@ -866,9 +866,9 @@ struct FileOperationPrompt: Identifiable, Equatable {
     var source: FileSource
 
     var title: String {
-        switch kind {
+        switch self.kind {
         case .createFolder:
-            "New \(source.rawValue.capitalized) Folder"
+            "New \(self.source.rawValue.capitalized) Folder"
         case .rename:
             "Rename Item"
         }
@@ -876,7 +876,10 @@ struct FileOperationPrompt: Identifiable, Equatable {
 }
 
 struct PendingHostTrust: Identifiable, Equatable {
-    var id: String { "\(host):\(port):\(algorithm):\(fingerprint)" }
+    var id: String {
+        "\(self.host):\(self.port):\(self.algorithm):\(self.fingerprint)"
+    }
+
     var host: String
     var port: Int
     var algorithm: String
@@ -891,7 +894,9 @@ struct ServerProfileDraft: Identifiable, Equatable {
         case privateKey = "Private Key"
         case none = "None"
 
-        var id: String { rawValue }
+        var id: String {
+            rawValue
+        }
     }
 
     var id: ServerProfileID
@@ -962,7 +967,7 @@ struct ServerProfileDraft: Identifiable, Equatable {
             self.password = ""
             self.passphrase = ""
             self.storePassphrase = false
-        case .privateKey(let path, _):
+        case let .privateKey(path, _):
             self.authKind = .privateKey
             self.privateKeyPath = path
             self.password = ""
@@ -978,39 +983,39 @@ struct ServerProfileDraft: Identifiable, Equatable {
     }
 
     func makeProfile() -> ServerProfile {
-        let trimmedHost = host.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedUsername = username.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedHost = self.host.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedUsername = self.username.trimmingCharacters(in: .whitespacesAndNewlines)
         let credentialAccount = "\(trimmedUsername)@\(trimmedHost)"
         let authenticationMethod: AuthenticationMethod
-        switch authKind {
+        switch self.authKind {
         case .agent:
             authenticationMethod = .agent
         case .password:
             authenticationMethod = .password(CredentialReference(service: "app.driftline.credentials", account: credentialAccount))
         case .privateKey:
-            let passphraseReference = storePassphrase
+            let passphraseReference = self.storePassphrase
                 ? CredentialReference(service: "app.driftline.private-key-passphrase", account: credentialAccount)
                 : nil
-            authenticationMethod = .privateKey(path: privateKeyPath, passphrase: passphraseReference)
+            authenticationMethod = .privateKey(path: self.privateKeyPath, passphrase: passphraseReference)
         case .none:
             authenticationMethod = .none
         }
 
         return ServerProfile(
-            id: id,
-            displayName: displayName.trimmingCharacters(in: .whitespacesAndNewlines),
+            id: self.id,
+            displayName: self.displayName.trimmingCharacters(in: .whitespacesAndNewlines),
             host: trimmedHost,
-            port: port,
-            protocolKind: protocolKind,
+            port: self.port,
+            protocolKind: self.protocolKind,
             username: trimmedUsername,
             authenticationMethod: authenticationMethod,
-            remoteDefaultPath: remoteDefaultPath.isEmpty ? "/" : remoteDefaultPath,
-            localDefaultPath: localDefaultPath.isEmpty ? FileManager.default.homeDirectoryForCurrentUser.path : localDefaultPath,
-            notes: notes,
-            tags: tags.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty },
-            isFavorite: isFavorite,
-            groupName: groupName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : groupName.trimmingCharacters(in: .whitespacesAndNewlines),
-            createdAt: createdAt,
+            remoteDefaultPath: self.remoteDefaultPath.isEmpty ? "/" : self.remoteDefaultPath,
+            localDefaultPath: self.localDefaultPath.isEmpty ? FileManager.default.homeDirectoryForCurrentUser.path : self.localDefaultPath,
+            notes: self.notes,
+            tags: self.tags.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty },
+            isFavorite: self.isFavorite,
+            groupName: self.groupName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : self.groupName.trimmingCharacters(in: .whitespacesAndNewlines),
+            createdAt: self.createdAt,
             updatedAt: Date()
         )
     }

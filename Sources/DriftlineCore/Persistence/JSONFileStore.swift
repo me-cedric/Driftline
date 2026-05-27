@@ -15,18 +15,18 @@ public actor JSONFileStore<Value: Codable & Sendable> {
     }
 
     public func load(default defaultValue: @autoclosure () -> Value) throws -> Value {
-        guard FileManager.default.fileExists(atPath: url.path) else {
+        guard FileManager.default.fileExists(atPath: self.url.path) else {
             return defaultValue()
         }
         let data = try Data(contentsOf: url)
-        return try decoder.decode(Value.self, from: data)
+        return try self.decoder.decode(Value.self, from: data)
     }
 
     public func save(_ value: Value) throws {
-        let directory = url.deletingLastPathComponent()
+        let directory = self.url.deletingLastPathComponent()
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let data = try encoder.encode(value)
-        try data.write(to: url, options: [.atomic])
+        try data.write(to: self.url, options: [.atomic])
     }
 }
 

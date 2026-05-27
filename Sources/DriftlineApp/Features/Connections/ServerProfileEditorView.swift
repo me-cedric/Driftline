@@ -13,41 +13,41 @@ struct ServerProfileEditorView: View {
         NavigationStack {
             Form {
                 Section("Server") {
-                    TextField("Display Name", text: $draft.displayName)
-                    TextField("Host", text: $draft.host)
-                    Picker("Protocol", selection: $draft.protocolKind) {
+                    TextField("Display Name", text: self.$draft.displayName)
+                    TextField("Host", text: self.$draft.host)
+                    Picker("Protocol", selection: self.$draft.protocolKind) {
                         ForEach(TransferProtocolKind.allCases) { protocolKind in
                             Text(protocolKind.rawValue.uppercased()).tag(protocolKind)
                         }
                     }
-                    Stepper(value: $draft.port, in: 1...65_535) {
-                        LabeledContent("Port", value: "\(draft.port)")
+                    Stepper(value: self.$draft.port, in: 1 ... 65535) {
+                        LabeledContent("Port", value: "\(self.draft.port)")
                     }
-                    TextField("Group", text: $draft.groupName)
-                    Toggle("Favorite", isOn: $draft.isFavorite)
+                    TextField("Group", text: self.$draft.groupName)
+                    Toggle("Favorite", isOn: self.$draft.isFavorite)
                 }
 
                 Section("Authentication") {
-                    TextField("Username", text: $draft.username)
-                    Picker("Method", selection: $draft.authKind) {
+                    TextField("Username", text: self.$draft.username)
+                    Picker("Method", selection: self.$draft.authKind) {
                         ForEach(ServerProfileDraft.AuthKind.allCases) { method in
                             Text(method.rawValue).tag(method)
                         }
                     }
-                    if draft.authKind == .privateKey {
+                    if self.draft.authKind == .privateKey {
                         HStack {
-                            TextField("Private Key Path", text: $draft.privateKeyPath)
+                            TextField("Private Key Path", text: self.$draft.privateKeyPath)
                             Button("Choose...") {
-                                choosePrivateKey()
+                                self.choosePrivateKey()
                             }
                         }
-                        Toggle("Store passphrase in Keychain", isOn: $draft.storePassphrase)
-                        if draft.storePassphrase {
-                            SecureField("Private Key Passphrase", text: $draft.passphrase)
+                        Toggle("Store passphrase in Keychain", isOn: self.$draft.storePassphrase)
+                        if self.draft.storePassphrase {
+                            SecureField("Private Key Passphrase", text: self.$draft.passphrase)
                         }
                     }
-                    if draft.authKind == .password {
-                        SecureField("Password", text: $draft.password)
+                    if self.draft.authKind == .password {
+                        SecureField("Password", text: self.$draft.password)
                         Text("Password is stored in Keychain. The current stable transfer backend uses system SSH, so password-based file browsing is blocked until the native Swift backend graduates.")
                             .font(.caption)
                             .foregroundStyle(.primary.opacity(0.68))
@@ -55,19 +55,19 @@ struct ServerProfileEditorView: View {
                 }
 
                 Section("Paths") {
-                    TextField("Remote Default Path", text: $draft.remoteDefaultPath)
+                    TextField("Remote Default Path", text: self.$draft.remoteDefaultPath)
                     HStack {
-                        TextField("Local Default Path", text: $draft.localDefaultPath)
+                        TextField("Local Default Path", text: self.$draft.localDefaultPath)
                         Button("Choose...") {
-                            chooseLocalFolder()
+                            self.chooseLocalFolder()
                         }
                     }
                 }
 
                 Section("Metadata") {
-                    TextField("Tags", text: $draft.tags, prompt: Text("production, website"))
-                    TextField("Notes", text: $draft.notes, axis: .vertical)
-                        .lineLimit(3...6)
+                    TextField("Tags", text: self.$draft.tags, prompt: Text("production, website"))
+                    TextField("Notes", text: self.$draft.notes, axis: .vertical)
+                        .lineLimit(3 ... 6)
                 }
 
                 if let errorMessage {
@@ -78,13 +78,13 @@ struct ServerProfileEditorView: View {
                 }
             }
             .formStyle(.grouped)
-            .navigationTitle(savesAndConnects ? "New Connection" : (draft.displayName.isEmpty ? "New Server" : draft.displayName))
+            .navigationTitle(self.savesAndConnects ? "New Connection" : (self.draft.displayName.isEmpty ? "New Server" : self.draft.displayName))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", action: onCancel)
+                    Button("Cancel", action: self.onCancel)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(savesAndConnects ? "Save & Connect" : "Save", action: onSave)
+                    Button(self.savesAndConnects ? "Save & Connect" : "Save", action: self.onSave)
                         .keyboardShortcut(.defaultAction)
                 }
             }
@@ -99,7 +99,7 @@ struct ServerProfileEditorView: View {
         panel.canChooseFiles = true
         panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".ssh", isDirectory: true)
         if panel.runModal() == .OK, let url = panel.url {
-            draft.privateKeyPath = url.path
+            self.draft.privateKeyPath = url.path
         }
     }
 
@@ -108,9 +108,9 @@ struct ServerProfileEditorView: View {
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
-        panel.directoryURL = URL(fileURLWithPath: NSString(string: draft.localDefaultPath).expandingTildeInPath)
+        panel.directoryURL = URL(fileURLWithPath: NSString(string: self.draft.localDefaultPath).expandingTildeInPath)
         if panel.runModal() == .OK, let url = panel.url {
-            draft.localDefaultPath = url.path
+            self.draft.localDefaultPath = url.path
         }
     }
 }

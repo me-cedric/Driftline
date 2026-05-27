@@ -15,18 +15,18 @@ struct TransferPanel: View {
                 Label("Transfers", systemImage: "arrow.up.arrow.down")
                     .font(.headline)
                 Spacer()
-                Button("Cancel Active", action: onCancelActive)
+                Button("Cancel Active", action: self.onCancelActive)
                     .accessibilityHint("Cancels active transfers.")
-                Button("Retry Failed", action: onRetryFailed)
+                Button("Retry Failed", action: self.onRetryFailed)
                     .accessibilityHint("Retries failed transfers.")
-                Button("Clear Failed", action: onClearFailed)
-                Button("Clear Completed", action: onClearCompleted)
+                Button("Clear Failed", action: self.onClearFailed)
+                Button("Clear Completed", action: self.onClearCompleted)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
             .background(.bar)
 
-            Table(jobs) {
+            Table(self.jobs) {
                 TableColumn("Status") { job in
                     TransferStatusBadge(status: job.status)
                 }
@@ -49,7 +49,7 @@ struct TransferPanel: View {
                 }
                 TableColumn("Action") { job in
                     Button {
-                        onCancelTransfer(job.id)
+                        self.onCancelTransfer(job.id)
                     } label: {
                         Image(systemName: "xmark.circle")
                     }
@@ -60,7 +60,7 @@ struct TransferPanel: View {
                 }
             }
             .overlay {
-                if jobs.isEmpty {
+                if self.jobs.isEmpty {
                     EmptyStateView(
                         title: "No Transfers Yet",
                         message: "Uploads and downloads will appear here with progress, retries, and history.",

@@ -1,5 +1,5 @@
-import XCTest
 @testable import DriftlineCore
+import XCTest
 
 final class CLIRequestTests: XCTestCase {
     func testCLIRequestStoreSavesAndConsumesRequest() throws {

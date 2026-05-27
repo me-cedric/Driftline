@@ -1,5 +1,5 @@
-import XCTest
 @testable import DriftlineCore
+import XCTest
 
 final class StatsTests: XCTestCase {
     func testTransferStatsCalculatorSummarizesJobs() {
@@ -8,7 +8,7 @@ final class StatsTests: XCTestCase {
             TransferJob(direction: .download, sourcePath: "/c", destinationPath: "/d", byteCount: 20, status: .succeeded),
             TransferJob(direction: .upload, sourcePath: "/e", destinationPath: "/f", status: .failed(message: "No")),
             TransferJob(direction: .download, sourcePath: "/g", destinationPath: "/h", status: .running(progress: 0.5, bytesPerSecond: 100)),
-            TransferJob(direction: .upload, sourcePath: "/i", destinationPath: "/j", status: .queued)
+            TransferJob(direction: .upload, sourcePath: "/i", destinationPath: "/j", status: .queued),
         ]
 
         let stats = TransferStatsCalculator.calculate(from: jobs)

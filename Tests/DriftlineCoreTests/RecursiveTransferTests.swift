@@ -1,5 +1,5 @@
-import XCTest
 @testable import DriftlineCore
+import XCTest
 
 final class RecursiveTransferTests: XCTestCase {
     func testFolderTransferJobMarksIsFolder() {
@@ -82,7 +82,7 @@ final class RecursiveTransferTests: XCTestCase {
 
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .secondsSince1970
-        var dict = try JSONSerialization.jsonObject(with: try encoder.encode(baseJob)) as! [String: Any]
+        var dict = try XCTUnwrap(try JSONSerialization.jsonObject(with: encoder.encode(baseJob)) as? [String: Any])
         dict.removeValue(forKey: "isFolder")
         let legacyData = try JSONSerialization.data(withJSONObject: dict)
 

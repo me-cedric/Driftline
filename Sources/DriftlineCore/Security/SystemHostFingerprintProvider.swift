@@ -40,7 +40,7 @@ public struct SystemHostFingerprintProvider: HostFingerprintProviding {
         }
         parsed.knownHostsLine = keyLines.first(where: { line in
             line.localizedCaseInsensitiveContains(parsed.algorithm)
-                || line.localizedCaseInsensitiveContains(openSSHKeyType(for: parsed.algorithm))
+                || line.localizedCaseInsensitiveContains(self.openSSHKeyType(for: parsed.algorithm))
         }) ?? keyLines.first ?? ""
         return parsed
     }

@@ -46,7 +46,7 @@ public struct SFTPPacket: Equatable, Sendable {
         if let requestID {
             body.appendUInt32(requestID)
         }
-        body.append(payload)
+        body.append(self.payload)
 
         var data = Data()
         data.appendUInt32(UInt32(body.count))
@@ -97,7 +97,7 @@ public enum SFTPPacketError: Error, Equatable, LocalizedError {
             "The SFTP packet length is invalid."
         case .incompletePacket:
             "The SFTP packet is incomplete."
-        case .unknownPacketType(let type):
+        case let .unknownPacketType(type):
             "Unknown SFTP packet type \(type)."
         case .truncatedField:
             "The SFTP packet ended unexpectedly."
@@ -109,40 +109,40 @@ public enum SFTPPacketError: Error, Equatable, LocalizedError {
 
 public struct SFTPDataReader {
     private var data: Data
-    private var offset: Int = 0
+    private var offset = 0
 
     public init(data: Data) {
         self.data = data
     }
 
     public var remainingCount: Int {
-        data.count - offset
+        self.data.count - self.offset
     }
 
     public mutating func readUInt8() throws -> UInt8 {
-        guard remainingCount >= 1 else { throw SFTPPacketError.truncatedField }
+        guard self.remainingCount >= 1 else { throw SFTPPacketError.truncatedField }
         defer { offset += 1 }
-        return data[offset]
+        return self.data[self.offset]
     }
 
     public mutating func readUInt32() throws -> UInt32 {
-        guard remainingCount >= 4 else { throw SFTPPacketError.truncatedField }
-        let value = data[offset..<offset + 4].reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
-        offset += 4
+        guard self.remainingCount >= 4 else { throw SFTPPacketError.truncatedField }
+        let value = self.data[self.offset ..< self.offset + 4].reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
+        self.offset += 4
         return value
     }
 
     public mutating func readUInt64() throws -> UInt64 {
-        guard remainingCount >= 8 else { throw SFTPPacketError.truncatedField }
-        let value = data[offset..<offset + 8].reduce(UInt64(0)) { ($0 << 8) | UInt64($1) }
-        offset += 8
+        guard self.remainingCount >= 8 else { throw SFTPPacketError.truncatedField }
+        let value = self.data[self.offset ..< self.offset + 8].reduce(UInt64(0)) { ($0 << 8) | UInt64($1) }
+        self.offset += 8
         return value
     }
 
     public mutating func readData(count: Int) throws -> Data {
-        guard count >= 0, remainingCount >= count else { throw SFTPPacketError.truncatedField }
-        let slice = data[offset..<offset + count]
-        offset += count
+        guard count >= 0, self.remainingCount >= count else { throw SFTPPacketError.truncatedField }
+        let slice = self.data[self.offset ..< self.offset + count]
+        self.offset += count
         return Data(slice)
     }
 
@@ -157,7 +157,7 @@ public struct SFTPDataReader {
 
     public mutating func readBinaryString() throws -> Data {
         let length = try readUInt32()
-        return try readData(count: Int(length))
+        return try self.readData(count: Int(length))
     }
 }
 
@@ -186,13 +186,12 @@ public extension Data {
 
     mutating func appendString(_ value: String) {
         let bytes = Data(value.utf8)
-        appendUInt32(UInt32(bytes.count))
+        self.appendUInt32(UInt32(bytes.count))
         append(bytes)
     }
 
     mutating func appendBinaryString(_ value: Data) {
-        appendUInt32(UInt32(value.count))
+        self.appendUInt32(UInt32(value.count))
         append(value)
     }
 }
-

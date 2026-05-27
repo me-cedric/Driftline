@@ -1,5 +1,5 @@
-import XCTest
 @testable import DriftlineCore
+import XCTest
 
 final class SFTPPacketTests: XCTestCase {
     func testInitializePacketEncoding() throws {
@@ -43,4 +43,3 @@ final class SFTPPacketTests: XCTestCase {
         }
     }
 }
-

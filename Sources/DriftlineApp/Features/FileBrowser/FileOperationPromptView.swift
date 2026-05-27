@@ -8,17 +8,17 @@ struct FileOperationPromptView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(title)
+            Text(self.title)
                 .font(.title2.bold())
-            TextField("Name", text: $text)
+            TextField("Name", text: self.$text)
                 .textFieldStyle(.roundedBorder)
-                .onSubmit(onCommit)
+                .onSubmit(self.onCommit)
             HStack {
                 Spacer()
-                Button("Cancel", role: .cancel, action: onCancel)
-                Button("Save", action: onCommit)
+                Button("Cancel", role: .cancel, action: self.onCancel)
+                Button("Save", action: self.onCommit)
                     .buttonStyle(.borderedProminent)
-                    .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(self.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
         .padding(24)

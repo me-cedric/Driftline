@@ -34,9 +34,9 @@ public struct FoundationProcessExecutor: SystemProcessExecuting {
             @Sendable func resume(_ result: Result<ProcessResult, Error>) {
                 guard resumeState.markResumedIfNeeded() else { return }
                 switch result {
-                case .success(let value):
+                case let .success(value):
                     continuation.resume(returning: value)
-                case .failure(let error):
+                case let .failure(error):
                     continuation.resume(throwing: error)
                 }
             }
@@ -70,10 +70,10 @@ private final class ProcessResumeState: @unchecked Sendable {
     private var didResume = false
 
     func markResumedIfNeeded() -> Bool {
-        lock.lock()
+        self.lock.lock()
         defer { lock.unlock() }
-        guard !didResume else { return false }
-        didResume = true
+        guard !self.didResume else { return false }
+        self.didResume = true
         return true
     }
 }

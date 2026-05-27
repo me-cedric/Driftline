@@ -2,11 +2,11 @@ import Foundation
 
 public enum RemoteFileCommandBuilder {
     public static func createFolderCommand(name: String, in path: String) -> String {
-        "mkdir -- \(SSHCommandBuilder.shellSingleQuoted(join(path, name)))"
+        "mkdir -- \(SSHCommandBuilder.shellSingleQuoted(self.join(path, name)))"
     }
 
     public static func renameCommand(path: String, newName: String) -> String {
-        let destination = join(URL(fileURLWithPath: path).deletingLastPathComponent().path, newName)
+        let destination = self.join(URL(fileURLWithPath: path).deletingLastPathComponent().path, newName)
         return "mv -- \(SSHCommandBuilder.shellSingleQuoted(path)) \(SSHCommandBuilder.shellSingleQuoted(destination))"
     }
 

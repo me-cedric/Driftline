@@ -61,7 +61,8 @@ func launchDriftline(path: String, newTab: Bool) throws {
 
 func findAppBundle() -> String? {
     if let explicit = ProcessInfo.processInfo.environment["DRIFTLINE_APP_PATH"],
-       FileManager.default.fileExists(atPath: explicit) {
+       FileManager.default.fileExists(atPath: explicit)
+    {
         return explicit
     }
     let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)

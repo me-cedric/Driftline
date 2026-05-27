@@ -5,17 +5,17 @@ struct ConnectionStatusPill: View {
     var state: ConnectionState
 
     var body: some View {
-        Label(label, systemImage: icon)
+        Label(self.label, systemImage: self.icon)
             .font(.caption.weight(.semibold))
             .padding(.horizontal, 9)
             .padding(.vertical, 5)
-            .background(color.opacity(0.16), in: Capsule())
-            .foregroundStyle(color)
-            .accessibilityLabel("Connection status: \(label)")
+            .background(self.color.opacity(0.16), in: Capsule())
+            .foregroundStyle(self.color)
+            .accessibilityLabel("Connection status: \(self.label)")
     }
 
     private var label: String {
-        switch state {
+        switch self.state {
         case .connected: "Connected"
         case .connecting: "Connecting"
         case .reconnecting: "Reconnecting"
@@ -26,7 +26,7 @@ struct ConnectionStatusPill: View {
     }
 
     private var icon: String {
-        switch state {
+        switch self.state {
         case .connected: "checkmark.circle.fill"
         case .connecting, .reconnecting: "arrow.triangle.2.circlepath"
         case .failed: "exclamationmark.triangle.fill"
@@ -36,7 +36,7 @@ struct ConnectionStatusPill: View {
     }
 
     private var color: Color {
-        switch state {
+        switch self.state {
         case .connected: .green
         case .connecting, .reconnecting: .blue
         case .failed: .red
@@ -50,10 +50,10 @@ struct TransferStatusBadge: View {
     var status: TransferStatus
 
     var body: some View {
-        switch status {
+        switch self.status {
         case .queued:
             Label("Queued", systemImage: "clock").foregroundStyle(.secondary)
-        case .running(let progress, _):
+        case let .running(progress, _):
             ProgressView(value: progress) {
                 Text("\(Int(progress * 100))%")
             }
@@ -80,7 +80,7 @@ struct EmptyStateView: View {
     }
 
     var body: some View {
-        ContentUnavailableView(title, systemImage: systemImage, description: message.map(Text.init))
+        ContentUnavailableView(self.title, systemImage: self.systemImage, description: self.message.map(Text.init))
             .foregroundStyle(.primary.opacity(0.72))
     }
 }
@@ -91,9 +91,9 @@ struct InspectorSection<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(title)
+            Text(self.title)
                 .font(.headline)
-            content
+            self.content
                 .font(.callout)
         }
         .padding(14)

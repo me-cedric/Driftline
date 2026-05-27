@@ -17,28 +17,28 @@ struct FileBrowserPane: View {
         VStack(spacing: 0) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
+                    Text(self.title)
                         .font(.headline)
-                    Text(path)
+                    Text(self.path)
                         .font(.caption)
                         .foregroundStyle(.primary.opacity(0.68))
                         .lineLimit(1)
                 }
                 Spacer()
-                Button(action: onParent) { Image(systemName: "chevron.up") }
+                Button(action: self.onParent) { Image(systemName: "chevron.up") }
                     .help("Parent Folder")
                     .accessibilityLabel("Parent Folder")
-                Button(action: onRefresh) { Image(systemName: "arrow.clockwise") }
+                Button(action: self.onRefresh) { Image(systemName: "arrow.clockwise") }
                     .help("Refresh")
-                    .accessibilityLabel("Refresh \(title)")
+                    .accessibilityLabel("Refresh \(self.title)")
             }
             .padding(12)
             .background(.regularMaterial)
 
-            Table(items, selection: Binding(get: {
-                selection?.id
+            Table(self.items, selection: Binding(get: {
+                self.selection?.id
             }, set: { id in
-                selection = items.first { $0.id == id }
+                self.selection = self.items.first { $0.id == id }
             })) {
                 TableColumn("Name") { item in
                     Label(item.name, systemImage: item.kind == .folder ? "folder" : "doc")
@@ -58,7 +58,7 @@ struct FileBrowserPane: View {
                 }
             }
             .contextMenu(forSelectionType: String.self) { _ in
-                Button("New Folder", action: onCreateFolder)
+                Button("New Folder", action: self.onCreateFolder)
                 Divider()
                 Button("Copy Path") {
                     if let selection {
@@ -66,9 +66,9 @@ struct FileBrowserPane: View {
                         NSPasteboard.general.setString(selection.path, forType: .string)
                     }
                 }
-                Button(title == "Local" ? "Reveal in Finder" : "Copy Remote Path") {
+                Button(self.title == "Local" ? "Reveal in Finder" : "Copy Remote Path") {
                     guard let selection else { return }
-                    if title == "Local" {
+                    if self.title == "Local" {
                         NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: selection.path)])
                     } else {
                         NSPasteboard.general.clearContents()
@@ -76,20 +76,20 @@ struct FileBrowserPane: View {
                     }
                 }
                 Divider()
-                Button("Rename", action: onRename)
-                Button("Delete", role: .destructive, action: onDelete)
+                Button("Rename", action: self.onRename)
+                Button("Delete", role: .destructive, action: self.onDelete)
             } primaryAction: { ids in
-                selection = items.first { ids.contains($0.id) }
+                selection = self.items.first { ids.contains($0.id) }
                 if let selection {
-                    onOpen(selection)
+                    self.onOpen(selection)
                 }
             }
             .overlay {
-                if items.isEmpty {
+                if self.items.isEmpty {
                     EmptyStateView(
-                        title: title == "Remote" ? "No Remote Listing" : "This Folder Is Empty",
-                        message: title == "Remote" ? "Create a connection, select a saved server, then press Connect." : "Create a folder or choose another local path.",
-                        systemImage: title == "Remote" ? "network.slash" : "folder"
+                        title: self.title == "Remote" ? "No Remote Listing" : "This Folder Is Empty",
+                        message: self.title == "Remote" ? "Create a connection, select a saved server, then press Connect." : "Create a folder or choose another local path.",
+                        systemImage: self.title == "Remote" ? "network.slash" : "folder"
                     )
                 }
             }

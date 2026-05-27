@@ -1,5 +1,5 @@
-import XCTest
 @testable import DriftlineCore
+import XCTest
 
 final class SFTPClientTests: XCTestCase {
     func testRemoteFindParserParsesAndSortsListing() {
@@ -61,7 +61,7 @@ final class SFTPClientTests: XCTestCase {
 }
 
 private actor RecordingProcessExecutor: SystemProcessExecuting {
-    struct Invocation: Sendable {
+    struct Invocation {
         var executable: String
         var arguments: [String]
     }
@@ -73,8 +73,8 @@ private actor RecordingProcessExecutor: SystemProcessExecuting {
         self.result = result
     }
 
-    func run(executable: String, arguments: [String], timeout: TimeInterval) async throws -> ProcessResult {
-        invocation = Invocation(executable: executable, arguments: arguments)
-        return result
+    func run(executable: String, arguments: [String], timeout _: TimeInterval) async throws -> ProcessResult {
+        self.invocation = Invocation(executable: executable, arguments: arguments)
+        return self.result
     }
 }

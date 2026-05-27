@@ -25,17 +25,17 @@ public enum SSHCommandBuilder {
             "-p", String(profile.port),
             "-o", "BatchMode=\(batchMode ? "yes" : "no")",
             "-o", "ConnectTimeout=12",
-            "-o", "StrictHostKeyChecking=yes"
+            "-o", "StrictHostKeyChecking=yes",
         ]
         if let knownHostsURL {
-            arguments.append(contentsOf: ["-o", "UserKnownHostsFile=\(sshConfigEscaped(knownHostsURL.path))"])
+            arguments.append(contentsOf: ["-o", "UserKnownHostsFile=\(self.sshConfigEscaped(knownHostsURL.path))"])
             arguments.append(contentsOf: ["-o", "GlobalKnownHostsFile=/dev/null"])
         }
-        if case .privateKey(let path, _) = profile.authenticationMethod {
+        if case let .privateKey(path, _) = profile.authenticationMethod {
             arguments.append(contentsOf: ["-i", NSString(string: path).expandingTildeInPath])
         }
         if !jumpHosts.isEmpty {
-            arguments.append(contentsOf: ["-o", "ProxyJump=\(jumpProxyValue(for: jumpHosts))"])
+            arguments.append(contentsOf: ["-o", "ProxyJump=\(self.jumpProxyValue(for: jumpHosts))"])
         }
         return arguments
     }
@@ -53,12 +53,12 @@ public enum SSHCommandBuilder {
     public static func remoteListArguments(for profile: ServerProfile, path: String) throws -> [String] {
         var arguments = try baseArguments(for: profile)
         arguments.append("\(profile.username)@\(profile.host)")
-        arguments.append(remoteFindCommand(path: path))
+        arguments.append(self.remoteFindCommand(path: path))
         return arguments
     }
 
     public static func remoteFindCommand(path: String) -> String {
-        let quotedPath = shellSingleQuoted(path)
+        let quotedPath = self.shellSingleQuoted(path)
         return "LC_ALL=C find \(quotedPath) -maxdepth 1 -mindepth 1 -printf '%y\\t%s\\t%T@\\t%M\\t%u\\t%g\\t%p\\n'"
     }
 

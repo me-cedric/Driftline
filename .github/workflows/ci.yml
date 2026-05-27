@@ -27,5 +27,7 @@ jobs:
             ${{ runner.os }}-spm-
       - name: Build
         run: swift build
+      - name: Lint
+        run: ./scripts/lint.sh
       - name: Test
         run: swift test

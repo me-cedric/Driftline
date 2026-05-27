@@ -1,5 +1,5 @@
-import Foundation
 import Darwin
+import Foundation
 
 public struct SSHAgentIdentity: Sendable {
     public var keyBlob: Data
@@ -58,8 +58,8 @@ public actor SSHAgentClient {
     }
 
     public func listIdentities() async throws -> [SSHAgentIdentity] {
-        let request = buildFrame(type: 11, payload: Data())
-        try writeAll(request)
+        let request = self.buildFrame(type: 11, payload: Data())
+        try self.writeAll(request)
 
         let response = try readFrame()
         guard let firstByte = response.first, firstByte == 12 else {
@@ -71,10 +71,10 @@ public actor SSHAgentClient {
         var identities: [SSHAgentIdentity] = []
         identities.reserveCapacity(Int(count))
 
-        for _ in 0..<count {
+        for _ in 0 ..< count {
             let keyBlob = try readBString(from: response, at: &cursor)
             let comment = try readString(from: response, at: &cursor)
-            let keyType = parseKeyType(from: keyBlob)
+            let keyType = self.parseKeyType(from: keyBlob)
             identities.append(SSHAgentIdentity(keyBlob: keyBlob, comment: comment, keyType: keyType))
         }
         return identities
@@ -82,12 +82,12 @@ public actor SSHAgentClient {
 
     public func sign(keyBlob: Data, data: Data, flags: UInt32 = 0) async throws -> Data {
         var payload = Data()
-        payload.append(contentsOf: encodeBString(keyBlob))
-        payload.append(contentsOf: encodeBString(data))
-        payload.append(contentsOf: encodeUInt32(flags))
+        payload.append(contentsOf: self.encodeBString(keyBlob))
+        payload.append(contentsOf: self.encodeBString(data))
+        payload.append(contentsOf: self.encodeUInt32(flags))
 
-        let request = buildFrame(type: 13, payload: payload)
-        try writeAll(request)
+        let request = self.buildFrame(type: 13, payload: payload)
+        try self.writeAll(request)
 
         let response = try readFrame()
         guard let firstByte = response.first else {
@@ -101,14 +101,13 @@ public actor SSHAgentClient {
         }
 
         var cursor = 1
-        let signature = try readBString(from: response, at: &cursor)
-        return signature
+        return try self.readBString(from: response, at: &cursor)
     }
 
     private func buildFrame(type: UInt8, payload: Data) -> Data {
         let length = UInt32(1 + payload.count)
         var frame = Data()
-        frame.append(contentsOf: encodeUInt32(length))
+        frame.append(contentsOf: self.encodeUInt32(length))
         frame.append(type)
         frame.append(payload)
         return frame
@@ -118,7 +117,7 @@ public actor SSHAgentClient {
         var offset = 0
         while offset < data.count {
             let sent = data.withUnsafeBytes { buffer in
-                Darwin.send(socketFD, buffer.baseAddress!.advanced(by: offset), data.count - offset, 0)
+                Darwin.send(self.socketFD, buffer.baseAddress!.advanced(by: offset), data.count - offset, 0)
             }
             if sent <= 0 { throw SSHAgentError.socketWriteFailed }
             offset += sent
@@ -130,7 +129,7 @@ public actor SSHAgentClient {
         var received = 0
         while received < count {
             let n = buffer.withUnsafeMutableBytes { ptr in
-                Darwin.recv(socketFD, ptr.baseAddress!.advanced(by: received), count - received, 0)
+                Darwin.recv(self.socketFD, ptr.baseAddress!.advanced(by: received), count - received, 0)
             }
             if n <= 0 { throw SSHAgentError.socketReadFailed }
             received += n
@@ -144,13 +143,13 @@ public actor SSHAgentClient {
         _ = withUnsafeMutableBytes(of: &length) { lengthData.copyBytes(to: $0) }
         length = UInt32(bigEndian: length)
         guard length > 0, length <= 65536 else { throw SSHAgentError.invalidFrameLength(Int(length)) }
-        return try readExact(count: Int(length))
+        return try self.readExact(count: Int(length))
     }
 
     private func readUInt32(from data: Data, at cursor: inout Int) throws -> UInt32 {
         guard cursor + 4 <= data.count else { throw SSHAgentError.malformedResponse }
         var value: UInt32 = 0
-        _ = withUnsafeMutableBytes(of: &value) { data.copyBytes(to: $0, from: cursor..<(cursor + 4)) }
+        _ = withUnsafeMutableBytes(of: &value) { data.copyBytes(to: $0, from: cursor ..< (cursor + 4)) }
         cursor += 4
         return UInt32(bigEndian: value)
     }
@@ -158,14 +157,17 @@ public actor SSHAgentClient {
     private func readBString(from data: Data, at cursor: inout Int) throws -> Data {
         let length = try readUInt32(from: data, at: &cursor)
         guard cursor + Int(length) <= data.count else { throw SSHAgentError.malformedResponse }
-        let slice = data[cursor..<(cursor + Int(length))]
+        let slice = data[cursor ..< (cursor + Int(length))]
         cursor += Int(length)
         return Data(slice)
     }
 
     private func readString(from data: Data, at cursor: inout Int) throws -> String {
         let raw = try readBString(from: data, at: &cursor)
-        return String(decoding: raw, as: UTF8.self)
+        guard let string = String(data: raw, encoding: .utf8) else {
+            throw SSHAgentError.malformedResponse
+        }
+        return string
     }
 
     private func encodeUInt32(_ value: UInt32) -> [UInt8] {
@@ -175,15 +177,17 @@ public actor SSHAgentClient {
 
     private func encodeBString(_ data: Data) -> Data {
         var result = Data()
-        result.append(contentsOf: encodeUInt32(UInt32(data.count)))
+        result.append(contentsOf: self.encodeUInt32(UInt32(data.count)))
         result.append(data)
         return result
     }
 
     private func parseKeyType(from keyBlob: Data) -> String {
         var cursor = 0
-        guard let typeData = try? readBString(from: keyBlob, at: &cursor) else { return "unknown" }
-        return String(decoding: typeData, as: UTF8.self)
+        guard let typeData = try? readBString(from: keyBlob, at: &cursor),
+              let keyType = String(data: typeData, encoding: .utf8)
+        else { return "unknown" }
+        return keyType
     }
 }
 
@@ -199,10 +203,10 @@ public enum SSHAgentError: Error, Equatable, LocalizedError {
         switch self {
         case .socketWriteFailed: "Failed to write to SSH agent socket."
         case .socketReadFailed: "Failed to read from SSH agent socket."
-        case .unexpectedResponse(let code): "SSH agent returned unexpected message type \(code)."
+        case let .unexpectedResponse(code): "SSH agent returned unexpected message type \(code)."
         case .agentFailure: "SSH agent refused the operation."
         case .malformedResponse: "SSH agent response was malformed."
-        case .invalidFrameLength(let len): "SSH agent sent an invalid frame length: \(len)."
+        case let .invalidFrameLength(len): "SSH agent sent an invalid frame length: \(len)."
         }
     }
 }

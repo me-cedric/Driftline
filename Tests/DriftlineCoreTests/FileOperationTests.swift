@@ -1,9 +1,9 @@
-import XCTest
 @testable import DriftlineCore
+import XCTest
 
 final class FileOperationTests: XCTestCase {
     func testManagedKnownHostsFileWritesTrustedHostLineAndReplacesExistingHost() async throws {
-        let url = temporaryFileURL("known_hosts")
+        let url = self.temporaryFileURL("known_hosts")
         let store = ManagedKnownHostsFile(url: url)
         try await store.trust(HostTrustRecord(host: "example.com", port: 22, algorithm: "ED25519", fingerprint: "SHA256:old", knownHostsLine: "example.com ssh-ed25519 OLD"))
         try await store.trust(HostTrustRecord(host: "example.com", port: 22, algorithm: "ED25519", fingerprint: "SHA256:new", knownHostsLine: "example.com ssh-ed25519 NEW"))

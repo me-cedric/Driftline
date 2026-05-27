@@ -1,5 +1,5 @@
-import XCTest
 @testable import DriftlineCore
+import XCTest
 
 final class SFTPAttributesTests: XCTestCase {
     func testAttributesParserReadsSizePermissionsAndModifiedDate() throws {
@@ -22,9 +22,9 @@ final class SFTPAttributesTests: XCTestCase {
     func testNameParserFiltersDotEntries() throws {
         var payload = Data()
         payload.appendUInt32(3)
-        appendName(".", permissions: 0o040755, to: &payload)
-        appendName("..", permissions: 0o040755, to: &payload)
-        appendName("file.txt", permissions: 0o100644, to: &payload)
+        self.appendName(".", permissions: 0o040755, to: &payload)
+        self.appendName("..", permissions: 0o040755, to: &payload)
+        self.appendName("file.txt", permissions: 0o100644, to: &payload)
 
         let entries = try SFTPNameParser.parseNamePacketPayload(payload)
 
@@ -39,4 +39,3 @@ final class SFTPAttributesTests: XCTestCase {
         payload.appendUInt32(permissions)
     }
 }
-

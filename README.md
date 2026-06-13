@@ -198,7 +198,7 @@ Driftline/
 
 | Backend | Auth Methods | Status |
 |---------|-------------|--------|
-| **System SSH** | SSH agent, private key | ✅ Production default |
+| **System SSH** | SSH agent, private key | ✅ Production default; requires SSH shell utilities and rsync |
 | **Native Swift SFTP** | Password, Ed25519 (plain & passphrase), ECDSA PEM | ✅ Tested, opt-in |
 | **SCP** | SSH agent, private key | ✅ Fallback |
 | **FTP / FTPS** | — | 🚧 Adapter planned |

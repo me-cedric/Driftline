@@ -22,6 +22,7 @@ final class RecursiveTransferTests: XCTestCase {
     }
 
     func testTransferJobWithIsFolderEncodesAndDecodesCorrectly() throws {
+        let profileID = ServerProfileID()
         let original = TransferJob(
             direction: .download,
             sourcePath: "/remote/assets",
@@ -30,7 +31,9 @@ final class RecursiveTransferTests: XCTestCase {
             isFolder: true,
             status: .queued,
             serverName: "prod",
-            protocolKind: .sftp
+            profileID: profileID,
+            protocolKind: .sftp,
+            backendKind: .nativeSwiftExperimental
         )
 
         let encoder = JSONEncoder()
@@ -49,7 +52,9 @@ final class RecursiveTransferTests: XCTestCase {
         XCTAssertTrue(decoded.isFolder)
         XCTAssertEqual(decoded.status, original.status)
         XCTAssertEqual(decoded.serverName, original.serverName)
+        XCTAssertEqual(decoded.profileID, profileID)
         XCTAssertEqual(decoded.protocolKind, original.protocolKind)
+        XCTAssertEqual(decoded.backendKind, .nativeSwiftExperimental)
     }
 
     func testTransferJobWithIsFolderFalseRoundTrips() throws {
@@ -91,5 +96,28 @@ final class RecursiveTransferTests: XCTestCase {
         let decoded = try decoder.decode(TransferJob.self, from: legacyData)
 
         XCTAssertFalse(decoded.isFolder)
+    }
+
+    func testTransferJobLegacyJsonDefaultsProfileAndBackendToNil() throws {
+        let baseJob = TransferJob(
+            direction: .upload,
+            sourcePath: "/tmp/file.txt",
+            destinationPath: "/remote/file.txt",
+            isFolder: false
+        )
+
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .secondsSince1970
+        var dict = try XCTUnwrap(try JSONSerialization.jsonObject(with: encoder.encode(baseJob)) as? [String: Any])
+        dict.removeValue(forKey: "profileID")
+        dict.removeValue(forKey: "backendKind")
+        let legacyData = try JSONSerialization.data(withJSONObject: dict)
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .secondsSince1970
+        let decoded = try decoder.decode(TransferJob.self, from: legacyData)
+
+        XCTAssertNil(decoded.profileID)
+        XCTAssertNil(decoded.backendKind)
     }
 }

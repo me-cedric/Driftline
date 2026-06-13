@@ -16,8 +16,8 @@ struct SettingsView: View {
                 }
             }
             Text(self.preferences.remoteBackendKind == .nativeSwiftExperimental
-                ? "Experimental: credentials are read from Keychain through the native Swift path, but SFTP file operations remain guarded until the subsystem is complete."
-                : "Recommended: uses macOS system SSH tools with strict host verification.")
+                ? "Experimental: native SFTP supports password and private-key workflows; use System SSH for SSH agent auth."
+                : "Recommended: uses macOS SSH shell tools with strict host verification, SSH agent support, and rsync transfers.")
                 .font(.caption)
                 .foregroundStyle(.primary.opacity(0.68))
             Picker("Default sort", selection: self.$preferences.fileList.sortKey) {

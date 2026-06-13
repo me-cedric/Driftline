@@ -168,6 +168,7 @@ public actor JSONServerBookmarkRepository: ServerBookmarkRepository {
 public protocol RecentServerRepository: Sendable {
     func list(limit: Int) async throws -> [RecentServer]
     func record(_ recent: RecentServer, limit: Int) async throws
+    func delete(profileID: ServerProfileID) async throws
 }
 
 public actor JSONRecentServerRepository: RecentServerRepository {
@@ -187,6 +188,12 @@ public actor JSONRecentServerRepository: RecentServerRepository {
         recents.removeAll { $0.profileID == recent.profileID }
         recents.insert(recent, at: 0)
         recents = Array(recents.prefix(limit))
+        try await self.store.save(recents)
+    }
+
+    public func delete(profileID: ServerProfileID) async throws {
+        var recents = try await store.load(default: [])
+        recents.removeAll { $0.profileID == profileID }
         try await self.store.save(recents)
     }
 }

@@ -44,18 +44,22 @@ struct FileBrowserPane: View {
                     Label(item.name, systemImage: item.kind == .folder ? "folder" : "doc")
                         .accessibilityLabel("\(item.name), \(item.kind.rawValue)")
                 }
+                .width(min: 140, ideal: 220)
                 TableColumn("Size") { item in
                     Text(item.size.map(ByteCountFormatter.string) ?? "--")
                         .foregroundStyle(.primary.opacity(0.72))
                 }
+                .width(min: 72, ideal: 90, max: 120)
                 TableColumn("Type") { item in
                     Text(item.kind.rawValue.capitalized)
                         .foregroundStyle(.primary.opacity(0.72))
                 }
+                .width(min: 72, ideal: 90, max: 120)
                 TableColumn("Modified") { item in
                     Text(item.modifiedAt?.formatted(date: .abbreviated, time: .shortened) ?? "--")
                         .foregroundStyle(.primary.opacity(0.72))
                 }
+                .width(min: 112, ideal: 150, max: 190)
             }
             .contextMenu(forSelectionType: String.self) { _ in
                 Button("New Folder", action: self.onCreateFolder)

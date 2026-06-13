@@ -32,11 +32,8 @@
 
 ## Planned Next
 
-- Real Keychain credential entry UI.
-- Progress streaming for long-running transfers.
 - File compare and checksum-based conflict details.
-- Native `.icns` generation after final bitmap export.
-- Keychain password/passphrase UI.
-- Upload/download execution.
-- Conflict resolver.
-- Terminal.app launcher.
+- App-level UI automation for create/edit/delete server flows, transfers, and conflicts.
+- Real-server QA across SFTP-only hosts and SSH shell hosts.
+- Signed and notarized public release artifacts.
+- Rich estimated-time-remaining display for transfers.

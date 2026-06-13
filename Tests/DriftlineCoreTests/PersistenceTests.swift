@@ -130,6 +130,22 @@ final class PersistenceTests: XCTestCase {
         XCTAssertEqual(recents.filter { $0.profileID == first }.count, 1)
     }
 
+    func testRecentRepositoryDeletesProfileRecents() async throws {
+        let url = self.temporaryFileURL("recents.json")
+        let repository = JSONRecentServerRepository(url: url)
+        let first = ServerProfileID()
+        let second = ServerProfileID()
+
+        try await repository.record(RecentServer(profileID: first, displayName: "First", host: "a.example.com", protocolKind: .sftp, localPath: "/a", remotePath: "/a"), limit: 10)
+        try await repository.record(RecentServer(profileID: second, displayName: "Second", host: "b.example.com", protocolKind: .sftp, localPath: "/b", remotePath: "/b"), limit: 10)
+
+        try await repository.delete(profileID: first)
+        let recents = try await repository.list(limit: 10)
+
+        XCTAssertEqual(recents.count, 1)
+        XCTAssertEqual(recents.first?.profileID, second)
+    }
+
     func testJSONHostTrustStoreDetectsUnknownTrustedAndChangedFingerprints() async throws {
         let url = self.temporaryFileURL("host-trust.json")
         let store = JSONHostTrustStore(url: url)

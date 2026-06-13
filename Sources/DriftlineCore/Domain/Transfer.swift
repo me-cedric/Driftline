@@ -22,7 +22,9 @@ public struct TransferJob: Identifiable, Codable, Sendable {
     public var isFolder: Bool
     public var status: TransferStatus
     public var serverName: String?
+    public var profileID: ServerProfileID?
     public var protocolKind: TransferProtocolKind?
+    public var backendKind: RemoteBackendKind?
     public var createdAt: Date
     public var startedAt: Date?
     public var finishedAt: Date?
@@ -36,7 +38,9 @@ public struct TransferJob: Identifiable, Codable, Sendable {
         isFolder: Bool = false,
         status: TransferStatus = .queued,
         serverName: String? = nil,
+        profileID: ServerProfileID? = nil,
         protocolKind: TransferProtocolKind? = nil,
+        backendKind: RemoteBackendKind? = nil,
         createdAt: Date = Date(),
         startedAt: Date? = nil,
         finishedAt: Date? = nil
@@ -49,7 +53,9 @@ public struct TransferJob: Identifiable, Codable, Sendable {
         self.isFolder = isFolder
         self.status = status
         self.serverName = serverName
+        self.profileID = profileID
         self.protocolKind = protocolKind
+        self.backendKind = backendKind
         self.createdAt = createdAt
         self.startedAt = startedAt
         self.finishedAt = finishedAt
@@ -57,7 +63,7 @@ public struct TransferJob: Identifiable, Codable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case id, direction, sourcePath, destinationPath, byteCount, isFolder
-        case status, serverName, protocolKind, createdAt, startedAt, finishedAt
+        case status, serverName, profileID, protocolKind, backendKind, createdAt, startedAt, finishedAt
     }
 
     public init(from decoder: Decoder) throws {
@@ -70,7 +76,9 @@ public struct TransferJob: Identifiable, Codable, Sendable {
         self.isFolder = try c.decodeIfPresent(Bool.self, forKey: .isFolder) ?? false
         self.status = try c.decode(TransferStatus.self, forKey: .status)
         self.serverName = try c.decodeIfPresent(String.self, forKey: .serverName)
+        self.profileID = try c.decodeIfPresent(ServerProfileID.self, forKey: .profileID)
         self.protocolKind = try c.decodeIfPresent(TransferProtocolKind.self, forKey: .protocolKind)
+        self.backendKind = try c.decodeIfPresent(RemoteBackendKind.self, forKey: .backendKind)
         self.createdAt = try c.decode(Date.self, forKey: .createdAt)
         self.startedAt = try c.decodeIfPresent(Date.self, forKey: .startedAt)
         self.finishedAt = try c.decodeIfPresent(Date.self, forKey: .finishedAt)

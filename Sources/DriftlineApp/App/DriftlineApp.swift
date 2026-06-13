@@ -45,7 +45,9 @@ final class AppModel: @unchecked Sendable {
     var preferences = ViewPreferences()
     var localItems: [FileItem] = []
     var remoteItems: [FileItem] = []
-    var selectedFile: FileItem?
+    var selectedLocalFile: FileItem?
+    var selectedRemoteFile: FileItem?
+    var activePane: FileSource = .local
     var profileDraft: ServerProfileDraft?
     var profileEditorError: String?
     var isConnecting = false
@@ -67,6 +69,15 @@ final class AppModel: @unchecked Sendable {
     var session = ConnectionSession(state: .disconnected, protocolKind: .sftp)
     var transferStats: TransferStats {
         TransferStatsCalculator.calculate(from: self.transferJobs)
+    }
+
+    var selectedFile: FileItem? {
+        switch self.activePane {
+        case .local:
+            self.selectedLocalFile
+        case .remote:
+            self.selectedRemoteFile
+        }
     }
 
     var lastConnectionDisplay: String {
@@ -146,11 +157,23 @@ final class AppModel: @unchecked Sendable {
             self.session.localPath = args[index + 1]
             return
         }
+        if let index = args.firstIndex(of: "--driftline-bookmark"), args.indices.contains(index + 1) {
+            if args.contains("--driftline-new-tab") {
+                self.newTab()
+            }
+            self.openBookmark(named: args[index + 1])
+            return
+        }
         if let request = try? CLIRequestStore.consume() {
             if request.openInNewTab {
                 self.newTab()
             }
-            self.session.localPath = request.localPath
+            switch request.intent {
+            case let .openPath(path):
+                self.session.localPath = path
+            case let .openBookmark(name):
+                self.openBookmark(named: name)
+            }
         }
     }
 
@@ -337,6 +360,14 @@ final class AppModel: @unchecked Sendable {
         }
     }
 
+    func openBookmark(named name: String) {
+        guard let bookmark = self.bookmarks.first(where: { $0.name.localizedCaseInsensitiveCompare(name) == .orderedSame }) else {
+            self.statusMessage = "Bookmark not found: \(name)"
+            return
+        }
+        self.openBookmark(bookmark)
+    }
+
     func openRecent(_ recent: RecentServer) {
         self.selectedSidebarItem = recent.profileID.rawValue.uuidString
         self.session.localPath = recent.localPath
@@ -374,9 +405,12 @@ final class AppModel: @unchecked Sendable {
             try ServerProfileValidator.validate(profile)
             Task {
                 do {
-                    try await self.saveCredentialSecrets(from: draft, profile: profile)
+                    let previousProfiles = self.profiles
+                    let previousProfile = previousProfiles.first { $0.id == profile.id }
+                    try await self.saveCredentialSecrets(from: draft, profile: profile, previousProfile: previousProfile)
                     try await self.profileRepository.save(profile)
                     self.profiles = try await self.profileRepository.list()
+                    try await self.deleteUnusedCredentialReferences(from: previousProfile.map { [$0] } ?? [], keeping: self.profiles)
                     self.selectedSidebarItem = profile.id.rawValue.uuidString
                     self.profileDraft = nil
                     self.profileEditorError = nil
@@ -393,19 +427,39 @@ final class AppModel: @unchecked Sendable {
         }
     }
 
-    private func saveCredentialSecrets(from draft: ServerProfileDraft, profile: ServerProfile) async throws {
+    private func saveCredentialSecrets(from draft: ServerProfileDraft, profile: ServerProfile, previousProfile: ServerProfile?) async throws {
         switch profile.authenticationMethod {
         case let .password(reference):
             if !draft.password.isEmpty {
                 try await self.credentialStore.saveString(draft.password, reference: reference)
+            } else {
+                try await self.copyCredentialIfNeeded(from: self.passwordReference(for: previousProfile), to: reference)
             }
         case let .privateKey(_, passphraseReference):
             if let passphraseReference, !draft.passphrase.isEmpty {
                 try await self.credentialStore.saveString(draft.passphrase, reference: passphraseReference)
+            } else if let passphraseReference {
+                try await self.copyCredentialIfNeeded(from: self.passphraseReference(for: previousProfile), to: passphraseReference)
             }
         case .agent, .none:
             break
         }
+    }
+
+    private func copyCredentialIfNeeded(from previousReference: CredentialReference?, to reference: CredentialReference) async throws {
+        guard let previousReference, previousReference != reference else { return }
+        guard let secret = try await self.credentialStore.read(reference: previousReference) else { return }
+        try await self.credentialStore.save(secret: secret, reference: reference)
+    }
+
+    private func passwordReference(for profile: ServerProfile?) -> CredentialReference? {
+        guard let profile, case let .password(reference) = profile.authenticationMethod else { return nil }
+        return reference
+    }
+
+    private func passphraseReference(for profile: ServerProfile?) -> CredentialReference? {
+        guard let profile, case let .privateKey(_, reference?) = profile.authenticationMethod else { return nil }
+        return reference
     }
 
     func duplicateSelectedProfile() {
@@ -428,6 +482,8 @@ final class AppModel: @unchecked Sendable {
             do {
                 try await self.profileRepository.delete(id: selectedProfile.id)
                 self.profiles = try await self.profileRepository.list()
+                try await self.deleteDependentNavigationRecords(for: selectedProfile.id)
+                try await self.deleteUnusedCredentialReferences(from: [selectedProfile], keeping: self.profiles)
                 self.selectedSidebarItem = nil
                 if self.session.serverID == selectedProfile.id {
                     self.disconnect()
@@ -438,19 +494,52 @@ final class AppModel: @unchecked Sendable {
         }
     }
 
+    private func deleteDependentNavigationRecords(for profileID: ServerProfileID) async throws {
+        let staleBookmarks = self.bookmarks.filter { $0.profileID == profileID }
+        for bookmark in staleBookmarks {
+            try await self.bookmarkRepository.delete(id: bookmark.id)
+        }
+        try await self.recentRepository.delete(profileID: profileID)
+        self.bookmarks = try await self.bookmarkRepository.list()
+        self.recents = try await self.recentRepository.list(limit: 10)
+    }
+
+    private func deleteUnusedCredentialReferences(from oldProfiles: [ServerProfile], keeping currentProfiles: [ServerProfile]) async throws {
+        let currentReferences = Set(currentProfiles.flatMap { self.credentialReferences(for: $0) })
+        let staleReferences = Set(oldProfiles.flatMap { self.credentialReferences(for: $0) }).subtracting(currentReferences)
+        for reference in staleReferences {
+            try await self.credentialStore.delete(reference: reference)
+        }
+    }
+
+    private func credentialReferences(for profile: ServerProfile) -> [CredentialReference] {
+        switch profile.authenticationMethod {
+        case let .password(reference):
+            [reference]
+        case let .privateKey(_, passphraseReference):
+            passphraseReference.map { [$0] } ?? []
+        case .agent, .none:
+            []
+        }
+    }
+
     func beginCreateFolder(source: FileSource) {
         self.fileOperationText = "New Folder"
         self.fileOperationPrompt = FileOperationPrompt(kind: .createFolder, source: source)
     }
 
-    func beginRenameSelectedItem() {
-        guard let selectedFile else { return }
+    func beginRenameSelectedItem(source: FileSource? = nil) {
+        let source = source ?? self.activePane
+        guard let selectedFile = self.selectedFile(in: source) else { return }
+        self.activePane = source
         self.fileOperationText = selectedFile.name
         self.fileOperationPrompt = FileOperationPrompt(kind: .rename(selectedFile), source: selectedFile.source)
     }
 
-    func requestDeleteSelectedItem() {
-        guard let selectedFile else { return }
+    func requestDeleteSelectedItem(source: FileSource? = nil) {
+        let source = source ?? self.activePane
+        guard let selectedFile = self.selectedFile(in: source) else { return }
+        self.activePane = source
         if self.preferences.confirmBeforeDelete {
             self.pendingDeleteItem = selectedFile
         } else {
@@ -520,12 +609,12 @@ final class AppModel: @unchecked Sendable {
                 switch item.source {
                 case .local:
                     try await self.localFileSystem.deleteItem(at: item.path)
-                    self.selectedFile = nil
+                    self.selectedLocalFile = nil
                     await self.refreshLocal()
                 case .remote:
                     guard let profile = activeProfile else { return }
                     try await self.remoteClientForCurrentPreference().deleteItem(at: item.path, profile: profile, session: self.session)
-                    self.selectedFile = nil
+                    self.selectedRemoteFile = nil
                     await self.refreshRemote()
                 }
             } catch {
@@ -536,10 +625,10 @@ final class AppModel: @unchecked Sendable {
 
     func uploadSelectedItem() {
         guard let profile = activeProfile,
-              let selectedFile,
-              selectedFile.source == .local,
+              let selectedFile = selectedLocalFile,
               session.state == .connected
         else { return }
+        self.activePane = .local
         let destination = self.remotePathAppending(self.session.remotePath, selectedFile.name)
         let job = TransferJob(
             direction: .upload,
@@ -548,7 +637,9 @@ final class AppModel: @unchecked Sendable {
             byteCount: selectedFile.size,
             isFolder: selectedFile.kind == .folder,
             serverName: profile.displayName,
-            protocolKind: profile.protocolKind
+            profileID: profile.id,
+            protocolKind: profile.protocolKind,
+            backendKind: self.preferences.remoteBackendKind
         )
         if self.preferences.confirmBeforeOverwrite, self.remoteItems.contains(where: { $0.path == destination }) {
             self.pendingTransferConflict = TransferConflict(job: job, profile: profile, existingPath: destination)
@@ -572,10 +663,10 @@ final class AppModel: @unchecked Sendable {
 
     func downloadSelectedItem() {
         guard let profile = activeProfile,
-              let selectedFile,
-              selectedFile.source == .remote,
+              let selectedFile = selectedRemoteFile,
               session.state == .connected
         else { return }
+        self.activePane = .remote
         let destination = URL(fileURLWithPath: session.localPath).appendingPathComponent(selectedFile.name).path
         let job = TransferJob(
             direction: .download,
@@ -584,7 +675,9 @@ final class AppModel: @unchecked Sendable {
             byteCount: selectedFile.size,
             isFolder: selectedFile.kind == .folder,
             serverName: profile.displayName,
-            protocolKind: profile.protocolKind
+            profileID: profile.id,
+            protocolKind: profile.protocolKind,
+            backendKind: self.preferences.remoteBackendKind
         )
         if self.preferences.confirmBeforeOverwrite, FileManager.default.fileExists(atPath: destination) {
             self.pendingTransferConflict = TransferConflict(job: job, profile: profile, existingPath: destination)
@@ -597,6 +690,10 @@ final class AppModel: @unchecked Sendable {
     private func enqueueTransfer(_ job: TransferJob, profile: ServerProfile) {
         var queued = job
         queued.status = .queued
+        queued.profileID = queued.profileID ?? profile.id
+        queued.protocolKind = queued.protocolKind ?? profile.protocolKind
+        queued.serverName = queued.serverName ?? profile.displayName
+        queued.backendKind = queued.backendKind ?? self.preferences.remoteBackendKind
         self.transferProfiles[queued.id] = profile
         self.replaceTransferJob(queued)
         self.processTransferQueue()
@@ -609,7 +706,7 @@ final class AppModel: @unchecked Sendable {
 
         let queuedJobs = self.transferJobs.filter(\.isQueued).prefix(capacity)
         for job in queuedJobs {
-            guard let profile = transferProfiles[job.id] else { continue }
+            guard let profile = self.profile(for: job) else { continue }
             var starting = job
             starting.status = .running(progress: 0, bytesPerSecond: nil)
             starting.startedAt = Date()
@@ -623,25 +720,30 @@ final class AppModel: @unchecked Sendable {
     private func runTransfer(_ job: TransferJob, profile: ServerProfile) async {
         do {
             let updateModel = self
-            let client = self.transferClientForCurrentPreference()
+            let client = self.transferClient(for: job.backendKind)
             try await client.enqueue(job, profile: profile) { [updateModel] updated in
                 await MainActor.run {
                     updateModel.replaceTransferJob(updated)
                 }
             }
-            self.transferJobs = await client.jobs().reversed()
             if let completed = transferJobs.first(where: { $0.id == job.id }) {
                 try? await self.transferHistoryRepository.append(completed)
             }
             self.transferProfiles[job.id] = nil
             await self.refreshLocal()
             await self.refreshRemote()
+        } catch is CancellationError {
+            var cancelled = self.transferJobs.first(where: { $0.id == job.id }) ?? job
+            cancelled.status = .cancelled
+            cancelled.finishedAt = Date()
+            self.replaceTransferJob(cancelled)
+            self.transferProfiles[job.id] = nil
+            try? await self.transferHistoryRepository.append(cancelled)
         } catch {
             var failed = job
             failed.status = .failed(message: error.localizedDescription)
             failed.finishedAt = Date()
-            self.transferJobs.removeAll { $0.id == job.id }
-            self.transferJobs.insert(failed, at: 0)
+            self.replaceTransferJob(failed)
             self.transferProfiles[job.id] = nil
             try? await self.transferHistoryRepository.append(failed)
         }
@@ -701,7 +803,9 @@ final class AppModel: @unchecked Sendable {
         self.tabs[index].session = self.session
         self.tabs[index].localItems = self.localItems
         self.tabs[index].remoteItems = self.remoteItems
-        self.tabs[index].selectedFile = self.selectedFile
+        self.tabs[index].selectedLocalFile = self.selectedLocalFile
+        self.tabs[index].selectedRemoteFile = self.selectedRemoteFile
+        self.tabs[index].activePane = self.activePane
         if let profile = selectedProfile {
             self.tabs[index].title = profile.displayName
         } else if self.session.remotePath != "/" {
@@ -718,7 +822,9 @@ final class AppModel: @unchecked Sendable {
         self.session = tab.session
         self.localItems = tab.localItems
         self.remoteItems = tab.remoteItems
-        self.selectedFile = tab.selectedFile
+        self.selectedLocalFile = tab.selectedLocalFile
+        self.selectedRemoteFile = tab.selectedRemoteFile
+        self.activePane = tab.activePane
     }
 
     func clearCompletedTransfers() {
@@ -726,12 +832,24 @@ final class AppModel: @unchecked Sendable {
             if case .succeeded = job.status { return true }
             return false
         }
+        Task {
+            try? await self.transferHistoryRepository.clear { job in
+                if case .succeeded = job.status { return true }
+                return false
+            }
+        }
     }
 
     func clearFailedTransfers() {
         self.transferJobs.removeAll { job in
             if case .failed = job.status { return true }
             return false
+        }
+        Task {
+            try? await self.transferHistoryRepository.clear { job in
+                if case .failed = job.status { return true }
+                return false
+            }
         }
     }
 
@@ -741,7 +859,7 @@ final class AppModel: @unchecked Sendable {
             return false
         }
         for var job in failedJobs {
-            guard let profile = transferProfiles[job.id] ?? activeProfile else { continue }
+            guard let profile = self.profile(for: job) else { continue }
             job.status = .queued
             job.startedAt = nil
             job.finishedAt = nil
@@ -763,7 +881,8 @@ final class AppModel: @unchecked Sendable {
         }
         Task {
             for id in activeIDs {
-                try? await self.transferClientForCurrentPreference().cancel(id: id)
+                let backendKind = self.transferJobs.first { $0.id == id }?.backendKind
+                try? await self.transferClient(for: backendKind).cancel(id: id)
             }
         }
         self.processTransferQueue()
@@ -778,11 +897,12 @@ final class AppModel: @unchecked Sendable {
             self.transferProfiles[id] = nil
             self.processTransferQueue()
         case .running:
+            let backendKind = self.transferJobs[index].backendKind
             self.transferJobs[index].status = .cancelled
             self.transferJobs[index].finishedAt = Date()
             self.transferProfiles[id] = nil
             Task {
-                try? await self.transferClientForCurrentPreference().cancel(id: id)
+                try? await self.transferClient(for: backendKind).cancel(id: id)
                 await MainActor.run {
                     self.processTransferQueue()
                 }
@@ -827,11 +947,34 @@ final class AppModel: @unchecked Sendable {
     }
 
     private func transferClientForCurrentPreference() -> TransferClient {
-        switch self.preferences.remoteBackendKind {
+        self.transferClient(for: self.preferences.remoteBackendKind)
+    }
+
+    private func transferClient(for backendKind: RemoteBackendKind?) -> TransferClient {
+        switch backendKind ?? self.preferences.remoteBackendKind {
         case .systemSSH:
             self.transferClient
         case .nativeSwiftExperimental:
             self.nativeTransferClient
+        }
+    }
+
+    private func profile(for job: TransferJob) -> ServerProfile? {
+        if let profile = self.transferProfiles[job.id] {
+            return profile
+        }
+        if let profileID = job.profileID {
+            return self.profiles.first { $0.id == profileID }
+        }
+        return self.activeProfile
+    }
+
+    private func selectedFile(in source: FileSource) -> FileItem? {
+        switch source {
+        case .local:
+            self.selectedLocalFile
+        case .remote:
+            self.selectedRemoteFile
         }
     }
 }
@@ -1027,7 +1170,9 @@ struct WorkspaceTab: Identifiable {
     var session = ConnectionSession(state: .disconnected, protocolKind: .sftp)
     var localItems: [FileItem] = []
     var remoteItems: [FileItem] = []
-    var selectedFile: FileItem?
+    var selectedLocalFile: FileItem?
+    var selectedRemoteFile: FileItem?
+    var activePane: FileSource = .local
 }
 
 struct SidebarItem: Identifiable, Hashable {

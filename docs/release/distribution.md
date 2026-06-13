@@ -11,7 +11,7 @@
 7. Publish GitHub Release.
 8. Update Homebrew formula.
 
-`scripts/package-dmg.sh` builds the SwiftPM app bundle, creates `dist/Driftline.dmg`, and writes a SHA-256 checksum.
+`scripts/package-dmg.sh` builds a release SwiftPM app bundle, creates `dist/Driftline.dmg`, and writes a SHA-256 checksum.
 
 Signing and notarization still require developer credentials and must not be claimed complete until configured.
 

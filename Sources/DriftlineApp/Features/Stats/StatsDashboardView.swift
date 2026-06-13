@@ -6,6 +6,16 @@ struct StatsDashboardView: View {
     var lastConnection: String
 
     var body: some View {
+        ViewThatFits(in: .horizontal) {
+            self.fullStats
+            self.compactStats
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(.thinMaterial)
+    }
+
+    private var fullStats: some View {
         HStack(spacing: 12) {
             self.stat("Uploads", "\(self.stats.uploadCount)", "arrow.up.circle")
             self.stat("Downloads", "\(self.stats.downloadCount)", "arrow.down.circle")
@@ -23,9 +33,20 @@ struct StatsDashboardView: View {
                     .lineLimit(1)
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-        .background(.thinMaterial)
+    }
+
+    private var compactStats: some View {
+        HStack(spacing: 12) {
+            self.stat("Up", "\(self.stats.uploadCount)", "arrow.up.circle")
+            self.stat("Down", "\(self.stats.downloadCount)", "arrow.down.circle")
+            self.stat("Active", "\(self.stats.activeTransfers)", "bolt.circle")
+            self.stat("Failed", "\(self.stats.failedTransfers)", "exclamationmark.triangle")
+            Spacer()
+            Text(self.lastConnection)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
     }
 
     private func stat(_ label: String, _ value: String, _ icon: String) -> some View {

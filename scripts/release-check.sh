@@ -6,8 +6,8 @@ cd "$ROOT_DIR"
 
 echo "== Driftline release readiness =="
 swift test
-swift build
-./scripts/ui-smoke.sh
+swift build -c release
+DRIFTLINE_BUILD_CONFIGURATION=release ./scripts/ui-smoke.sh
 ./scripts/package-dmg.sh
 
 echo "== Artifact =="

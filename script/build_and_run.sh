@@ -5,6 +5,7 @@ MODE="${1:-run}"
 APP_NAME="Driftline"
 BUNDLE_ID="app.driftline.Driftline"
 MIN_SYSTEM_VERSION="14.0"
+BUILD_CONFIGURATION="${DRIFTLINE_BUILD_CONFIGURATION:-debug}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist"
@@ -17,8 +18,13 @@ INFO_PLIST="$APP_CONTENTS/Info.plist"
 
 pkill -x "$APP_NAME" >/dev/null 2>&1 || true
 
-swift build --product "$APP_NAME"
-BUILD_BINARY="$(swift build --show-bin-path)/$APP_NAME"
+if [[ "$BUILD_CONFIGURATION" == "release" ]]; then
+  swift build -c release --product "$APP_NAME"
+  BUILD_BINARY="$(swift build -c release --show-bin-path)/$APP_NAME"
+else
+  swift build --product "$APP_NAME"
+  BUILD_BINARY="$(swift build --show-bin-path)/$APP_NAME"
+fi
 
 rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_MACOS" "$APP_RESOURCES"

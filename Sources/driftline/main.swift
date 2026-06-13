@@ -30,27 +30,54 @@ if arguments.contains("--help") || arguments.contains("-h") {
     fputs("driftline: secrets are not accepted on the command line\n", stderr)
     exit(2)
 } else {
-    let path = arguments.first(where: { !$0.hasPrefix("--") }) ?? FileManager.default.currentDirectoryPath
-    let resolvedPath = URL(fileURLWithPath: path).standardizedFileURL.path
-    let request = CLIRequest(localPath: resolvedPath, openInNewTab: arguments.contains("--new-tab"))
+    let openInNewTab = arguments.contains("--new-tab")
+    let request: CLIRequest
+    let launchArgument: LaunchArgument
+    if let bookmarkName = bookmarkArgument(in: arguments) {
+        request = CLIRequest(intent: .openBookmark(bookmarkName), openInNewTab: openInNewTab)
+        launchArgument = .bookmark(bookmarkName)
+    } else {
+        let path = pathArgument(in: arguments) ?? FileManager.default.currentDirectoryPath
+        let resolvedPath = URL(fileURLWithPath: path).standardizedFileURL.path
+        request = CLIRequest(localPath: resolvedPath, openInNewTab: openInNewTab)
+        launchArgument = .path(resolvedPath)
+    }
     do {
         try CLIRequestStore.save(request)
-        try launchDriftline(path: resolvedPath, newTab: request.openInNewTab)
-        print("Opening Driftline at \(resolvedPath)")
+        try launchDriftline(argument: launchArgument, newTab: request.openInNewTab)
+        print(launchArgument.message)
     } catch {
         fputs("driftline: \(error.localizedDescription)\n", stderr)
         exit(1)
     }
 }
 
-func launchDriftline(path: String, newTab: Bool) throws {
+func pathArgument(in arguments: [String]) -> String? {
+    if let index = arguments.firstIndex(of: "--open"), arguments.indices.contains(index + 1) {
+        let value = arguments[index + 1]
+        return value.hasPrefix("--") ? nil : value
+    }
+    return arguments.first { !$0.hasPrefix("--") }
+}
+
+func bookmarkArgument(in arguments: [String]) -> String? {
+    guard let index = arguments.firstIndex(of: "--bookmark") else { return nil }
+    guard arguments.indices.contains(index + 1), !arguments[index + 1].hasPrefix("--") else {
+        fputs("driftline: --bookmark requires a bookmark name\n", stderr)
+        exit(2)
+    }
+    return arguments[index + 1]
+}
+
+func launchDriftline(argument: LaunchArgument, newTab: Bool) throws {
     let appPath = findAppBundle()
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+    let launchArguments = argument.appArguments + (newTab ? ["--driftline-new-tab"] : [])
     if let appPath {
-        process.arguments = ["-n", appPath, "--args", "--driftline-open", path] + (newTab ? ["--driftline-new-tab"] : [])
+        process.arguments = ["-n", appPath, "--args"] + launchArguments
     } else {
-        process.arguments = ["-b", "app.driftline.Driftline", "--args", "--driftline-open", path] + (newTab ? ["--driftline-new-tab"] : [])
+        process.arguments = ["-b", "app.driftline.Driftline", "--args"] + launchArguments
     }
     try process.run()
     process.waitUntilExit()
@@ -60,10 +87,10 @@ func launchDriftline(path: String, newTab: Bool) throws {
 }
 
 func findAppBundle() -> String? {
-    if let explicit = ProcessInfo.processInfo.environment["DRIFTLINE_APP_PATH"],
-       FileManager.default.fileExists(atPath: explicit)
-    {
-        return explicit
+    if let explicit = ProcessInfo.processInfo.environment["DRIFTLINE_APP_PATH"] {
+        if FileManager.default.fileExists(atPath: explicit) {
+            return explicit
+        }
     }
     let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
     var cursor: URL? = cwd
@@ -78,6 +105,29 @@ func findAppBundle() -> String? {
     }
     let applications = "/Applications/Driftline.app"
     return FileManager.default.fileExists(atPath: applications) ? applications : nil
+}
+
+enum LaunchArgument {
+    case path(String)
+    case bookmark(String)
+
+    var appArguments: [String] {
+        switch self {
+        case let .path(path):
+            ["--driftline-open", path]
+        case let .bookmark(name):
+            ["--driftline-bookmark", name]
+        }
+    }
+
+    var message: String {
+        switch self {
+        case let .path(path):
+            "Opening Driftline at \(path)"
+        case let .bookmark(name):
+            "Opening Driftline bookmark \(name)"
+        }
+    }
 }
 
 enum CLIError: Error, LocalizedError {

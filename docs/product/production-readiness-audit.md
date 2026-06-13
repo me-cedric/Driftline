@@ -12,12 +12,14 @@ Last reviewed: 2026-05-26.
 - Native SFTP transfers: file upload/download, recursive folder upload/download, progress callbacks, cancellation, large-file round-trip coverage, and recursive remote delete.
 - CLI: `driftline .`, `--open`, `--new-tab`, `--bookmark`, `--help`, and `--version` parse safely and never accept secrets.
 - Release scaffolding: app icon, app bundle, DMG packaging, checksums, signing/notarization scripts, GitHub workflows, and Homebrew documentation.
+- Transfer queue state records profile/backend identity for retry and cancellation, and clear actions update persistent history.
 
 ## Intentional Non-Production Defaults
 
 - Native Swift SFTP remains opt-in from Settings while it receives broader real-server testing. System SSH remains the default stable backend.
 - FTP and FTPS remain unsupported by code. They are documented as protocol-roadmap items because FTPS certificate validation and FTP mode handling need dedicated security work.
 - SSH agent auth for the native Swift backend is not claimed complete. Driftline has a native agent protocol client, but SwiftNIO SSH 0.11.0 does not expose an agent-backed authentication signer hook. Use the System SSH backend for agent-based auth today.
+- The System SSH backend requires SSH shell access plus compatible remote shell utilities for browsing and `rsync` for transfers; SFTP-only servers should use the native Swift backend.
 - Signing and notarization are documented but cannot be completed without Apple Developer credentials configured through `DRIFTLINE_SIGN_IDENTITY` and `DRIFTLINE_NOTARY_PROFILE`.
 - Manual VoiceOver, high-contrast, and real-server security QA are still required before a public 1.0 release.
 

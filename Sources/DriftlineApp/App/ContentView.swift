@@ -200,11 +200,20 @@ struct ContentView: View {
                 items: self.model.localItems,
                 selection: self.selectedFileBinding,
                 onOpen: { self.model.navigateLocal(to: $0) },
+                onNavigate: { self.model.navigateLocal(toPath: $0) },
                 onParent: { self.model.navigateLocalParent() },
                 onRefresh: { Task { await self.model.refreshLocal() } },
                 onCreateFolder: { self.model.beginCreateFolder(source: .local) },
                 onRename: { self.model.beginRenameSelectedItem() },
-                onDelete: { self.model.requestDeleteSelectedItem() }
+                onDelete: { self.model.requestDeleteSelectedItem() },
+                onTransfer: { item in
+                    if self.model.session.state == .connected {
+                        self.model.uploadItem(item)
+                    } else {
+                        self.model.navigateLocal(to: item)
+                    }
+                },
+                onDropItems: { ids in self.model.transferDraggedItems(ids: ids, to: .local) }
             )
             .frame(minWidth: 360, maxWidth: .infinity)
             .layoutPriority(1)
@@ -214,11 +223,14 @@ struct ContentView: View {
                 items: self.model.remoteItems,
                 selection: self.selectedFileBinding,
                 onOpen: { self.model.navigateRemote(to: $0) },
+                onNavigate: { self.model.navigateRemote(toPath: $0) },
                 onParent: { self.model.navigateRemoteParent() },
                 onRefresh: { Task { await self.model.refreshRemote() } },
                 onCreateFolder: { self.model.beginCreateFolder(source: .remote) },
                 onRename: { self.model.beginRenameSelectedItem() },
-                onDelete: { self.model.requestDeleteSelectedItem() }
+                onDelete: { self.model.requestDeleteSelectedItem() },
+                onTransfer: { self.model.downloadItem($0) },
+                onDropItems: { ids in self.model.transferDraggedItems(ids: ids, to: .remote) }
             )
             .frame(minWidth: 360, maxWidth: .infinity)
             .layoutPriority(1)

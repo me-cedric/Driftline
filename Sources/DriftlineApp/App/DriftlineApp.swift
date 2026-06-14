@@ -195,16 +195,24 @@ final class AppModel: @unchecked Sendable {
     func navigateLocal(to item: FileItem) {
         guard item.source == .local else { return }
         if item.kind == .folder {
-            self.session.localPath = item.path
-            Task { await self.refreshLocal() }
+            self.navigateLocal(toPath: item.path)
         } else {
             NSWorkspace.shared.open(URL(fileURLWithPath: item.path))
         }
     }
 
+    func navigateLocal(toPath path: String) {
+        self.session.localPath = path
+        Task { await self.refreshLocal() }
+    }
+
     func navigateRemote(to item: FileItem) {
         guard item.source == .remote, item.kind == .folder else { return }
-        self.session.remotePath = item.path
+        self.navigateRemote(toPath: item.path)
+    }
+
+    func navigateRemote(toPath path: String) {
+        self.session.remotePath = path.isEmpty ? "/" : path
         Task { await self.refreshRemote() }
     }
 
@@ -242,6 +250,7 @@ final class AppModel: @unchecked Sendable {
 
     private func connect(_ profile: ServerProfile) async {
         self.isConnecting = true
+        self.useNativeBackendIfNeeded(for: profile)
         self.session = ConnectionSession(serverID: profile.id, state: .connecting, protocolKind: profile.protocolKind, localPath: profile.localDefaultPath, remotePath: profile.remoteDefaultPath)
         do {
             let client = self.remoteClientForCurrentPreference()
@@ -268,6 +277,15 @@ final class AppModel: @unchecked Sendable {
             self.statusMessage = error.localizedDescription
             self.isConnecting = false
         }
+    }
+
+    private func useNativeBackendIfNeeded(for profile: ServerProfile) {
+        guard case .password = profile.authenticationMethod,
+              self.preferences.remoteBackendKind != .nativeSwiftExperimental
+        else { return }
+        self.preferences.remoteBackendKind = .nativeSwiftExperimental
+        self.statusMessage = "Switched to Native Swift SSH for password authentication."
+        self.savePreferences()
     }
 
     func trustPendingHostAndReconnect() {
@@ -628,18 +646,24 @@ final class AppModel: @unchecked Sendable {
     }
 
     func uploadSelectedItem() {
-        guard let profile = activeProfile,
-              let selectedFile = selectedLocalFile,
+        guard let selectedLocalFile else { return }
+        self.uploadItem(selectedLocalFile)
+    }
+
+    func uploadItem(_ item: FileItem) {
+        guard item.source == .local,
+              let profile = activeProfile,
               session.state == .connected
         else { return }
         self.activePane = .local
-        let destination = self.remotePathAppending(self.session.remotePath, selectedFile.name)
+        self.selectedLocalFile = item
+        let destination = self.remotePathAppending(self.session.remotePath, item.name)
         let job = TransferJob(
             direction: .upload,
-            sourcePath: selectedFile.path,
+            sourcePath: item.path,
             destinationPath: destination,
-            byteCount: selectedFile.size,
-            isFolder: selectedFile.kind == .folder,
+            byteCount: item.size,
+            isFolder: item.kind == .folder,
             serverName: profile.displayName,
             profileID: profile.id,
             protocolKind: profile.protocolKind,
@@ -647,7 +671,7 @@ final class AppModel: @unchecked Sendable {
         )
         if self.preferences.confirmBeforeOverwrite, self.remoteItems.contains(where: { $0.path == destination }) {
             self.pendingTransferConflict = TransferConflict(job: job, profile: profile, existingPath: destination)
-            self.conflictRenameText = self.suggestedConflictName(for: selectedFile.name)
+            self.conflictRenameText = self.suggestedConflictName(for: item.name)
             return
         }
         self.enqueueTransfer(job, profile: profile)
@@ -666,18 +690,24 @@ final class AppModel: @unchecked Sendable {
     }
 
     func downloadSelectedItem() {
-        guard let profile = activeProfile,
-              let selectedFile = selectedRemoteFile,
+        guard let selectedRemoteFile else { return }
+        self.downloadItem(selectedRemoteFile)
+    }
+
+    func downloadItem(_ item: FileItem) {
+        guard item.source == .remote,
+              let profile = activeProfile,
               session.state == .connected
         else { return }
         self.activePane = .remote
-        let destination = URL(fileURLWithPath: session.localPath).appendingPathComponent(selectedFile.name).path
+        self.selectedRemoteFile = item
+        let destination = URL(fileURLWithPath: session.localPath).appendingPathComponent(item.name).path
         let job = TransferJob(
             direction: .download,
-            sourcePath: selectedFile.path,
+            sourcePath: item.path,
             destinationPath: destination,
-            byteCount: selectedFile.size,
-            isFolder: selectedFile.kind == .folder,
+            byteCount: item.size,
+            isFolder: item.kind == .folder,
             serverName: profile.displayName,
             profileID: profile.id,
             protocolKind: profile.protocolKind,
@@ -685,10 +715,27 @@ final class AppModel: @unchecked Sendable {
         )
         if self.preferences.confirmBeforeOverwrite, FileManager.default.fileExists(atPath: destination) {
             self.pendingTransferConflict = TransferConflict(job: job, profile: profile, existingPath: destination)
-            self.conflictRenameText = self.suggestedConflictName(for: selectedFile.name)
+            self.conflictRenameText = self.suggestedConflictName(for: item.name)
             return
         }
         self.enqueueTransfer(job, profile: profile)
+    }
+
+    func transferDraggedItems(ids: [String], to destination: FileSource) -> Bool {
+        var transferred = false
+        for id in ids {
+            switch destination {
+            case .local:
+                guard let item = self.remoteItems.first(where: { $0.id == id }) else { continue }
+                self.downloadItem(item)
+                transferred = true
+            case .remote:
+                guard let item = self.localItems.first(where: { $0.id == id }) else { continue }
+                self.uploadItem(item)
+                transferred = true
+            }
+        }
+        return transferred
     }
 
     private func enqueueTransfer(_ job: TransferJob, profile: ServerProfile) {

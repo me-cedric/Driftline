@@ -48,7 +48,7 @@ struct ServerProfileEditorView: View {
                     }
                     if self.draft.authKind == .password {
                         SecureField("Password", text: self.$draft.password)
-                        Text("Password is stored in Keychain. The current stable transfer backend uses system SSH, so password-based file browsing is blocked until the native Swift backend graduates.")
+                        Text("Password is stored in Keychain. Driftline automatically uses the Native Swift SSH backend for password-based connections.")
                             .font(.caption)
                             .foregroundStyle(.primary.opacity(0.68))
                     }

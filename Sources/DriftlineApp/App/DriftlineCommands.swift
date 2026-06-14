@@ -37,6 +37,15 @@ struct DriftlineCommands: Commands {
                 .keyboardShortcut("j")
         }
 
+        CommandGroup(replacing: .pasteboard) {
+            Button("Copy") { self.model.copySelectedItems() }
+                .keyboardShortcut("c")
+                .disabled(self.model.selectedFile == nil)
+            Button("Paste") { self.model.pasteCopiedItemsIntoActivePane() }
+                .keyboardShortcut("v")
+                .disabled(self.model.copiedFiles.isEmpty)
+        }
+
         CommandGroup(replacing: .appInfo) {
             Button("About Driftline") { self.model.showAbout = true }
         }

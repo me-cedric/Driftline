@@ -1,13 +1,14 @@
 import AppKit
 import DriftlineCore
 import SwiftUI
-import UniformTypeIdentifiers
 
 struct FileBrowserPane: View {
     var title: String
     var path: String
     var items: [FileItem]
-    @Binding var selection: FileItem?
+    var source: FileSource
+    @Binding var selectionIDs: Set<String>
+    var onSelectionChange: ([FileItem]) -> Void
     var onOpen: (FileItem) -> Void
     var onNavigate: (String) -> Void
     var onParent: () -> Void
@@ -15,8 +16,12 @@ struct FileBrowserPane: View {
     var onCreateFolder: () -> Void
     var onRename: () -> Void
     var onDelete: () -> Void
-    var onTransfer: (FileItem) -> Void
-    var onDropItems: ([String]) -> Bool
+    var onTransfer: ([FileItem]) -> Void
+    var onDropItems: ([FileItem]) -> Bool
+    var onCopy: ([FileItem]) -> Void
+    var onPaste: () -> Void
+    var onShowInfo: () -> Void
+    var loadChildren: (FileItem, @escaping ([FileItem]) -> Void) -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -31,87 +36,22 @@ struct FileBrowserPane: View {
             .padding(12)
             .background(.regularMaterial)
 
-            Table(self.items, selection: Binding(get: {
-                self.selection?.id
-            }, set: { id in
-                self.selection = self.items.first { $0.id == id }
-            })) {
-                TableColumn("Name") { item in
-                    HStack(spacing: 8) {
-                        FileItemIcon(item: item)
-                            .frame(width: 18, height: 18)
-                        Text(item.name)
-                            .lineLimit(1)
-                    }
-                        .accessibilityLabel("\(item.name), \(item.kind.rawValue)")
-                }
-                .width(min: 170, ideal: 260)
-                TableColumn("Size") { item in
-                    Text(item.size.map(ByteCountFormatter.string) ?? "--")
-                        .foregroundStyle(.primary.opacity(0.72))
-                }
-                .width(min: 72, ideal: 90, max: 120)
-                TableColumn("Type") { item in
-                    Text(item.kind.rawValue.capitalized)
-                        .foregroundStyle(.primary.opacity(0.72))
-                }
-                .width(min: 72, ideal: 90, max: 120)
-                TableColumn("Modified") { item in
-                    Text(item.modifiedAt?.formatted(date: .abbreviated, time: .shortened) ?? "--")
-                        .foregroundStyle(.primary.opacity(0.72))
-                }
-                .width(min: 112, ideal: 190)
-            }
+            FileBrowserOutlineView(
+                source: self.source,
+                items: self.items,
+                selectionIDs: self.$selectionIDs,
+                onSelectionChange: self.onSelectionChange,
+                onOpen: self.onOpen,
+                onTransfer: self.onTransfer,
+                onDropItems: self.onDropItems,
+                onCopy: self.onCopy,
+                onPaste: self.onPaste,
+                onRename: self.onRename,
+                onDelete: self.onDelete,
+                onShowInfo: self.onShowInfo,
+                loadChildren: self.loadChildren
+            )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .contextMenu(forSelectionType: String.self) { ids in
-                if let item = self.contextItem(for: ids) {
-                    Button(self.title == "Local" ? "Upload" : "Download") {
-                        self.selection = item
-                        self.onTransfer(item)
-                    }
-                    Divider()
-                }
-                Button("New Folder", action: self.onCreateFolder)
-                Divider()
-                Button("Copy Path") {
-                    if let item = self.contextItem(for: ids) {
-                        self.copyPath(item.path)
-                    }
-                }
-                Button(self.title == "Local" ? "Reveal in Finder" : "Copy Remote Path") {
-                    guard let item = self.contextItem(for: ids) else { return }
-                    if self.title == "Local" {
-                        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: item.path)])
-                    } else {
-                        self.copyPath(item.path)
-                    }
-                }
-                Divider()
-                Button("Rename") {
-                    if let item = self.contextItem(for: ids) {
-                        self.selection = item
-                    }
-                    self.onRename()
-                }
-                Button("Delete", role: .destructive) {
-                    if let item = self.contextItem(for: ids) {
-                        self.selection = item
-                    }
-                    self.onDelete()
-                }
-            } primaryAction: { ids in
-                if let item = self.items.first(where: { ids.contains($0.id) }) {
-                    self.selection = item
-                    if item.kind == .folder {
-                        self.onOpen(item)
-                    } else {
-                        self.onTransfer(item)
-                    }
-                }
-            }
-            .dropDestination(for: String.self) { ids, _ in
-                self.onDropItems(ids)
-            }
             .overlay {
                 if self.items.isEmpty {
                     EmptyStateView(
@@ -126,54 +66,6 @@ struct FileBrowserPane: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.ultraThinMaterial)
-    }
-
-    private func contextItem(for ids: Set<String>) -> FileItem? {
-        if let item = self.items.first(where: { ids.contains($0.id) }) {
-            return item
-        }
-        return self.selection
-    }
-
-    private func copyPath(_ path: String) {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(path, forType: .string)
-    }
-}
-
-private struct FileItemIcon: View {
-    var item: FileItem
-
-    var body: some View {
-        Image(nsImage: self.icon)
-            .resizable()
-            .aspectRatio(contentMode: .fit)
-    }
-
-    private var icon: NSImage {
-        if item.source == .local {
-            return NSWorkspace.shared.icon(forFile: item.path)
-        }
-        return NSWorkspace.shared.icon(for: self.remoteContentType)
-    }
-
-    private var remoteContentType: UTType {
-        switch item.kind {
-        case .folder:
-            return UTType.folder
-        case .symbolicLink:
-            return UTType.aliasFile
-        case .unknown:
-            return UTType.data
-        case .file:
-            guard let fileExtension = item.name.split(separator: ".").last.map(String.init),
-                  fileExtension != item.name,
-                  let contentType = UTType(filenameExtension: fileExtension)
-            else {
-                return UTType.data
-            }
-            return contentType
-        }
     }
 }
 

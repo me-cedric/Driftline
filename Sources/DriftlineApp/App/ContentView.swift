@@ -47,12 +47,12 @@ struct ContentView: View {
                 Button { self.model.uploadSelectedItem() } label: {
                     Label("Upload", systemImage: "arrow.up.circle")
                 }
-                .disabled(self.model.selectedFile?.source != .local || self.model.session.state != .connected)
+                .disabled(self.model.selectedLocalFiles.isEmpty || self.model.session.state != .connected)
                 .accessibilityHint("Uploads the selected local item to the current remote folder.")
                 Button { self.model.downloadSelectedItem() } label: {
                     Label("Download", systemImage: "arrow.down.circle")
                 }
-                .disabled(self.model.selectedFile?.source != .remote || self.model.session.state != .connected)
+                .disabled(self.model.selectedRemoteFiles.isEmpty || self.model.session.state != .connected)
                 .accessibilityHint("Downloads the selected remote item to the current local folder.")
                 Button { self.model.beginCreateFolder(source: self.model.selectedFile?.source ?? .local) } label: {
                     Label("New Folder", systemImage: "folder.badge.plus")
@@ -198,22 +198,33 @@ struct ContentView: View {
                 title: "Local",
                 path: self.model.session.localPath,
                 items: self.model.localItems,
-                selection: self.selectedFileBinding,
+                source: .local,
+                selectionIDs: self.$model.selectedLocalFileIDs,
+                onSelectionChange: { self.model.selectItems($0, in: .local) },
                 onOpen: { self.model.navigateLocal(to: $0) },
                 onNavigate: { self.model.navigateLocal(toPath: $0) },
                 onParent: { self.model.navigateLocalParent() },
                 onRefresh: { Task { await self.model.refreshLocal() } },
                 onCreateFolder: { self.model.beginCreateFolder(source: .local) },
-                onRename: { self.model.beginRenameSelectedItem() },
-                onDelete: { self.model.requestDeleteSelectedItem() },
-                onTransfer: { item in
+                onRename: { self.model.beginRenameSelectedItem(source: .local) },
+                onDelete: { self.model.requestDeleteSelectedItem(source: .local) },
+                onTransfer: { items in
                     if self.model.session.state == .connected {
-                        self.model.uploadItem(item)
+                        self.model.uploadItems(items)
                     } else {
-                        self.model.navigateLocal(to: item)
+                        if let item = items.first {
+                            self.model.navigateLocal(to: item)
+                        }
                     }
                 },
-                onDropItems: { ids in self.model.transferDraggedItems(ids: ids, to: .local) }
+                onDropItems: { self.model.transferDroppedItems($0, to: .local) },
+                onCopy: { self.model.copyItems($0) },
+                onPaste: { self.model.pasteCopiedItems(into: .local) },
+                onShowInfo: {
+                    self.model.activePane = .local
+                    self.model.preferences.showInspector = true
+                },
+                loadChildren: { item, completion in self.model.loadChildren(of: item, completion: completion) }
             )
             .frame(minWidth: 360, maxWidth: .infinity)
             .layoutPriority(1)
@@ -221,16 +232,25 @@ struct ContentView: View {
                 title: "Remote",
                 path: self.model.session.remotePath,
                 items: self.model.remoteItems,
-                selection: self.selectedFileBinding,
+                source: .remote,
+                selectionIDs: self.$model.selectedRemoteFileIDs,
+                onSelectionChange: { self.model.selectItems($0, in: .remote) },
                 onOpen: { self.model.navigateRemote(to: $0) },
                 onNavigate: { self.model.navigateRemote(toPath: $0) },
                 onParent: { self.model.navigateRemoteParent() },
                 onRefresh: { Task { await self.model.refreshRemote() } },
                 onCreateFolder: { self.model.beginCreateFolder(source: .remote) },
-                onRename: { self.model.beginRenameSelectedItem() },
-                onDelete: { self.model.requestDeleteSelectedItem() },
-                onTransfer: { self.model.downloadItem($0) },
-                onDropItems: { ids in self.model.transferDraggedItems(ids: ids, to: .remote) }
+                onRename: { self.model.beginRenameSelectedItem(source: .remote) },
+                onDelete: { self.model.requestDeleteSelectedItem(source: .remote) },
+                onTransfer: { self.model.downloadItems($0) },
+                onDropItems: { self.model.transferDroppedItems($0, to: .remote) },
+                onCopy: { self.model.copyItems($0) },
+                onPaste: { self.model.pasteCopiedItems(into: .remote) },
+                onShowInfo: {
+                    self.model.activePane = .remote
+                    self.model.preferences.showInspector = true
+                },
+                loadChildren: { item, completion in self.model.loadChildren(of: item, completion: completion) }
             )
             .frame(minWidth: 360, maxWidth: .infinity)
             .layoutPriority(1)
@@ -253,24 +273,6 @@ struct ContentView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private var selectedFileBinding: Binding<FileItem?> {
-        Binding(
-            get: { self.model.selectedFile },
-            set: { selectedFile in
-                self.model.selectedLocalFile = nil
-                self.model.selectedRemoteFile = nil
-                guard let selectedFile else { return }
-                switch selectedFile.source {
-                case .local:
-                    self.model.selectedLocalFile = selectedFile
-                    self.model.activePane = .local
-                case .remote:
-                    self.model.selectedRemoteFile = selectedFile
-                    self.model.activePane = .remote
-                }
-            }
-        )
-    }
 }
 
 struct SidebarView: View {

@@ -49,6 +49,11 @@ final class AppModel: @unchecked Sendable {
     var remoteItems: [FileItem] = []
     var selectedLocalFile: FileItem?
     var selectedRemoteFile: FileItem?
+    var selectedLocalFileIDs: Set<String> = []
+    var selectedRemoteFileIDs: Set<String> = []
+    var selectedLocalFiles: [FileItem] = []
+    var selectedRemoteFiles: [FileItem] = []
+    var copiedFiles: [FileItem] = []
     var activePane: FileSource = .local
     var profileDraft: ServerProfileDraft?
     var profileEditorError: String?
@@ -76,9 +81,9 @@ final class AppModel: @unchecked Sendable {
     var selectedFile: FileItem? {
         switch self.activePane {
         case .local:
-            self.selectedLocalFile
+            self.selectedLocalFiles.first ?? self.selectedLocalFile
         case .remote:
-            self.selectedRemoteFile
+            self.selectedRemoteFiles.first ?? self.selectedRemoteFile
         }
     }
 
@@ -214,6 +219,124 @@ final class AppModel: @unchecked Sendable {
     func navigateRemote(toPath path: String) {
         self.session.remotePath = path.isEmpty ? "/" : path
         Task { await self.refreshRemote() }
+    }
+
+    func selectItems(_ items: [FileItem], in source: FileSource) {
+        switch source {
+        case .local:
+            self.selectedLocalFileIDs = Set(items.map(\.id))
+            self.selectedLocalFiles = items
+            self.selectedLocalFile = items.first
+            self.selectedRemoteFileIDs = []
+            self.selectedRemoteFiles = []
+            self.selectedRemoteFile = nil
+        case .remote:
+            self.selectedRemoteFileIDs = Set(items.map(\.id))
+            self.selectedRemoteFiles = items
+            self.selectedRemoteFile = items.first
+            self.selectedLocalFileIDs = []
+            self.selectedLocalFiles = []
+            self.selectedLocalFile = nil
+        }
+        self.activePane = source
+    }
+
+    func loadChildren(of item: FileItem, completion: @escaping ([FileItem]) -> Void) {
+        Task {
+            do {
+                switch item.source {
+                case .local:
+                    let children = try await self.localFileSystem.listDirectory(at: item.path, preferences: self.preferences.fileList)
+                    completion(children)
+                case .remote:
+                    guard let profile = self.activeProfile else {
+                        completion([])
+                        return
+                    }
+                    let children = try await self.remoteClientForCurrentPreference().listDirectory(
+                        at: item.path,
+                        profile: profile,
+                        session: self.session,
+                        preferences: self.preferences.fileList
+                    )
+                    completion(children)
+                }
+            } catch {
+                self.statusMessage = error.localizedDescription
+                completion([])
+            }
+        }
+    }
+
+    func copySelectedItems() {
+        switch self.activePane {
+        case .local:
+            self.copyItems(self.selectedLocalFiles)
+        case .remote:
+            self.copyItems(self.selectedRemoteFiles)
+        }
+    }
+
+    func copyItems(_ items: [FileItem]) {
+        guard !items.isEmpty else { return }
+        self.copiedFiles = items
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(items.map(\.path).joined(separator: "\n"), forType: .string)
+        self.statusMessage = items.count == 1 ? "Copied \(items[0].name)." : "Copied \(items.count) items."
+    }
+
+    func pasteCopiedItemsIntoActivePane() {
+        self.pasteCopiedItems(into: self.activePane)
+    }
+
+    func pasteCopiedItems(into destination: FileSource) {
+        guard !self.copiedFiles.isEmpty else { return }
+        let source = self.copiedFiles[0].source
+        if source != destination {
+            _ = self.transferDroppedItems(self.copiedFiles, to: destination)
+            return
+        }
+
+        switch destination {
+        case .local:
+            self.copyLocalItems(self.copiedFiles)
+        case .remote:
+            self.statusMessage = "Remote-to-remote copy is not supported yet."
+        }
+    }
+
+    private func copyLocalItems(_ items: [FileItem]) {
+        Task {
+            var copiedCount = 0
+            for item in items where item.source == .local {
+                do {
+                    let destination = self.uniqueLocalCopyDestination(for: item)
+                    try FileManager.default.copyItem(atPath: item.path, toPath: destination.path)
+                    copiedCount += 1
+                } catch {
+                    self.statusMessage = error.localizedDescription
+                    return
+                }
+            }
+            await self.refreshLocal()
+            self.statusMessage = copiedCount == 1 ? "Copied 1 item." : "Copied \(copiedCount) items."
+        }
+    }
+
+    private func uniqueLocalCopyDestination(for item: FileItem) -> URL {
+        let sourceURL = URL(fileURLWithPath: item.path)
+        let parent = sourceURL.deletingLastPathComponent()
+        let base = sourceURL.deletingPathExtension().lastPathComponent
+        let ext = sourceURL.pathExtension
+        let firstName = ext.isEmpty ? "\(base) copy" : "\(base) copy.\(ext)"
+        var candidate = parent.appendingPathComponent(firstName)
+        var index = 2
+        while FileManager.default.fileExists(atPath: candidate.path) {
+            let name = ext.isEmpty ? "\(base) copy \(index)" : "\(base) copy \(index).\(ext)"
+            candidate = parent.appendingPathComponent(name)
+            index += 1
+        }
+        return candidate
     }
 
     func navigateLocalParent() {
@@ -632,11 +755,15 @@ final class AppModel: @unchecked Sendable {
                 case .local:
                     try await self.localFileSystem.deleteItem(at: item.path)
                     self.selectedLocalFile = nil
+                    self.selectedLocalFileIDs.remove(item.id)
+                    self.selectedLocalFiles.removeAll { $0.id == item.id }
                     await self.refreshLocal()
                 case .remote:
                     guard let profile = activeProfile else { return }
                     try await self.remoteClientForCurrentPreference().deleteItem(at: item.path, profile: profile, session: self.session)
                     self.selectedRemoteFile = nil
+                    self.selectedRemoteFileIDs.remove(item.id)
+                    self.selectedRemoteFiles.removeAll { $0.id == item.id }
                     await self.refreshRemote()
                 }
             } catch {
@@ -646,17 +773,28 @@ final class AppModel: @unchecked Sendable {
     }
 
     func uploadSelectedItem() {
-        guard let selectedLocalFile else { return }
-        self.uploadItem(selectedLocalFile)
+        self.uploadItems(self.selectedLocalFiles)
     }
 
     func uploadItem(_ item: FileItem) {
+        self.uploadItems([item])
+    }
+
+    func uploadItems(_ items: [FileItem]) {
+        for item in items {
+            self.uploadItemImmediately(item)
+        }
+    }
+
+    private func uploadItemImmediately(_ item: FileItem) {
         guard item.source == .local,
               let profile = activeProfile,
               session.state == .connected
         else { return }
         self.activePane = .local
         self.selectedLocalFile = item
+        self.selectedLocalFiles = [item]
+        self.selectedLocalFileIDs = [item.id]
         let destination = self.remotePathAppending(self.session.remotePath, item.name)
         let job = TransferJob(
             direction: .upload,
@@ -690,17 +828,28 @@ final class AppModel: @unchecked Sendable {
     }
 
     func downloadSelectedItem() {
-        guard let selectedRemoteFile else { return }
-        self.downloadItem(selectedRemoteFile)
+        self.downloadItems(self.selectedRemoteFiles)
     }
 
     func downloadItem(_ item: FileItem) {
+        self.downloadItems([item])
+    }
+
+    func downloadItems(_ items: [FileItem]) {
+        for item in items {
+            self.downloadItemImmediately(item)
+        }
+    }
+
+    private func downloadItemImmediately(_ item: FileItem) {
         guard item.source == .remote,
               let profile = activeProfile,
               session.state == .connected
         else { return }
         self.activePane = .remote
         self.selectedRemoteFile = item
+        self.selectedRemoteFiles = [item]
+        self.selectedRemoteFileIDs = [item.id]
         let destination = URL(fileURLWithPath: session.localPath).appendingPathComponent(item.name).path
         let job = TransferJob(
             direction: .download,
@@ -722,20 +871,33 @@ final class AppModel: @unchecked Sendable {
     }
 
     func transferDraggedItems(ids: [String], to destination: FileSource) -> Bool {
-        var transferred = false
-        for id in ids {
-            switch destination {
-            case .local:
-                guard let item = self.remoteItems.first(where: { $0.id == id }) else { continue }
-                self.downloadItem(item)
-                transferred = true
-            case .remote:
-                guard let item = self.localItems.first(where: { $0.id == id }) else { continue }
-                self.uploadItem(item)
-                transferred = true
-            }
+        switch destination {
+        case .local:
+            let items = self.items(matching: Set(ids), in: self.remoteItems)
+            guard !items.isEmpty else { return false }
+            self.downloadItems(items)
+            return true
+        case .remote:
+            let items = self.items(matching: Set(ids), in: self.localItems)
+            guard !items.isEmpty else { return false }
+            self.uploadItems(items)
+            return true
         }
-        return transferred
+    }
+
+    func transferDroppedItems(_ items: [FileItem], to destination: FileSource) -> Bool {
+        switch destination {
+        case .local:
+            let remoteItems = items.filter { $0.source == .remote }
+            guard !remoteItems.isEmpty else { return false }
+            self.downloadItems(remoteItems)
+            return true
+        case .remote:
+            let localItems = items.filter { $0.source == .local }
+            guard !localItems.isEmpty else { return false }
+            self.uploadItems(localItems)
+            return true
+        }
     }
 
     private func enqueueTransfer(_ job: TransferJob, profile: ServerProfile) {
@@ -856,6 +1018,10 @@ final class AppModel: @unchecked Sendable {
         self.tabs[index].remoteItems = self.remoteItems
         self.tabs[index].selectedLocalFile = self.selectedLocalFile
         self.tabs[index].selectedRemoteFile = self.selectedRemoteFile
+        self.tabs[index].selectedLocalFileIDs = self.selectedLocalFileIDs
+        self.tabs[index].selectedRemoteFileIDs = self.selectedRemoteFileIDs
+        self.tabs[index].selectedLocalFiles = self.selectedLocalFiles
+        self.tabs[index].selectedRemoteFiles = self.selectedRemoteFiles
         self.tabs[index].activePane = self.activePane
         if let profile = selectedProfile {
             self.tabs[index].title = profile.displayName
@@ -875,6 +1041,10 @@ final class AppModel: @unchecked Sendable {
         self.remoteItems = tab.remoteItems
         self.selectedLocalFile = tab.selectedLocalFile
         self.selectedRemoteFile = tab.selectedRemoteFile
+        self.selectedLocalFileIDs = tab.selectedLocalFileIDs
+        self.selectedRemoteFileIDs = tab.selectedRemoteFileIDs
+        self.selectedLocalFiles = tab.selectedLocalFiles
+        self.selectedRemoteFiles = tab.selectedRemoteFiles
         self.activePane = tab.activePane
     }
 
@@ -1027,6 +1197,10 @@ final class AppModel: @unchecked Sendable {
         case .remote:
             self.selectedRemoteFile
         }
+    }
+
+    private func items(matching ids: Set<String>, in items: [FileItem]) -> [FileItem] {
+        items.filter { ids.contains($0.id) }
     }
 }
 
@@ -1274,6 +1448,10 @@ struct WorkspaceTab: Identifiable {
     var remoteItems: [FileItem] = []
     var selectedLocalFile: FileItem?
     var selectedRemoteFile: FileItem?
+    var selectedLocalFileIDs: Set<String> = []
+    var selectedRemoteFileIDs: Set<String> = []
+    var selectedLocalFiles: [FileItem] = []
+    var selectedRemoteFiles: [FileItem] = []
     var activePane: FileSource = .local
 }
 

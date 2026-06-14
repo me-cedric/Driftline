@@ -5,67 +5,40 @@ struct ContentView: View {
     @Bindable var model: AppModel
 
     var body: some View {
-        HSplitView {
-            if self.model.preferences.showSidebar {
-                SidebarView(model: self.model)
-                    .frame(minWidth: 220, idealWidth: 250, maxWidth: 320)
-            }
-            VStack(spacing: 0) {
-                ConnectionToolbar(model: self.model)
-                TabStrip(model: self.model)
-                if let message = model.statusMessage {
-                    StatusBanner(message: message) {
-                        self.model.statusMessage = nil
+        NavigationSplitView {
+            SidebarView(model: self.model)
+                .navigationSplitViewColumnWidth(min: 300, ideal: 320, max: 360)
+        } detail: {
+            HSplitView {
+                VStack(spacing: 0) {
+                    ConnectionToolbar(model: self.model)
+                    TabStrip(model: self.model)
+                    if let message = model.statusMessage {
+                        StatusBanner(message: message) {
+                            self.model.statusMessage = nil
+                        }
+                    }
+                    self.fileBrowserSplit
+                    if self.model.preferences.showTransferQueue {
+                        StatsDashboardView(stats: self.model.transferStats, lastConnection: self.model.lastConnectionDisplay)
+                        TransferPanel(
+                            jobs: self.model.transferJobs,
+                            onClearCompleted: { self.model.clearCompletedTransfers() },
+                            onClearFailed: { self.model.clearFailedTransfers() },
+                            onRetryFailed: { self.model.retryFailedTransfers() },
+                            onCancelActive: { self.model.cancelActiveTransfers() },
+                            onCancelTransfer: { self.model.cancelTransfer(id: $0) }
+                        )
+                        .frame(height: 170)
                     }
                 }
-                HSplitView {
-                    FileBrowserPane(
-                        title: "Local",
-                        path: self.model.session.localPath,
-                        items: self.model.localItems,
-                        selection: self.selectedFileBinding,
-                        onOpen: { self.model.navigateLocal(to: $0) },
-                        onParent: { self.model.navigateLocalParent() },
-                        onRefresh: { Task { await self.model.refreshLocal() } },
-                        onCreateFolder: { self.model.beginCreateFolder(source: .local) },
-                        onRename: { self.model.beginRenameSelectedItem() },
-                        onDelete: { self.model.requestDeleteSelectedItem() }
-                    )
-                    .frame(minWidth: 320, idealWidth: 380)
-                    FileBrowserPane(
-                        title: "Remote",
-                        path: self.model.session.remotePath,
-                        items: self.model.remoteItems,
-                        selection: self.selectedFileBinding,
-                        onOpen: { self.model.navigateRemote(to: $0) },
-                        onParent: { self.model.navigateRemoteParent() },
-                        onRefresh: { Task { await self.model.refreshRemote() } },
-                        onCreateFolder: { self.model.beginCreateFolder(source: .remote) },
-                        onRename: { self.model.beginRenameSelectedItem() },
-                        onDelete: { self.model.requestDeleteSelectedItem() }
-                    )
-                    .frame(minWidth: 320, idealWidth: 380)
-                }
-                if self.model.preferences.showTransferQueue {
-                    StatsDashboardView(stats: self.model.transferStats, lastConnection: self.model.lastConnectionDisplay)
-                    TransferPanel(
-                        jobs: self.model.transferJobs,
-                        onClearCompleted: { self.model.clearCompletedTransfers() },
-                        onClearFailed: { self.model.clearFailedTransfers() },
-                        onRetryFailed: { self.model.retryFailedTransfers() },
-                        onCancelActive: { self.model.cancelActiveTransfers() },
-                        onCancelTransfer: { self.model.cancelTransfer(id: $0) }
-                    )
-                    .frame(height: 170)
+                .frame(minWidth: 640)
+                if self.model.preferences.showInspector {
+                    InspectorView(file: self.model.selectedFile, session: self.model.session)
+                        .frame(minWidth: 240, idealWidth: 280, maxWidth: 360)
+                        .background(.bar)
                 }
             }
-            .frame(minWidth: 640)
-            if self.model.preferences.showInspector {
-                InspectorView(file: self.model.selectedFile, session: self.model.session)
-                    .frame(minWidth: 240, idealWidth: 280, maxWidth: 360)
-                    .background(.bar)
-            }
-        }
             .toolbar {
                 ToolbarItemGroup {
                     Button { Task { await self.model.refreshLocal() } } label: {
@@ -165,6 +138,38 @@ struct ContentView: View {
             .sheet(isPresented: self.$model.showAbout) {
                 AboutView()
             }
+        }
+    }
+
+    private var fileBrowserSplit: some View {
+        HSplitView {
+            FileBrowserPane(
+                title: "Local",
+                path: self.model.session.localPath,
+                items: self.model.localItems,
+                selection: self.selectedFileBinding,
+                onOpen: { self.model.navigateLocal(to: $0) },
+                onParent: { self.model.navigateLocalParent() },
+                onRefresh: { Task { await self.model.refreshLocal() } },
+                onCreateFolder: { self.model.beginCreateFolder(source: .local) },
+                onRename: { self.model.beginRenameSelectedItem() },
+                onDelete: { self.model.requestDeleteSelectedItem() }
+            )
+            .frame(minWidth: 360)
+            FileBrowserPane(
+                title: "Remote",
+                path: self.model.session.remotePath,
+                items: self.model.remoteItems,
+                selection: self.selectedFileBinding,
+                onOpen: { self.model.navigateRemote(to: $0) },
+                onParent: { self.model.navigateRemoteParent() },
+                onRefresh: { Task { await self.model.refreshRemote() } },
+                onCreateFolder: { self.model.beginCreateFolder(source: .remote) },
+                onRename: { self.model.beginRenameSelectedItem() },
+                onDelete: { self.model.requestDeleteSelectedItem() }
+            )
+            .frame(minWidth: 360)
+        }
     }
 
     private var selectedFileBinding: Binding<FileItem?> {
@@ -281,7 +286,6 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
-        .frame(minWidth: 220)
         .navigationTitle("Driftline")
     }
 }
@@ -290,16 +294,6 @@ struct ConnectionToolbar: View {
     @Bindable var model: AppModel
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            self.fullToolbar
-            self.compactToolbar
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(.bar)
-    }
-
-    private var fullToolbar: some View {
         HStack(spacing: 12) {
             ConnectionStatusPill(state: self.model.session.state)
             Text(self.model.activeProfile?.displayName ?? "No Server Selected")
@@ -328,55 +322,9 @@ struct ConnectionToolbar: View {
             Button("Disconnect") { self.model.disconnect() }
                 .disabled(self.model.session.state == .disconnected)
         }
-    }
-
-    private var compactToolbar: some View {
-        HStack(spacing: 8) {
-            ConnectionStatusPill(state: self.model.session.state)
-            Text(self.model.activeProfile?.displayName ?? "No Server Selected")
-                .font(.headline)
-                .lineLimit(1)
-                .frame(minWidth: 80, alignment: .leading)
-            Text(self.model.session.protocolKind?.rawValue.uppercased() ?? "SFTP")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.primary.opacity(0.72))
-            Spacer(minLength: 8)
-            Button { self.model.connectToSelectedServer() } label: {
-                Image(systemName: self.model.isConnecting ? "arrow.triangle.2.circlepath" : "bolt.horizontal.circle")
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(self.model.isConnecting)
-            .help(self.model.isConnecting ? "Connecting..." : "Connect")
-            Button { self.model.beginQuickConnect() } label: {
-                Image(systemName: "plus.circle")
-            }
-            .help("New Connection")
-            Button { self.model.beginEditingSelectedProfile() } label: {
-                Image(systemName: "pencil")
-            }
-            .disabled(self.model.selectedProfile == nil)
-            .help("Edit Server")
-            Button { self.model.toggleSelectedFavorite() } label: {
-                Image(systemName: "star")
-            }
-            .disabled(self.model.selectedProfile == nil)
-            .help("Favorite")
-            Button { self.model.saveCurrentConnectionAsBookmark() } label: {
-                Image(systemName: "bookmark")
-            }
-            .disabled(self.model.activeProfile == nil || self.model.session.state != .connected)
-            .help("Bookmark")
-            Button { self.model.openTerminalSession() } label: {
-                Image(systemName: "terminal")
-            }
-            .disabled(self.model.activeProfile == nil)
-            .help("Terminal")
-            Button { self.model.disconnect() } label: {
-                Image(systemName: "xmark.circle")
-            }
-            .disabled(self.model.session.state == .disconnected)
-            .help("Disconnect")
-        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(.bar)
     }
 }
 

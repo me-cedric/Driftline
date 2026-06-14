@@ -23,12 +23,15 @@
 <a href="https://swift.org"><img src="https://img.shields.io/badge/Swift-5.10-orange?logo=swift&style=flat" alt="Swift 5.10" /></a>
 <a href="https://developer.apple.com/macos/"><img src="https://img.shields.io/badge/macOS-14%2B-blue?logo=apple&style=flat" alt="macOS 14+" /></a>
 <a href="https://github.com/me-cedric/Driftline/stargazers"><img src="https://img.shields.io/github/stars/me-cedric/Driftline?style=flat&label=Stars&logo=github" alt="Stars" /></a>
+<a href="https://ko-fi.com/mecedric"><img src="https://img.shields.io/badge/Ko--fi-Support%20Driftline-ff5f5f?logo=kofi&logoColor=white&style=flat" alt="Support Driftline on Ko-fi" /></a>
 <img src="https://img.shields.io/badge/platform-macOS-lightgrey?style=flat" alt="Platform" />
 </p>
 <br />
 </div>
 
 Driftline is a modern macOS file transfer client inspired by Finder, FileZilla's practical dual-pane workflow, and polished native Mac tools. It's designed around SFTP first, with protocol adapters for FTP, FTPS, WebDAV, S3, SMB, SCP, and other backends.
+
+Driftline is entirely free. If it helps you, feel free to [support development on Ko-fi](https://ko-fi.com/mecedric).
 
 ---
 

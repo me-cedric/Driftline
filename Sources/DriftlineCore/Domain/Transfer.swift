@@ -3,6 +3,15 @@ import Foundation
 public enum TransferDirection: String, Codable, Sendable {
     case upload
     case download
+
+    public var localizedTitle: String {
+        switch self {
+        case .upload:
+            LocalizationManager.shared.localized("browser.upload")
+        case .download:
+            LocalizationManager.shared.localized("browser.download")
+        }
+    }
 }
 
 public enum TransferStatus: Equatable, Codable, Sendable {

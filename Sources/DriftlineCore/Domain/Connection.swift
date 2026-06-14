@@ -7,6 +7,23 @@ public enum ConnectionState: Equatable, Codable, Sendable {
     case reconnecting
     case failed(message: String)
     case cancelling
+
+    public var localizedTitle: String {
+        switch self {
+        case .disconnected:
+            LocalizationManager.shared.localized("connection.disconnected")
+        case .connecting:
+            LocalizationManager.shared.localized("connection.connecting")
+        case .connected:
+            LocalizationManager.shared.localized("connection.connected")
+        case .reconnecting:
+            LocalizationManager.shared.localized("connection.reconnecting")
+        case .failed:
+            LocalizationManager.shared.localized("connection.failed")
+        case .cancelling:
+            LocalizationManager.shared.localized("connection.cancelling")
+        }
+    }
 }
 
 public struct ConnectionSession: Identifiable, Codable, Sendable {

@@ -7,22 +7,22 @@ struct ViewOptionsView: View {
 
     var body: some View {
         Form {
-            Section("Browser") {
-                Toggle("Show hidden files", isOn: self.$preferences.fileList.showHiddenFiles)
-                Toggle("Show file extensions", isOn: self.$preferences.fileList.showFileExtensions)
-                Toggle("Folders first", isOn: self.$preferences.fileList.foldersFirst)
-                Picker("Sort by", selection: self.$preferences.fileList.sortKey) {
+            Section(LocalizationManager.shared.localized("viewOptions.browser")) {
+                Toggle(LocalizationManager.shared.localized("settings.showHiddenFiles"), isOn: self.$preferences.fileList.showHiddenFiles)
+                Toggle(LocalizationManager.shared.localized("settings.showFileExtensions"), isOn: self.$preferences.fileList.showFileExtensions)
+                Toggle(LocalizationManager.shared.localized("settings.foldersFirst"), isOn: self.$preferences.fileList.foldersFirst)
+                Picker(LocalizationManager.shared.localized("settings.sortBy"), selection: self.$preferences.fileList.sortKey) {
                     ForEach(FileSortKey.allCases, id: \.self) { key in
-                        Text(key.rawValue.capitalized).tag(key)
+                        Text(key.localizedTitle).tag(key)
                     }
                 }
-                Toggle("Ascending", isOn: self.$preferences.fileList.sortAscending)
+                Toggle(LocalizationManager.shared.localized("settings.ascending"), isOn: self.$preferences.fileList.sortAscending)
             }
 
-            Section("Panels") {
-                Toggle("Show sidebar", isOn: self.$preferences.showSidebar)
-                Toggle("Show inspector", isOn: self.$preferences.showInspector)
-                Toggle("Show transfer queue", isOn: self.$preferences.showTransferQueue)
+            Section(LocalizationManager.shared.localized("viewOptions.panels")) {
+                Toggle(LocalizationManager.shared.localized("settings.showSidebar"), isOn: self.$preferences.showSidebar)
+                Toggle(LocalizationManager.shared.localized("settings.showInspector"), isOn: self.$preferences.showInspector)
+                Toggle(LocalizationManager.shared.localized("settings.showTransferQueue"), isOn: self.$preferences.showTransferQueue)
             }
         }
         .formStyle(.grouped)

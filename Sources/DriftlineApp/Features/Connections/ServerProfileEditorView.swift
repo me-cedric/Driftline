@@ -12,61 +12,61 @@ struct ServerProfileEditorView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Server") {
-                    TextField("Display Name", text: self.$draft.displayName)
-                    TextField("Host", text: self.$draft.host)
-                    Picker("Protocol", selection: self.$draft.protocolKind) {
+                Section(LocalizationManager.shared.localized("profile.section.server")) {
+                    TextField(LocalizationManager.shared.localized("profile.displayName"), text: self.$draft.displayName)
+                    TextField(LocalizationManager.shared.localized("profile.host"), text: self.$draft.host)
+                    Picker(LocalizationManager.shared.localized("profile.protocol"), selection: self.$draft.protocolKind) {
                         ForEach(TransferProtocolKind.allCases) { protocolKind in
                             Text(protocolKind.rawValue.uppercased()).tag(protocolKind)
                         }
                     }
                     Stepper(value: self.$draft.port, in: 1 ... 65535) {
-                        LabeledContent("Port", value: "\(self.draft.port)")
+                        LabeledContent(LocalizationManager.shared.localized("profile.port"), value: "\(self.draft.port)")
                     }
-                    TextField("Group", text: self.$draft.groupName)
-                    Toggle("Favorite", isOn: self.$draft.isFavorite)
+                    TextField(LocalizationManager.shared.localized("profile.group"), text: self.$draft.groupName)
+                    Toggle(LocalizationManager.shared.localized("profile.favorite"), isOn: self.$draft.isFavorite)
                 }
 
-                Section("Authentication") {
-                    TextField("Username", text: self.$draft.username)
-                    Picker("Method", selection: self.$draft.authKind) {
+                Section(LocalizationManager.shared.localized("profile.section.authentication")) {
+                    TextField(LocalizationManager.shared.localized("profile.username"), text: self.$draft.username)
+                    Picker(LocalizationManager.shared.localized("profile.method"), selection: self.$draft.authKind) {
                         ForEach(ServerProfileDraft.AuthKind.allCases) { method in
-                            Text(method.rawValue).tag(method)
+                            Text(method.localizedTitle).tag(method)
                         }
                     }
                     if self.draft.authKind == .privateKey {
                         HStack {
-                            TextField("Private Key Path", text: self.$draft.privateKeyPath)
-                            Button("Choose...") {
+                            TextField(LocalizationManager.shared.localized("profile.privateKeyPath"), text: self.$draft.privateKeyPath)
+                            Button(LocalizationManager.shared.localized("profile.choose")) {
                                 self.choosePrivateKey()
                             }
                         }
-                        Toggle("Store passphrase in Keychain", isOn: self.$draft.storePassphrase)
+                        Toggle(LocalizationManager.shared.localized("profile.storePassphrase"), isOn: self.$draft.storePassphrase)
                         if self.draft.storePassphrase {
-                            SecureField("Private Key Passphrase", text: self.$draft.passphrase)
+                            SecureField(LocalizationManager.shared.localized("profile.privateKeyPassphrase"), text: self.$draft.passphrase)
                         }
                     }
                     if self.draft.authKind == .password {
-                        SecureField("Password", text: self.$draft.password)
-                        Text("Password is stored in Keychain. Driftline automatically uses the Native Swift SSH backend for password-based connections.")
+                        SecureField(LocalizationManager.shared.localized("profile.password"), text: self.$draft.password)
+                        Text(LocalizationManager.shared.localized("profile.passwordNote"))
                             .font(.caption)
                             .foregroundStyle(.primary.opacity(0.68))
                     }
                 }
 
-                Section("Paths") {
-                    TextField("Remote Default Path", text: self.$draft.remoteDefaultPath)
+                Section(LocalizationManager.shared.localized("profile.section.paths")) {
+                    TextField(LocalizationManager.shared.localized("profile.remotePath"), text: self.$draft.remoteDefaultPath)
                     HStack {
-                        TextField("Local Default Path", text: self.$draft.localDefaultPath)
-                        Button("Choose...") {
+                        TextField(LocalizationManager.shared.localized("profile.localPath"), text: self.$draft.localDefaultPath)
+                        Button(LocalizationManager.shared.localized("profile.choose")) {
                             self.chooseLocalFolder()
                         }
                     }
                 }
 
-                Section("Metadata") {
-                    TextField("Tags", text: self.$draft.tags, prompt: Text("production, website"))
-                    TextField("Notes", text: self.$draft.notes, axis: .vertical)
+                Section(LocalizationManager.shared.localized("profile.section.metadata")) {
+                    TextField(LocalizationManager.shared.localized("profile.tags"), text: self.$draft.tags, prompt: Text(LocalizationManager.shared.localized("profile.tagsPrompt")))
+                    TextField(LocalizationManager.shared.localized("profile.notes"), text: self.$draft.notes, axis: .vertical)
                         .lineLimit(3 ... 6)
                 }
 
@@ -78,13 +78,13 @@ struct ServerProfileEditorView: View {
                 }
             }
             .formStyle(.grouped)
-            .navigationTitle(self.savesAndConnects ? "New Connection" : (self.draft.displayName.isEmpty ? "New Server" : self.draft.displayName))
+            .navigationTitle(self.savesAndConnects ? LocalizationManager.shared.localized("menu.newConnection") : (self.draft.displayName.isEmpty ? LocalizationManager.shared.localized("profile.newServer") : self.draft.displayName))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", action: self.onCancel)
+                    Button(LocalizationManager.shared.localized("delete.cancel"), action: self.onCancel)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(self.savesAndConnects ? "Save & Connect" : "Save", action: self.onSave)
+                    Button(self.savesAndConnects ? LocalizationManager.shared.localized("profile.saveConnect") : LocalizationManager.shared.localized("profile.save"), action: self.onSave)
                         .keyboardShortcut(.defaultAction)
                 }
             }

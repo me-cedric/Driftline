@@ -23,24 +23,24 @@ struct SyncPreviewView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Label("Compare Folders", systemImage: "arrow.left.arrow.right")
+                Label(LocalizationManager.shared.localized("menu.compareFolders"), systemImage: "arrow.left.arrow.right")
                     .font(.title2.bold())
                 Spacer()
-                Button("Done", action: self.onClose)
+                Button(LocalizationManager.shared.localized("sync.done"), action: self.onClose)
                     .keyboardShortcut(.cancelAction)
-                    .accessibilityHint("Closes the folder comparison.")
+                    .accessibilityHint(LocalizationManager.shared.localized("sync.closeHint"))
             }
 
             Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 6) {
                 GridRow {
-                    Text("Local")
+                    Text(LocalizationManager.shared.localized("browser.local"))
                         .foregroundStyle(.secondary)
                     Text(self.preview.localPath)
                         .lineLimit(1)
                         .truncationMode(.middle)
                 }
                 GridRow {
-                    Text("Remote")
+                    Text(LocalizationManager.shared.localized("browser.remote"))
                         .foregroundStyle(.secondary)
                     Text(self.preview.remotePath)
                         .lineLimit(1)
@@ -49,50 +49,50 @@ struct SyncPreviewView: View {
             }
 
             HStack(spacing: 12) {
-                self.stat("\(self.preview.matchingCount)", "Matching")
-                self.stat("\(self.preview.localOnly.count)", "Local only")
-                self.stat("\(self.preview.remoteOnly.count)", "Remote only")
-                self.stat("\(self.preview.changed.count)", "Changed")
+                self.stat("\(self.preview.matchingCount)", LocalizationManager.shared.localized("sync.matching"))
+                self.stat("\(self.preview.localOnly.count)", LocalizationManager.shared.localized("sync.localOnly"))
+                self.stat("\(self.preview.remoteOnly.count)", LocalizationManager.shared.localized("sync.remoteOnly"))
+                self.stat("\(self.preview.changed.count)", LocalizationManager.shared.localized("sync.changed"))
             }
 
             Divider()
 
             HStack {
-                Picker("Changed conflicts", selection: self.$conflictPolicy) {
+                Picker(LocalizationManager.shared.localized("sync.changedConflicts"), selection: self.$conflictPolicy) {
                     ForEach(SyncConflictPolicy.allCases) { policy in
-                        Text(policy.title).tag(policy)
+                        Text(policy.localizedTitle).tag(policy)
                     }
                 }
                 .pickerStyle(.segmented)
-                .accessibilityHint("Controls how changed files are handled when both sides already have an item.")
+                .accessibilityHint(LocalizationManager.shared.localized("sync.conflictHint"))
 
                 Spacer()
 
-                Text("\(self.plan.uploads.count + self.plan.downloads.count) planned")
+                Text(String(format: LocalizationManager.shared.localized("sync.planned"), self.plan.uploads.count + self.plan.downloads.count))
                     .foregroundStyle(.secondary)
 
-                Button("Run Plan") {
+                Button(LocalizationManager.shared.localized("sync.runPlan")) {
                     self.onRunPlan(self.plan)
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(self.plan.uploads.isEmpty && self.plan.downloads.isEmpty)
-                .accessibilityHint("Starts selected uploads and downloads.")
+                .accessibilityHint(LocalizationManager.shared.localized("sync.runPlanHint"))
             }
 
             HStack(alignment: .top, spacing: 18) {
                 self.selectableSection(
-                    title: "Only Local",
+                    title: LocalizationManager.shared.localized("sync.onlyLocal"),
                     items: self.preview.localOnly,
                     selection: self.$selectedLocalUploads,
-                    emptyText: "Nothing to upload.",
-                    target: "Upload"
+                    emptyText: LocalizationManager.shared.localized("sync.nothingToUpload"),
+                    target: LocalizationManager.shared.localized("browser.upload")
                 )
                 self.selectableSection(
-                    title: "Only Remote",
+                    title: LocalizationManager.shared.localized("sync.onlyRemote"),
                     items: self.preview.remoteOnly,
                     selection: self.$selectedRemoteDownloads,
-                    emptyText: "Nothing to download.",
-                    target: "Download"
+                    emptyText: LocalizationManager.shared.localized("sync.nothingToDownload"),
+                    target: LocalizationManager.shared.localized("browser.download")
                 )
                 self.changedSection
             }
@@ -141,7 +141,7 @@ struct SyncPreviewView: View {
                 Text(title)
                     .font(.headline)
                 Spacer()
-                Button(selection.wrappedValue.count == items.count ? "None" : "All") {
+                Button(selection.wrappedValue.count == items.count ? LocalizationManager.shared.localized("sync.none") : LocalizationManager.shared.localized("sync.all")) {
                     if selection.wrappedValue.count == items.count {
                         selection.wrappedValue = []
                     } else {
@@ -149,7 +149,7 @@ struct SyncPreviewView: View {
                     }
                 }
                 .disabled(items.isEmpty)
-                .accessibilityHint("Toggles all items in this section.")
+                .accessibilityHint(LocalizationManager.shared.localized("sync.toggleAllHint"))
             }
             self.selectableItemList(items: items, selection: selection, emptyText: emptyText, target: target)
         }
@@ -159,27 +159,27 @@ struct SyncPreviewView: View {
     private var changedSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Changed")
+                Text(LocalizationManager.shared.localized("sync.changed"))
                     .font(.headline)
                 Spacer()
-                Menu("Set All") {
-                    Button("Skip") {
+                Menu(LocalizationManager.shared.localized("sync.setAll")) {
+                    Button(LocalizationManager.shared.localized("sync.skip")) {
                         self.setAllChanged(.skip)
                     }
                     .disabled(self.preview.changed.isEmpty)
-                    Button("Upload Local Versions") {
+                    Button(LocalizationManager.shared.localized("sync.uploadLocalVersions")) {
                         self.setAllChanged(.uploadLocal)
                     }
                     .disabled(self.preview.changed.isEmpty)
-                    Button("Download Remote Versions") {
+                    Button(LocalizationManager.shared.localized("sync.downloadRemoteVersions")) {
                         self.setAllChanged(.downloadRemote)
                     }
                     .disabled(self.preview.changed.isEmpty)
                 }
-                .accessibilityHint("Choose whether local or remote changed versions should win.")
+                .accessibilityHint(LocalizationManager.shared.localized("sync.setAllHint"))
             }
             if self.preview.changed.isEmpty {
-                Text("No size or type differences.")
+                Text(LocalizationManager.shared.localized("sync.noDifferences"))
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, minHeight: 250, alignment: .topLeading)
             } else {
@@ -189,9 +189,9 @@ struct SyncPreviewView: View {
                             Text(difference.name)
                                 .lineLimit(1)
                             Spacer()
-                            Picker("Action", selection: self.changedChoiceBinding(for: difference)) {
+                            Picker(LocalizationManager.shared.localized("sync.action"), selection: self.changedChoiceBinding(for: difference)) {
                                 ForEach(SyncChangedChoice.allCases) { choice in
-                                    Text(choice.title).tag(choice)
+                                    Text(choice.localizedTitle).tag(choice)
                                 }
                             }
                             .labelsHidden()
@@ -240,7 +240,7 @@ struct SyncPreviewView: View {
                         }
                     }
                     .accessibilityLabel(item.name)
-                    .accessibilityValue(item.kind.rawValue.capitalized)
+                    .accessibilityValue(item.kind.localizedTitle)
                 }
                 .frame(minHeight: 250)
             }
@@ -276,14 +276,14 @@ enum SyncConflictPolicy: String, CaseIterable, Identifiable {
         self.rawValue
     }
 
-    var title: String {
+    var localizedTitle: String {
         switch self {
         case .ask:
-            "Ask"
+            LocalizationManager.shared.localized("sync.ask")
         case .replace:
-            "Replace"
+            LocalizationManager.shared.localized("sync.replace")
         case .skipChanged:
-            "Skip Changed"
+            LocalizationManager.shared.localized("sync.skipChanged")
         }
     }
 
@@ -308,14 +308,14 @@ enum SyncChangedChoice: String, CaseIterable, Identifiable {
         self.rawValue
     }
 
-    var title: String {
+    var localizedTitle: String {
         switch self {
         case .skip:
-            "Skip"
+            LocalizationManager.shared.localized("sync.skip")
         case .uploadLocal:
-            "Upload"
+            LocalizationManager.shared.localized("browser.upload")
         case .downloadRemote:
-            "Download"
+            LocalizationManager.shared.localized("browser.download")
         }
     }
 }

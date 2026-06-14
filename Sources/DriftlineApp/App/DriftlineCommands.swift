@@ -1,3 +1,4 @@
+import DriftlineCore
 import SwiftUI
 
 struct DriftlineCommands: Commands {
@@ -5,58 +6,58 @@ struct DriftlineCommands: Commands {
 
     var body: some Commands {
         CommandGroup(after: .newItem) {
-            Button("New Connection") { self.model.beginQuickConnect() }
+            Button(LocalizationManager.shared.localized("menu.newConnection")) { self.model.beginQuickConnect() }
                 .keyboardShortcut("n")
-            Button("New Tab") { self.model.newTab() }
+            Button(LocalizationManager.shared.localized("menu.newTab")) { self.model.newTab() }
                 .keyboardShortcut("t")
-            Button("Close Tab") { self.model.closeSelectedTab() }
+            Button(LocalizationManager.shared.localized("menu.closeTab")) { self.model.closeSelectedTab() }
                 .keyboardShortcut("w")
         }
 
-        CommandMenu("Connection") {
-            Button("Quick Connect") { self.model.beginQuickConnect() }
+        CommandMenu(LocalizationManager.shared.localized("menu.connection")) {
+            Button(LocalizationManager.shared.localized("menu.quickConnect")) { self.model.beginQuickConnect() }
                 .keyboardShortcut("l")
-            Button("Connect Selected Server") { self.model.connectToSelectedServer() }
-            Button("Open SSH in Terminal") { self.model.openTerminalSession() }
-            Button("Disconnect") { self.model.disconnect() }
+            Button(LocalizationManager.shared.localized("menu.connectSelected")) { self.model.connectToSelectedServer() }
+            Button(LocalizationManager.shared.localized("menu.openSSH")) { self.model.openTerminalSession() }
+            Button(LocalizationManager.shared.localized("connection.disconnect")) { self.model.disconnect() }
                 .keyboardShortcut("k", modifiers: [.command, .shift])
-            Button("Reconnect Last") { self.model.reconnectLastServer() }
+            Button(LocalizationManager.shared.localized("menu.reconnectLast")) { self.model.reconnectLastServer() }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
-            Button("Save Current Connection") { self.model.saveCurrentConnectionAsBookmark() }
+            Button(LocalizationManager.shared.localized("menu.saveConnection")) { self.model.saveCurrentConnectionAsBookmark() }
                 .keyboardShortcut("s", modifiers: [.command, .option])
         }
 
-        CommandMenu("Transfer") {
-            Button("Upload") { self.model.uploadSelectedItem() }
+        CommandMenu(LocalizationManager.shared.localized("menu.transfer")) {
+            Button(LocalizationManager.shared.localized("menu.upload")) { self.model.uploadSelectedItem() }
                 .keyboardShortcut("u", modifiers: [.command, .option])
-            Button("Download") { self.model.downloadSelectedItem() }
+            Button(LocalizationManager.shared.localized("menu.download")) { self.model.downloadSelectedItem() }
                 .keyboardShortcut("d", modifiers: [.command, .option])
-            Button("Compare Folders") { self.model.prepareSyncPreview() }
+            Button(LocalizationManager.shared.localized("menu.compareFolders")) { self.model.prepareSyncPreview() }
                 .keyboardShortcut("=", modifiers: [.command, .option])
                 .disabled(self.model.session.state != .connected)
-            Button("Show Inspector") { self.model.preferences.showInspector.toggle() }
+            Button(LocalizationManager.shared.localized("menu.showInspector")) { self.model.preferences.showInspector.toggle() }
                 .keyboardShortcut("i")
-            Button("View Options") { self.model.showViewOptions.toggle() }
+            Button(LocalizationManager.shared.localized("menu.viewOptions")) { self.model.showViewOptions.toggle() }
                 .keyboardShortcut("j")
         }
 
-        CommandMenu("Help") {
-            Button("Check for Updates") { self.model.checkForUpdates(showNoUpdateMessage: true) }
+        CommandMenu(LocalizationManager.shared.localized("menu.help")) {
+            Button(LocalizationManager.shared.localized("menu.checkUpdates")) { self.model.checkForUpdates(showNoUpdateMessage: true) }
                 .disabled(self.model.isCheckingForUpdates)
-            Button("Reveal Diagnostics Log") { self.model.revealDiagnosticsLog() }
+            Button(LocalizationManager.shared.localized("menu.revealDiagnostics")) { self.model.revealDiagnosticsLog() }
         }
 
         CommandGroup(replacing: .pasteboard) {
-            Button("Copy") { self.model.copySelectedItems() }
+            Button(LocalizationManager.shared.localized("menu.copy")) { self.model.copySelectedItems() }
                 .keyboardShortcut("c")
                 .disabled(self.model.selectedFile == nil)
-            Button("Paste") { self.model.pasteCopiedItemsIntoActivePane() }
+            Button(LocalizationManager.shared.localized("menu.paste")) { self.model.pasteCopiedItemsIntoActivePane() }
                 .keyboardShortcut("v")
                 .disabled(self.model.copiedFiles.isEmpty)
         }
 
         CommandGroup(replacing: .appInfo) {
-            Button("About Driftline") { self.model.showAbout = true }
+            Button(LocalizationManager.shared.localized("menu.aboutDriftline")) { self.model.showAbout = true }
         }
     }
 }

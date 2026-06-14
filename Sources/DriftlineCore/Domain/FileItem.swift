@@ -3,6 +3,15 @@ import Foundation
 public enum FileSource: String, Codable, Sendable {
     case local
     case remote
+
+    public var localizedTitle: String {
+        switch self {
+        case .local:
+            LocalizationManager.shared.localized("browser.local")
+        case .remote:
+            LocalizationManager.shared.localized("browser.remote")
+        }
+    }
 }
 
 public enum FileItemKind: String, Codable, Sendable {
@@ -10,6 +19,19 @@ public enum FileItemKind: String, Codable, Sendable {
     case folder
     case symbolicLink
     case unknown
+
+    public var localizedTitle: String {
+        switch self {
+        case .file:
+            LocalizationManager.shared.localized("fileKind.file")
+        case .folder:
+            LocalizationManager.shared.localized("fileKind.folder")
+        case .symbolicLink:
+            LocalizationManager.shared.localized("fileKind.symbolicLink")
+        case .unknown:
+            LocalizationManager.shared.localized("fileKind.unknown")
+        }
+    }
 }
 
 public struct FileItem: Identifiable, Hashable, Codable, Sendable {
@@ -58,6 +80,19 @@ public enum FileSortKey: String, CaseIterable, Codable, Sendable {
     case size
     case type
     case modifiedAt
+
+    public var localizedTitle: String {
+        switch self {
+        case .name:
+            LocalizationManager.shared.localized("browser.column.name")
+        case .size:
+            LocalizationManager.shared.localized("browser.column.size")
+        case .type:
+            LocalizationManager.shared.localized("browser.column.type")
+        case .modifiedAt:
+            LocalizationManager.shared.localized("browser.column.modified")
+        }
+    }
 }
 
 public struct FileListPreferences: Codable, Equatable, Sendable {

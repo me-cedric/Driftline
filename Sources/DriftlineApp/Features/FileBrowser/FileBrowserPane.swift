@@ -29,8 +29,8 @@ struct FileBrowserPane: View {
                 Text(self.title)
                     .font(.headline)
                 Spacer()
-                PaneToolbarButton(title: "Up One Folder", systemImage: "chevron.up", action: self.onParent)
-                PaneToolbarButton(title: "Refresh \(self.title)", systemImage: "arrow.clockwise", action: self.onRefresh)
+                PaneToolbarButton(title: LocalizationManager.shared.localized("browser.upOneFolder"), systemImage: "chevron.up", action: self.onParent)
+                PaneToolbarButton(title: String(format: LocalizationManager.shared.localized("browser.refreshPane"), self.title), systemImage: "arrow.clockwise", action: self.onRefresh)
             }
             .frame(maxWidth: .infinity)
             .padding(12)
@@ -55,9 +55,9 @@ struct FileBrowserPane: View {
             .overlay {
                 if self.items.isEmpty {
                     EmptyStateView(
-                        title: self.title == "Remote" ? "No Remote Listing" : "This Folder Is Empty",
-                        message: self.title == "Remote" ? "Create a connection, select a saved server, then press Connect." : "Create a folder or choose another local path.",
-                        systemImage: self.title == "Remote" ? "network.slash" : "folder"
+                        title: self.title == LocalizationManager.shared.localized("browser.remote") ? LocalizationManager.shared.localized("browser.emptyRemote") : LocalizationManager.shared.localized("browser.emptyLocal"),
+                        message: self.title == LocalizationManager.shared.localized("browser.remote") ? LocalizationManager.shared.localized("browser.emptyRemoteMessage") : LocalizationManager.shared.localized("browser.emptyLocalMessage"),
+                        systemImage: self.title == LocalizationManager.shared.localized("browser.remote") ? "network.slash" : "folder"
                     )
                 }
             }
@@ -90,7 +90,7 @@ private struct PathBreadcrumbBar: View {
                             .lineLimit(1)
                     }
                     .buttonStyle(.plain)
-                    .help("Go to \(component.path)")
+                    .help(String(format: LocalizationManager.shared.localized("browser.goTo"), component.path))
 
                     if component.id != self.components.last?.id {
                         Image(systemName: "chevron.right")
@@ -116,7 +116,7 @@ private struct PathBreadcrumb: Identifiable {
     var systemImage: String
 
     static func build(sourceTitle: String, path: String) -> [PathBreadcrumb] {
-        if sourceTitle == "Remote" {
+        if sourceTitle == LocalizationManager.shared.localized("browser.remote") {
             return self.remote(path: path)
         }
         return self.local(path: path)
@@ -129,7 +129,7 @@ private struct PathBreadcrumb: Identifiable {
         for index in components.indices {
             let component = components[index]
             let currentPath = NSString.path(withComponents: Array(components[...index]))
-            let title = index == 0 ? "Macintosh HD" : component
+            let title = index == 0 ? LocalizationManager.shared.localized("browser.macintoshHD") : component
             let icon = index == 0 ? "internaldrive" : "folder"
             breadcrumbs.append(PathBreadcrumb(title: title, path: currentPath, systemImage: icon))
         }

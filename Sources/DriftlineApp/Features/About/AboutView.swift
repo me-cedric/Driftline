@@ -1,3 +1,4 @@
+import DriftlineCore
 import SwiftUI
 
 struct AboutView: View {
@@ -37,19 +38,19 @@ struct AppAboutContent: View {
                     .foregroundStyle(.secondary)
             }
 
-            Text("Native file transfer, calmly secure.")
+            Text(LocalizationManager.shared.localized("about.tagline"))
                 .foregroundStyle(.secondary)
 
             Divider()
                 .padding(.vertical, 4)
 
-            Text("Driftline is entirely free. If it helps you, feel free to donate.")
+            Text(LocalizationManager.shared.localized("about.freeMessage"))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             Link(destination: self.donationURL) {
-                Label("Donate on Ko-fi", systemImage: "heart.fill")
+                Label(LocalizationManager.shared.localized("about.donate"), systemImage: "heart.fill")
             }
             .buttonStyle(.borderedProminent)
 
@@ -57,14 +58,14 @@ struct AppAboutContent: View {
                 Button {
                     self.onCheckForUpdates()
                 } label: {
-                    Label(self.isCheckingForUpdates ? "Checking..." : "Check for Updates", systemImage: "arrow.triangle.2.circlepath")
+                    Label(self.isCheckingForUpdates ? LocalizationManager.shared.localized("about.checking") : LocalizationManager.shared.localized("about.checkForUpdates"), systemImage: "arrow.triangle.2.circlepath")
                 }
                 .disabled(self.isCheckingForUpdates)
 
                 Button {
                     self.onRevealDiagnostics()
                 } label: {
-                    Label("Diagnostics", systemImage: "doc.text.magnifyingglass")
+                    Label(LocalizationManager.shared.localized("about.diagnostics"), systemImage: "doc.text.magnifyingglass")
                 }
             }
 
@@ -82,7 +83,7 @@ enum AppMetadata {
     }
 
     static var versionDisplay: String {
-        "Version \(self.shortVersion) (\(self.buildNumber))"
+        String(format: LocalizationManager.shared.localized("about.version"), self.shortVersion, self.buildNumber)
     }
 
     static var shortVersion: String {

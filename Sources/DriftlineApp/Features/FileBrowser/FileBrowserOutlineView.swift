@@ -30,7 +30,7 @@ struct FileBrowserOutlineView: NSViewRepresentable {
         scrollView.borderType = .noBorder
 
         let outlineView = FileBrowserNativeOutlineView()
-        outlineView.setAccessibilityLabel("\(self.source.rawValue.capitalized) file browser")
+        outlineView.setAccessibilityLabel(String(format: LocalizationManager.shared.localized("browser.fileBrowser"), self.source.localizedTitle))
         outlineView.headerView = NSTableHeaderView()
         outlineView.rowSizeStyle = .medium
         outlineView.rowHeight = 24
@@ -46,12 +46,12 @@ struct FileBrowserOutlineView: NSViewRepresentable {
         outlineView.target = context.coordinator
         outlineView.actionHandler = context.coordinator
 
-        let nameColumn = self.makeColumn("name", title: "Name", width: 260)
+        let nameColumn = self.makeColumn("name", title: LocalizationManager.shared.localized("browser.column.name"), width: 260)
         outlineView.addTableColumn(nameColumn)
         outlineView.outlineTableColumn = nameColumn
-        outlineView.addTableColumn(self.makeColumn("size", title: "Size", width: 90))
-        outlineView.addTableColumn(self.makeColumn("type", title: "Type", width: 110))
-        outlineView.addTableColumn(self.makeColumn("modified", title: "Modified", width: 170))
+        outlineView.addTableColumn(self.makeColumn("size", title: LocalizationManager.shared.localized("browser.column.size"), width: 90))
+        outlineView.addTableColumn(self.makeColumn("type", title: LocalizationManager.shared.localized("browser.column.type"), width: 110))
+        outlineView.addTableColumn(self.makeColumn("modified", title: LocalizationManager.shared.localized("browser.column.modified"), width: 170))
 
         outlineView.delegate = context.coordinator
         outlineView.dataSource = context.coordinator
@@ -149,7 +149,7 @@ extension FileBrowserOutlineView {
             }
             let cell = NSTableCellView()
             let textField = NSTextField(labelWithString: self.value(for: columnID, node: node))
-            textField.setAccessibilityLabel("\(columnID.capitalized): \(textField.stringValue)")
+            textField.setAccessibilityLabel(String(format: LocalizationManager.shared.localized("browser.column.accessibility"), self.localizedColumnTitle(for: columnID), textField.stringValue))
             textField.lineBreakMode = .byTruncatingMiddle
             textField.textColor = .secondaryLabelColor
             textField.translatesAutoresizingMaskIntoConstraints = false
@@ -291,19 +291,19 @@ extension FileBrowserOutlineView {
             let items = self.selectedItems()
             let menu = NSMenu()
 
-            let transferTitle = self.parent.source == .local ? "Upload" : "Download"
+            let transferTitle = self.parent.source == .local ? LocalizationManager.shared.localized("browser.upload") : LocalizationManager.shared.localized("browser.download")
             menu.addItem(self.menuItem(transferTitle, action: #selector(self.transferMenuItem(_:)), enabled: !items.isEmpty))
             menu.addItem(NSMenuItem.separator())
-            menu.addItem(self.menuItem("Copy", action: #selector(self.copyMenuItem(_:)), keyEquivalent: "c", enabled: !items.isEmpty))
-            menu.addItem(self.menuItem("Paste", action: #selector(self.pasteMenuItem(_:)), keyEquivalent: "v", enabled: true))
-            menu.addItem(self.menuItem("Copy Path", action: #selector(self.copyPathMenuItem(_:)), enabled: !items.isEmpty))
+            menu.addItem(self.menuItem(LocalizationManager.shared.localized("menu.copy"), action: #selector(self.copyMenuItem(_:)), keyEquivalent: "c", enabled: !items.isEmpty))
+            menu.addItem(self.menuItem(LocalizationManager.shared.localized("menu.paste"), action: #selector(self.pasteMenuItem(_:)), keyEquivalent: "v", enabled: true))
+            menu.addItem(self.menuItem(LocalizationManager.shared.localized("browser.copyPath"), action: #selector(self.copyPathMenuItem(_:)), enabled: !items.isEmpty))
             if self.parent.source == .local {
-                menu.addItem(self.menuItem("Reveal in Finder", action: #selector(self.revealMenuItem(_:)), enabled: !items.isEmpty))
+                menu.addItem(self.menuItem(LocalizationManager.shared.localized("browser.revealFinder"), action: #selector(self.revealMenuItem(_:)), enabled: !items.isEmpty))
             }
             menu.addItem(NSMenuItem.separator())
-            menu.addItem(self.menuItem("Get Info", action: #selector(self.infoMenuItem(_:)), enabled: !items.isEmpty))
-            menu.addItem(self.menuItem("Rename", action: #selector(self.renameMenuItem(_:)), enabled: items.count == 1))
-            menu.addItem(self.menuItem("Delete", action: #selector(self.deleteMenuItem(_:)), enabled: !items.isEmpty))
+            menu.addItem(self.menuItem(LocalizationManager.shared.localized("browser.getInfo"), action: #selector(self.infoMenuItem(_:)), enabled: !items.isEmpty))
+            menu.addItem(self.menuItem(LocalizationManager.shared.localized("browser.rename"), action: #selector(self.renameMenuItem(_:)), enabled: items.count == 1))
+            menu.addItem(self.menuItem(LocalizationManager.shared.localized("browser.delete"), action: #selector(self.deleteMenuItem(_:)), enabled: !items.isEmpty))
             return menu
         }
 
@@ -368,7 +368,7 @@ extension FileBrowserOutlineView {
             case "size":
                 return node.item.kind == .folder ? "--" : node.item.size.map(ByteCountFormatter.string) ?? "--"
             case "type":
-                return node.item.kind.rawValue.capitalized
+                return node.item.kind.localizedTitle
             case "modified":
                 return node.item.modifiedAt?.formatted(date: .abbreviated, time: .shortened) ?? "--"
             default:
@@ -435,6 +435,19 @@ extension FileBrowserOutlineView {
             return self.sortAscending ? orderedAscending : !orderedAscending
         }
 
+        private func localizedColumnTitle(for columnID: String) -> String {
+            switch columnID {
+            case "size":
+                LocalizationManager.shared.localized("browser.column.size")
+            case "type":
+                LocalizationManager.shared.localized("browser.column.type")
+            case "modified":
+                LocalizationManager.shared.localized("browser.column.modified")
+            default:
+                LocalizationManager.shared.localized("browser.column.name")
+            }
+        }
+
         private func expandedIDs() -> Set<String> {
             guard let outlineView else { return [] }
             var ids: Set<String> = []
@@ -476,7 +489,7 @@ private final class FileBrowserNode: NSObject {
     static func placeholder(parentID: String) -> FileBrowserNode {
         FileBrowserNode(
             item: FileItem(
-                name: "Loading...",
+                name: LocalizationManager.shared.localized("browser.loading"),
                 path: "\(parentID):loading",
                 kind: .unknown,
                 source: .local
@@ -560,19 +573,19 @@ private final class FileBrowserNameCellView: NSTableCellView {
 
     func configure(node: FileBrowserNode, source: FileSource) {
         self.imageView?.image = node.isPlaceholder ? nil : FileBrowserIconProvider.icon(for: node.item, source: source)
-        self.textField?.stringValue = node.isPlaceholder ? "Loading..." : node.item.name
+        self.textField?.stringValue = node.isPlaceholder ? LocalizationManager.shared.localized("browser.loading") : node.item.name
         self.textField?.textColor = node.isPlaceholder ? .secondaryLabelColor : .labelColor
-        self.setAccessibilityLabel(node.isPlaceholder ? "Loading" : node.item.name)
+        self.setAccessibilityLabel(node.isPlaceholder ? LocalizationManager.shared.localized("browser.loadingAccessibility") : node.item.name)
         self.setAccessibilityValue(node.isPlaceholder ? nil : self.accessibilityValue(for: node.item))
     }
 
     private func accessibilityValue(for item: FileItem) -> String {
-        var parts = [item.kind.rawValue.capitalized]
+        var parts = [item.kind.localizedTitle]
         if let size = item.size, item.kind != .folder {
             parts.append(ByteCountFormatter.string(fromByteCount: size, countStyle: .file))
         }
         if let modifiedAt = item.modifiedAt {
-            parts.append("Modified \(modifiedAt.formatted(date: .abbreviated, time: .shortened))")
+            parts.append(String(format: LocalizationManager.shared.localized("browser.modifiedAccessibility"), modifiedAt.formatted(date: .abbreviated, time: .shortened)))
         }
         return parts.joined(separator: ", ")
     }

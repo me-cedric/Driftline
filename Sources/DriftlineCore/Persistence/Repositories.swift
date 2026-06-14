@@ -129,6 +129,22 @@ public actor JSONViewPreferencesRepository: ViewPreferencesRepository {
     }
 }
 
+public actor InMemoryViewPreferencesRepository: ViewPreferencesRepository {
+    private var preferences: ViewPreferences
+
+    public init(preferences: ViewPreferences = ViewPreferences()) {
+        self.preferences = preferences
+    }
+
+    public func load() async throws -> ViewPreferences {
+        self.preferences
+    }
+
+    public func save(_ preferences: ViewPreferences) async throws {
+        self.preferences = preferences
+    }
+}
+
 public protocol ServerBookmarkRepository: Sendable {
     func list() async throws -> [ServerBookmark]
     func save(_ bookmark: ServerBookmark) async throws
@@ -165,6 +181,30 @@ public actor JSONServerBookmarkRepository: ServerBookmarkRepository {
     }
 }
 
+public actor InMemoryServerBookmarkRepository: ServerBookmarkRepository {
+    private var bookmarks: [ServerBookmark] = []
+
+    public init(bookmarks: [ServerBookmark] = []) {
+        self.bookmarks = bookmarks
+    }
+
+    public func list() async throws -> [ServerBookmark] {
+        self.bookmarks.sorted { ($0.lastUsedAt ?? $0.createdAt) > ($1.lastUsedAt ?? $1.createdAt) }
+    }
+
+    public func save(_ bookmark: ServerBookmark) async throws {
+        if let index = self.bookmarks.firstIndex(where: { $0.id == bookmark.id }) {
+            self.bookmarks[index] = bookmark
+        } else {
+            self.bookmarks.append(bookmark)
+        }
+    }
+
+    public func delete(id: UUID) async throws {
+        self.bookmarks.removeAll { $0.id == id }
+    }
+}
+
 public protocol RecentServerRepository: Sendable {
     func list(limit: Int) async throws -> [RecentServer]
     func record(_ recent: RecentServer, limit: Int) async throws
@@ -195,5 +235,27 @@ public actor JSONRecentServerRepository: RecentServerRepository {
         var recents = try await store.load(default: [])
         recents.removeAll { $0.profileID == profileID }
         try await self.store.save(recents)
+    }
+}
+
+public actor InMemoryRecentServerRepository: RecentServerRepository {
+    private var recents: [RecentServer] = []
+
+    public init(recents: [RecentServer] = []) {
+        self.recents = recents
+    }
+
+    public func list(limit: Int) async throws -> [RecentServer] {
+        Array(self.recents.sorted { $0.connectedAt > $1.connectedAt }.prefix(limit))
+    }
+
+    public func record(_ recent: RecentServer, limit: Int = 20) async throws {
+        self.recents.removeAll { $0.profileID == recent.profileID }
+        self.recents.insert(recent, at: 0)
+        self.recents = Array(self.recents.prefix(limit))
+    }
+
+    public func delete(profileID: ServerProfileID) async throws {
+        self.recents.removeAll { $0.profileID == profileID }
     }
 }

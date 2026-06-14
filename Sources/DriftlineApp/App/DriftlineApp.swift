@@ -74,7 +74,17 @@ final class AppModel: @unchecked Sendable {
     var showAbout = false
     var pendingUpdate: AppUpdate?
     var isCheckingForUpdates = false
-    var statusMessage: String?
+    var pendingCloseTabID: WorkspaceTab.ID?
+
+    var pendingCloseTab: WorkspaceTab? {
+        guard let id = pendingCloseTabID else { return nil }
+        return self.tabs.first { $0.id == id }
+    }
+
+    var statusMessage: ToastMessage?
+    var userAlert: UserAlert?
+    var footerMessage: String?
+    var hasInitialLoadFailed = false
     var transferJobs: [TransferJob] = []
     var transferProfiles: [TransferJobID: ServerProfile] = [:]
     var profiles: [ServerProfile] = []
@@ -93,11 +103,11 @@ final class AppModel: @unchecked Sendable {
     }
 
     var lastConnectionDisplay: String {
-        guard let connectedAt = session.connectedAt else { return "None" }
+        guard let connectedAt = session.connectedAt else { return self.loc("common.none") }
         return connectedAt.formatted(date: .abbreviated, time: .shortened)
     }
 
-    private let localFileSystem: LocalFileSystemClient = FoundationLocalFileSystemClient()
+    private let localFileSystem: LocalFileSystemClient
     private let profileRepository: ServerProfileRepository
     private let preferencesRepository: ViewPreferencesRepository
     private let transferHistoryRepository: TransferHistoryRepository
@@ -112,7 +122,7 @@ final class AppModel: @unchecked Sendable {
     private let terminalLauncher: TerminalLaunching
     private let credentialStore: CredentialStore
     private let diagnosticsRecorder: DiagnosticsRecorder
-    private let notificationController: AppNotificationController
+    private let notificationController: AppNotificationControlling
     private var didPerformStartupUpdateCheck = false
 
     init(
@@ -121,6 +131,7 @@ final class AppModel: @unchecked Sendable {
         transferHistoryRepository: TransferHistoryRepository = JSONTransferHistoryRepository(),
         bookmarkRepository: ServerBookmarkRepository = JSONServerBookmarkRepository(),
         recentRepository: RecentServerRepository = JSONRecentServerRepository(),
+        localFileSystem: LocalFileSystemClient = FoundationLocalFileSystemClient(),
         remoteFileSystem: RemoteFileSystemClient = SystemSFTPClient.secureDefault(),
         nativeRemoteFileSystem: RemoteFileSystemClient? = nil,
         transferClient: TransferClient = SystemRsyncTransferClient(),
@@ -130,8 +141,9 @@ final class AppModel: @unchecked Sendable {
         terminalLauncher: TerminalLaunching = SystemTerminalLauncher(),
         credentialStore: CredentialStore = KeychainCredentialStore(),
         diagnosticsRecorder: DiagnosticsRecorder = DiagnosticsRecorder(),
-        notificationController: AppNotificationController = AppNotificationController()
+        notificationController: AppNotificationControlling = AppNotificationController()
     ) {
+        self.localFileSystem = localFileSystem
         self.profileRepository = profileRepository
         self.preferencesRepository = preferencesRepository
         self.transferHistoryRepository = transferHistoryRepository
@@ -152,8 +164,10 @@ final class AppModel: @unchecked Sendable {
     }
 
     func loadInitialState() async {
+        await self.notificationController.requestPermissionIfNeeded()
         do {
             self.preferences = try await self.preferencesRepository.load()
+            self.detectAndApplyLanguage()
             AppIconController.apply(self.preferences.appIconVariant)
             AppThemeController.apply(self.preferences.appThemeVariant)
             self.profiles = try await self.profileRepository.list()
@@ -166,9 +180,16 @@ final class AppModel: @unchecked Sendable {
         } catch {
             self.recordError(error, category: "startup")
             self.session.lastErrorMessage = error.localizedDescription
-            self.statusMessage = error.localizedDescription
-            await self.refreshLocal()
+            self.footerMessage = error.localizedDescription
+            self.hasInitialLoadFailed = true
         }
+    }
+
+    func retryInitialLoad() {
+        guard self.hasInitialLoadFailed else { return }
+        self.hasInitialLoadFailed = false
+        self.footerMessage = nil
+        Task { await self.loadInitialState() }
     }
 
     private func consumeLaunchRequest() {
@@ -178,6 +199,7 @@ final class AppModel: @unchecked Sendable {
                 self.newTab()
             }
             self.session.localPath = args[index + 1]
+            Task { await self.refreshLocal() }
             return
         }
         if let index = args.firstIndex(of: "--driftline-bookmark"), args.indices.contains(index + 1) {
@@ -194,6 +216,7 @@ final class AppModel: @unchecked Sendable {
             switch request.intent {
             case let .openPath(path):
                 self.session.localPath = path
+                Task { await self.refreshLocal() }
             case let .openBookmark(name):
                 self.openBookmark(named: name)
             }
@@ -224,18 +247,18 @@ final class AppModel: @unchecked Sendable {
             if update.isNewer {
                 self.pendingUpdate = update
                 self.notifyInBackground(
-                    title: "Driftline Update Available",
-                    body: "Version \(update.latestVersion) is ready to download.",
+                    title: self.loc("update.notificationTitle"),
+                    body: self.loc("update.notificationBody", update.latestVersion),
                     identifier: "update-\(update.latestVersion)"
                 )
                 self.recordDiagnostic(level: .info, category: "updates", message: "Update available: \(update.latestVersion)")
             } else if showNoUpdateMessage {
-                self.statusMessage = "Driftline is up to date."
+                self.statusMessage = ToastMessage(text: self.loc("toast.upToDate"))
             }
         } catch {
             self.recordError(error, category: "updates")
             if showNoUpdateMessage {
-                self.statusMessage = "Could not check for updates: \(error.localizedDescription)"
+                self.userAlert = UserAlert(title: self.loc("alert.checkUpdatesTitle"), message: error.localizedDescription)
             }
         }
     }
@@ -287,7 +310,7 @@ final class AppModel: @unchecked Sendable {
             self.recordError(error, category: "local.list")
             self.localItems = []
             self.session.lastErrorMessage = error.localizedDescription
-            self.statusMessage = error.localizedDescription
+            self.footerMessage = error.localizedDescription
         }
     }
 
@@ -357,7 +380,7 @@ final class AppModel: @unchecked Sendable {
                 }
             } catch {
                 self.recordError(error, category: "browser.children")
-                self.statusMessage = error.localizedDescription
+                self.footerMessage = error.localizedDescription
                 completion([])
             }
         }
@@ -377,7 +400,7 @@ final class AppModel: @unchecked Sendable {
         self.copiedFiles = items
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(items.map(\.path).joined(separator: "\n"), forType: .string)
-        self.statusMessage = items.count == 1 ? "Copied \(items[0].name)." : "Copied \(items.count) items."
+        self.statusMessage = ToastMessage(text: items.count == 1 ? self.loc("toast.copiedSingle", items[0].name) : self.loc("toast.copiedMulti", items.count))
     }
 
     func pasteCopiedItemsIntoActivePane() {
@@ -396,13 +419,13 @@ final class AppModel: @unchecked Sendable {
         case .local:
             self.copyLocalItems(self.copiedFiles)
         case .remote:
-            self.statusMessage = "Remote-to-remote copy is not supported yet."
+            self.userAlert = UserAlert(title: self.loc("alert.unsupportedTitle"), message: self.loc("alert.unsupportedMsg"))
         }
     }
 
     func prepareSyncPreview() {
         guard self.session.state == .connected else {
-            self.statusMessage = "Connect to a server before comparing folders."
+            self.userAlert = UserAlert(title: self.loc("alert.notConnectedTitle"), message: self.loc("alert.notConnectedMsg"))
             return
         }
         self.syncPreview = SyncPreview(localPath: self.session.localPath, remotePath: self.session.remotePath, localItems: self.localItems, remoteItems: self.remoteItems)
@@ -424,7 +447,7 @@ final class AppModel: @unchecked Sendable {
         guard total > 0 else { return }
         self.uploadItems(plan.uploads, conflictPolicy: plan.conflictPolicy)
         self.downloadItems(plan.downloads, conflictPolicy: plan.conflictPolicy)
-        self.statusMessage = total == 1 ? "Started 1 sync transfer." : "Started \(total) sync transfers."
+        self.statusMessage = ToastMessage(text: total == 1 ? self.loc("toast.syncStartedSingle") : self.loc("toast.syncStartedMulti", total))
     }
 
     private func copyLocalItems(_ items: [FileItem]) {
@@ -437,12 +460,12 @@ final class AppModel: @unchecked Sendable {
                     copiedCount += 1
                 } catch {
                     self.recordError(error, category: "local.copy")
-                    self.statusMessage = error.localizedDescription
+                    self.userAlert = UserAlert(title: self.loc("alert.copyFailedTitle"), message: error.localizedDescription)
                     return
                 }
             }
             await self.refreshLocal()
-            self.statusMessage = copiedCount == 1 ? "Copied 1 item." : "Copied \(copiedCount) items."
+            self.statusMessage = ToastMessage(text: copiedCount == 1 ? self.loc("toast.copiedSingle", copiedCount) : self.loc("toast.copiedMulti", copiedCount))
         }
     }
 
@@ -487,7 +510,7 @@ final class AppModel: @unchecked Sendable {
 
     func connectSelectedServer() async {
         guard let profile = selectedProfile else {
-            self.statusMessage = "Select a saved server or create a new connection."
+            self.userAlert = UserAlert(title: self.loc("alert.noServerTitle"), message: self.loc("alert.noServerMsg"))
             self.beginQuickConnect()
             return
         }
@@ -521,7 +544,7 @@ final class AppModel: @unchecked Sendable {
             }
             self.session.state = .failed(message: error.localizedDescription)
             self.session.lastErrorMessage = error.localizedDescription
-            self.statusMessage = error.localizedDescription
+            self.footerMessage = error.localizedDescription
             self.isConnecting = false
         }
     }
@@ -531,7 +554,7 @@ final class AppModel: @unchecked Sendable {
               self.preferences.remoteBackendKind != .nativeSwiftExperimental
         else { return }
         self.preferences.remoteBackendKind = .nativeSwiftExperimental
-        self.statusMessage = "Switched to Native Swift SSH for password authentication."
+        self.footerMessage = self.loc("toast.nativeSSHSwitch")
         self.savePreferences()
     }
 
@@ -564,20 +587,42 @@ final class AppModel: @unchecked Sendable {
             self.saveActiveTabSnapshot()
         } catch {
             self.notifyInBackground(
-                title: "Server Disconnected",
-                body: "\(profile.displayName) is no longer reachable.",
+                title: self.loc("notification.serverDisconnectedTitle"),
+                body: self.loc("notification.serverDisconnectedBody", profile.displayName),
                 identifier: "server-disconnected-\(profile.id.rawValue.uuidString)"
             )
             self.recordError(error, category: "remote.list")
             self.session.state = .failed(message: error.localizedDescription)
             self.session.lastErrorMessage = error.localizedDescription
-            self.statusMessage = error.localizedDescription
+            self.footerMessage = error.localizedDescription
         }
     }
 
     func disconnect() {
+        let sessionToDisconnect = self.session
         self.session.state = .disconnected
         self.remoteItems = []
+        self.saveActiveTabSnapshot()
+        Task {
+            try? await self.remoteClientForCurrentPreference().disconnect(session: sessionToDisconnect)
+        }
+    }
+
+    func setLanguage(_ language: SupportedLanguage) {
+        self.preferences.localizedLanguage = language
+        self.preferences.hasSetLanguageExplicitly = true
+        LocalizationManager.shared.setLanguage(language)
+        self.savePreferences()
+    }
+
+    private func detectAndApplyLanguage() {
+        let detected = LocalizationManager.shared.detectSystemLanguage()
+        LocalizationManager.shared.setLanguage(self.preferences.localizedLanguage)
+        if !self.preferences.hasSetLanguageExplicitly, self.preferences.localizedLanguage != detected {
+            self.preferences.localizedLanguage = detected
+            LocalizationManager.shared.setLanguage(detected)
+            self.savePreferences()
+        }
     }
 
     func savePreferences() {
@@ -599,10 +644,10 @@ final class AppModel: @unchecked Sendable {
             do {
                 try await self.profileRepository.save(selectedProfile)
                 self.profiles = try await self.profileRepository.list()
-                self.statusMessage = selectedProfile.isFavorite ? "Added to favorites." : "Removed from favorites."
+                self.statusMessage = ToastMessage(text: selectedProfile.isFavorite ? self.loc("toast.favoriteAdded") : self.loc("toast.favoriteRemoved"))
             } catch {
                 self.recordError(error, category: "profile.favorite")
-                self.statusMessage = error.localizedDescription
+                self.userAlert = UserAlert(title: self.loc("alert.favoriteFailedTitle"), message: error.localizedDescription)
             }
         }
     }
@@ -619,10 +664,10 @@ final class AppModel: @unchecked Sendable {
             do {
                 try await self.bookmarkRepository.save(bookmark)
                 self.bookmarks = try await self.bookmarkRepository.list()
-                self.statusMessage = "Saved bookmark."
+                self.statusMessage = ToastMessage(text: self.loc("toast.bookmarkSaved"))
             } catch {
                 self.recordError(error, category: "bookmark.save")
-                self.statusMessage = error.localizedDescription
+                self.userAlert = UserAlert(title: self.loc("alert.bookmarkSaveFailedTitle"), message: error.localizedDescription)
             }
         }
     }
@@ -640,7 +685,7 @@ final class AppModel: @unchecked Sendable {
 
     func openBookmark(named name: String) {
         guard let bookmark = self.bookmarks.first(where: { $0.name.localizedCaseInsensitiveCompare(name) == .orderedSame }) else {
-            self.statusMessage = "Bookmark not found: \(name)"
+            self.userAlert = UserAlert(title: self.loc("alert.bookmarkNotFoundTitle"), message: self.loc("alert.bookmarkNotFoundMsg", name))
             return
         }
         self.openBookmark(bookmark)
@@ -806,7 +851,7 @@ final class AppModel: @unchecked Sendable {
     }
 
     func beginCreateFolder(source: FileSource) {
-        self.fileOperationText = "New Folder"
+        self.fileOperationText = self.loc("file.newFolder")
         self.fileOperationPrompt = FileOperationPrompt(kind: .createFolder, source: source)
     }
 
@@ -1126,12 +1171,12 @@ final class AppModel: @unchecked Sendable {
         guard case .succeeded = job.status else { return }
         let displayPath = job.direction == .download ? job.destinationPath : job.sourcePath
         let fileName = URL(fileURLWithPath: displayPath).lastPathComponent
-        let itemKind = job.isFolder ? "folder" : "file"
-        let action = job.direction == .download ? "Downloaded" : "Uploaded"
-        let serverName = job.serverName ?? "server"
+        let itemKind = job.isFolder ? self.loc("fileKind.folder") : self.loc("fileKind.file")
+        let action = job.direction == .download ? self.loc("transfer.downloaded") : self.loc("transfer.uploaded")
+        let serverName = job.serverName ?? self.loc("common.server")
         self.notifyInBackground(
-            title: "\(action) \(itemKind)",
-            body: "\(fileName) finished on \(serverName).",
+            title: self.loc("notification.transferCompletedTitle", action, itemKind),
+            body: self.loc("notification.transferCompletedBody", fileName, serverName),
             identifier: "transfer-completed-\(job.id.rawValue.uuidString)"
         )
     }
@@ -1139,11 +1184,11 @@ final class AppModel: @unchecked Sendable {
     private func notifyTransferFailed(_ job: TransferJob) {
         let displayPath = job.direction == .download ? job.destinationPath : job.sourcePath
         let fileName = URL(fileURLWithPath: displayPath).lastPathComponent
-        let action = job.direction == .download ? "Download" : "Upload"
-        let serverName = job.serverName ?? "server"
+        let action = job.direction.localizedTitle
+        let serverName = job.serverName ?? self.loc("common.server")
         self.notifyInBackground(
-            title: "\(action) Failed",
-            body: "\(fileName) failed on \(serverName).",
+            title: self.loc("notification.transferFailedTitle", action),
+            body: self.loc("notification.transferFailedBody", fileName, serverName),
             identifier: "transfer-failed-\(job.id.rawValue.uuidString)"
         )
     }
@@ -1280,7 +1325,7 @@ final class AppModel: @unchecked Sendable {
         } else if self.session.remotePath != "/" {
             self.tabs[index].title = self.session.remotePath
         } else {
-            self.tabs[index].title = "New Connection"
+            self.tabs[index].title = self.loc("tab.newConnection")
         }
     }
 
@@ -1390,13 +1435,51 @@ final class AppModel: @unchecked Sendable {
         let tab = WorkspaceTab()
         self.tabs.append(tab)
         self.selectTab(tab.id)
+        Task { await self.refreshLocal() }
     }
 
     func closeSelectedTab() {
-        guard self.tabs.count > 1, let selectedTabID else { return }
-        self.tabs.removeAll { $0.id == selectedTabID }
-        if let first = tabs.first {
+        guard let selectedTabID else { return }
+        self.requestCloseTab(selectedTabID)
+    }
+
+    func requestCloseTab(_ tabID: WorkspaceTab.ID) {
+        guard self.tabs.count > 1 else { return }
+        guard let tab = self.tabs.first(where: { $0.id == tabID }) else { return }
+        switch tab.session.state {
+        case .disconnected, .failed:
+            self.forceCloseTab(tabID)
+        default:
+            self.pendingCloseTabID = tabID
+        }
+    }
+
+    func confirmCloseTab() {
+        guard let tabID = self.pendingCloseTabID else { return }
+        self.pendingCloseTabID = nil
+        if let index = self.tabs.firstIndex(where: { $0.id == tabID }) {
+            self.disconnectTabSession(self.tabs[index].session)
+            self.tabs[index].session.state = .disconnected
+        }
+        self.forceCloseTab(tabID)
+    }
+
+    func cancelCloseTab() {
+        self.pendingCloseTabID = nil
+    }
+
+    private func forceCloseTab(_ tabID: WorkspaceTab.ID) {
+        guard self.tabs.count > 1 else { return }
+        let wasSelected = self.selectedTabID == tabID
+        self.tabs.removeAll { $0.id == tabID }
+        if wasSelected, let first = tabs.first {
             self.selectTab(first.id)
+        }
+    }
+
+    private func disconnectTabSession(_ session: ConnectionSession) {
+        Task {
+            try? await self.remoteClientForCurrentPreference().disconnect(session: session)
         }
     }
 
@@ -1453,6 +1536,12 @@ final class AppModel: @unchecked Sendable {
 
     private func items(matching ids: Set<String>, in items: [FileItem]) -> [FileItem] {
         items.filter { ids.contains($0.id) }
+    }
+
+    private func loc(_ key: String, _ args: CVarArg...) -> String {
+        let format = LocalizationManager.shared.localized(key)
+        if args.isEmpty { return format }
+        return String(format: format, arguments: args)
     }
 }
 
@@ -1543,9 +1632,9 @@ struct FileOperationPrompt: Identifiable, Equatable {
     var title: String {
         switch self.kind {
         case .createFolder:
-            "New \(self.source.rawValue.capitalized) Folder"
+            String(format: LocalizationManager.shared.localized("file.newSourceFolder"), self.source.localizedTitle)
         case .rename:
-            "Rename Item"
+            LocalizationManager.shared.localized("file.renameItem")
         }
     }
 }
@@ -1564,13 +1653,26 @@ struct PendingHostTrust: Identifiable, Equatable {
 
 struct ServerProfileDraft: Identifiable, Equatable {
     enum AuthKind: String, CaseIterable, Identifiable {
-        case agent = "SSH Agent"
-        case password = "Password"
-        case privateKey = "Private Key"
-        case none = "None"
+        case agent
+        case password
+        case privateKey
+        case none
 
         var id: String {
             rawValue
+        }
+
+        var localizedTitle: String {
+            switch self {
+            case .agent:
+                LocalizationManager.shared.localized("profile.auth.agent")
+            case .password:
+                LocalizationManager.shared.localized("profile.auth.password")
+            case .privateKey:
+                LocalizationManager.shared.localized("profile.auth.privateKey")
+            case .none:
+                LocalizationManager.shared.localized("profile.auth.none")
+            }
         }
     }
 
@@ -1698,7 +1800,7 @@ struct ServerProfileDraft: Identifiable, Equatable {
 
 struct WorkspaceTab: Identifiable {
     var id = UUID()
-    var title = "New Connection"
+    var title = LocalizationManager.shared.localized("tab.newConnection")
     var session = ConnectionSession(state: .disconnected, protocolKind: .sftp)
     var localItems: [FileItem] = []
     var remoteItems: [FileItem] = []
@@ -1709,6 +1811,17 @@ struct WorkspaceTab: Identifiable {
     var selectedLocalFiles: [FileItem] = []
     var selectedRemoteFiles: [FileItem] = []
     var activePane: FileSource = .local
+}
+
+struct ToastMessage {
+    var text: String
+    var systemImage = "checkmark.circle.fill"
+    var iconColor: Color = .green
+}
+
+struct UserAlert {
+    var title: String
+    var message: String
 }
 
 struct SidebarItem: Identifiable, Hashable {

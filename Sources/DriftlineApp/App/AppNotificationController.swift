@@ -1,7 +1,20 @@
 import AppKit
 import UserNotifications
 
-final class AppNotificationController: @unchecked Sendable {
+protocol AppNotificationControlling: Sendable {
+    @MainActor func requestPermissionIfNeeded() async
+    @MainActor func notifyIfBackground(isEnabled: Bool, title: String, body: String, identifier: String)
+}
+
+final class AppNotificationController: AppNotificationControlling, @unchecked Sendable {
+    @MainActor
+    func requestPermissionIfNeeded() async {
+        let center = UNUserNotificationCenter.current()
+        let settings = await center.notificationSettings()
+        guard settings.authorizationStatus == .notDetermined else { return }
+        _ = try? await center.requestAuthorization(options: [.alert, .sound])
+    }
+
     @MainActor
     func notifyIfBackground(isEnabled: Bool, title: String, body: String, identifier: String = UUID().uuidString) {
         guard isEnabled, !NSApp.isActive else { return }

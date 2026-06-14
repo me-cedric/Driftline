@@ -9,24 +9,24 @@ struct InspectorView: View {
         GeometryReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    InspectorSection(title: "Selection") {
+                    InspectorSection(title: LocalizationManager.shared.localized("inspector.selection")) {
                         if let file {
-                            LabeledContent("Name", value: file.name)
-                            LabeledContent("Path", value: file.path)
-                            LabeledContent("Type", value: file.kind.rawValue.capitalized)
-                            LabeledContent("Size", value: file.size.map(ByteCountFormatter.string) ?? "--")
-                            LabeledContent("Source", value: file.source.rawValue.capitalized)
+                            LabeledContent(LocalizationManager.shared.localized("inspector.name"), value: file.name)
+                            LabeledContent(LocalizationManager.shared.localized("inspector.path"), value: file.path)
+                            LabeledContent(LocalizationManager.shared.localized("inspector.type"), value: file.kind.localizedTitle)
+                            LabeledContent(LocalizationManager.shared.localized("inspector.size"), value: file.size.map(ByteCountFormatter.string) ?? "--")
+                            LabeledContent(LocalizationManager.shared.localized("inspector.source"), value: file.source.localizedTitle)
                         } else {
-                            Text("Select a local or remote item.")
+                            Text(LocalizationManager.shared.localized("inspector.selectItem"))
                                 .foregroundStyle(.secondary)
                         }
                     }
 
-                    InspectorSection(title: "Connection") {
-                        LabeledContent("State", value: String(describing: self.session.state))
-                        LabeledContent("Protocol", value: self.session.protocolKind?.rawValue.uppercased() ?? "--")
-                        LabeledContent("Local Path", value: self.session.localPath)
-                        LabeledContent("Remote Path", value: self.session.remotePath)
+                    InspectorSection(title: LocalizationManager.shared.localized("inspector.connection")) {
+                        LabeledContent(LocalizationManager.shared.localized("inspector.state"), value: self.session.state.localizedTitle)
+                        LabeledContent(LocalizationManager.shared.localized("inspector.protocol"), value: self.session.protocolKind?.rawValue.uppercased() ?? "--")
+                        LabeledContent(LocalizationManager.shared.localized("inspector.localPath"), value: self.session.localPath)
+                        LabeledContent(LocalizationManager.shared.localized("inspector.remotePath"), value: self.session.remotePath)
                     }
                 }
                 .frame(width: max(0, proxy.size.width - 32), alignment: .topLeading)

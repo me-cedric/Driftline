@@ -12,9 +12,9 @@ public enum RemoteBackendKind: String, CaseIterable, Codable, Sendable, Identifi
     public var displayName: String {
         switch self {
         case .systemSSH:
-            "System SSH"
+            LocalizationManager.shared.localized("backend.systemSSH")
         case .nativeSwiftExperimental:
-            "Native Swift SSH"
+            LocalizationManager.shared.localized("backend.nativeSwiftSSH")
         }
     }
 }

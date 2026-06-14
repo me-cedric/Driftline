@@ -1,3 +1,4 @@
+import DriftlineCore
 import SwiftUI
 
 struct HostTrustPromptView: View {
@@ -7,16 +8,16 @@ struct HostTrustPromptView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Label("Trust Host?", systemImage: "lock.shield")
+            Label(LocalizationManager.shared.localized("trust.title"), systemImage: "lock.shield")
                 .font(.title2.bold())
             Text("\(self.trust.host):\(self.trust.port)")
                 .font(.headline)
             VStack(alignment: .leading, spacing: 8) {
-                Text("Algorithm")
+                Text(LocalizationManager.shared.localized("trust.algorithm"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Text(self.trust.algorithm)
-                Text("Fingerprint")
+                Text(LocalizationManager.shared.localized("trust.fingerprint"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Text(self.trust.fingerprint)
@@ -25,14 +26,14 @@ struct HostTrustPromptView: View {
             }
             .padding(14)
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
-            Text("Only trust this host if the fingerprint matches a value you verified out of band.")
+            Text(LocalizationManager.shared.localized("trust.warning"))
                 .foregroundStyle(.secondary)
             HStack {
                 Spacer()
-                Button("Cancel", role: .cancel, action: self.onCancel)
-                Button("Trust and Connect", action: self.onTrust)
+                Button(LocalizationManager.shared.localized("delete.cancel"), role: .cancel, action: self.onCancel)
+                Button(LocalizationManager.shared.localized("trust.trustAndConnect"), action: self.onTrust)
                     .buttonStyle(.borderedProminent)
-                    .accessibilityHint("Stores this fingerprint in Driftline known hosts and reconnects.")
+                    .accessibilityHint(LocalizationManager.shared.localized("trust.hint"))
             }
         }
         .padding(24)

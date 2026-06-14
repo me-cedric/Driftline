@@ -11,13 +11,12 @@ public struct FoundationLocalFileSystemClient: LocalFileSystemClient {
             let values = try itemURL.resourceValues(forKeys: keys)
             let isHidden = values.isHidden ?? itemURL.lastPathComponent.hasPrefix(".")
             if isHidden, !preferences.showHiddenFiles { return nil }
-            let kind: FileItemKind
-            if values.isDirectory == true {
-                kind = .folder
+            let kind: FileItemKind = if values.isDirectory == true {
+                .folder
             } else if values.isSymbolicLink == true {
-                kind = .symbolicLink
+                .symbolicLink
             } else {
-                kind = .file
+                .file
             }
             return FileItem(
                 name: itemURL.lastPathComponent,
@@ -59,16 +58,15 @@ public enum FileItemSorter {
                 if lhs.kind == .folder { return true }
                 if rhs.kind == .folder { return false }
             }
-            let ascendingResult: Bool
-            switch preferences.sortKey {
+            let ascendingResult: Bool = switch preferences.sortKey {
             case .name:
-                ascendingResult = lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+                lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
             case .size:
-                ascendingResult = (lhs.size ?? -1) < (rhs.size ?? -1)
+                (lhs.size ?? -1) < (rhs.size ?? -1)
             case .type:
-                ascendingResult = lhs.kind.rawValue < rhs.kind.rawValue
+                lhs.kind.rawValue < rhs.kind.rawValue
             case .modifiedAt:
-                ascendingResult = (lhs.modifiedAt ?? .distantPast) < (rhs.modifiedAt ?? .distantPast)
+                (lhs.modifiedAt ?? .distantPast) < (rhs.modifiedAt ?? .distantPast)
             }
             return preferences.sortAscending ? ascendingResult : !ascendingResult
         }

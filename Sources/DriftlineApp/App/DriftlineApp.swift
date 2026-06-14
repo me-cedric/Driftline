@@ -17,7 +17,7 @@ struct DriftlineApp: App {
         }
 
         Settings {
-            SettingsView(preferences: self.$model.preferences)
+            SettingsView(model: self.model)
                 .onChange(of: self.model.preferences) { _, _ in
                     AppIconController.apply(self.model.preferences.appIconVariant)
                     AppThemeController.apply(self.model.preferences.appThemeVariant)
@@ -72,6 +72,8 @@ final class AppModel: @unchecked Sendable {
     var connectAfterSavingDraft = false
     var showViewOptions = false
     var showAbout = false
+    var pendingUpdate: AppUpdate?
+    var isCheckingForUpdates = false
     var statusMessage: String?
     var transferJobs: [TransferJob] = []
     var transferProfiles: [TransferJobID: ServerProfile] = [:]
@@ -109,6 +111,9 @@ final class AppModel: @unchecked Sendable {
     private let knownHostsFile: ManagedKnownHostsFile
     private let terminalLauncher: TerminalLaunching
     private let credentialStore: CredentialStore
+    private let diagnosticsRecorder: DiagnosticsRecorder
+    private let notificationController: AppNotificationController
+    private var didPerformStartupUpdateCheck = false
 
     init(
         profileRepository: ServerProfileRepository = JSONServerProfileRepository(),
@@ -123,7 +128,9 @@ final class AppModel: @unchecked Sendable {
         hostTrustStore: HostTrustStore = JSONHostTrustStore(),
         knownHostsFile: ManagedKnownHostsFile = ManagedKnownHostsFile(),
         terminalLauncher: TerminalLaunching = SystemTerminalLauncher(),
-        credentialStore: CredentialStore = KeychainCredentialStore()
+        credentialStore: CredentialStore = KeychainCredentialStore(),
+        diagnosticsRecorder: DiagnosticsRecorder = DiagnosticsRecorder(),
+        notificationController: AppNotificationController = AppNotificationController()
     ) {
         self.profileRepository = profileRepository
         self.preferencesRepository = preferencesRepository
@@ -138,6 +145,8 @@ final class AppModel: @unchecked Sendable {
         self.knownHostsFile = knownHostsFile
         self.terminalLauncher = terminalLauncher
         self.credentialStore = credentialStore
+        self.diagnosticsRecorder = diagnosticsRecorder
+        self.notificationController = notificationController
         self.selectedTabID = self.tabs.first?.id
         Task { await self.loadInitialState() }
     }
@@ -153,7 +162,9 @@ final class AppModel: @unchecked Sendable {
             self.transferJobs = try await self.transferHistoryRepository.list(limit: 100)
             self.consumeLaunchRequest()
             await self.refreshLocal()
+            await self.performStartupUpdateCheckIfNeeded()
         } catch {
+            self.recordError(error, category: "startup")
             self.session.lastErrorMessage = error.localizedDescription
             self.statusMessage = error.localizedDescription
             await self.refreshLocal()
@@ -189,11 +200,91 @@ final class AppModel: @unchecked Sendable {
         }
     }
 
+    func performStartupUpdateCheckIfNeeded() async {
+        guard !self.didPerformStartupUpdateCheck else { return }
+        self.didPerformStartupUpdateCheck = true
+        guard self.preferences.checkForUpdatesOnStartup else { return }
+        await self.checkForUpdatesNow(showNoUpdateMessage: false)
+    }
+
+    func checkForUpdates(showNoUpdateMessage: Bool) {
+        Task {
+            await self.checkForUpdatesNow(showNoUpdateMessage: showNoUpdateMessage)
+        }
+    }
+
+    private func checkForUpdatesNow(showNoUpdateMessage: Bool) async {
+        guard !self.isCheckingForUpdates else { return }
+        self.isCheckingForUpdates = true
+        defer { self.isCheckingForUpdates = false }
+
+        do {
+            let checker = GitHubUpdateChecker(currentVersion: AppMetadata.shortVersion)
+            let update = try await checker.latestUpdate()
+            if update.isNewer {
+                self.pendingUpdate = update
+                self.notifyInBackground(
+                    title: "Driftline Update Available",
+                    body: "Version \(update.latestVersion) is ready to download.",
+                    identifier: "update-\(update.latestVersion)"
+                )
+                self.recordDiagnostic(level: .info, category: "updates", message: "Update available: \(update.latestVersion)")
+            } else if showNoUpdateMessage {
+                self.statusMessage = "Driftline is up to date."
+            }
+        } catch {
+            self.recordError(error, category: "updates")
+            if showNoUpdateMessage {
+                self.statusMessage = "Could not check for updates: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    func openPendingUpdateDownload() {
+        guard let pendingUpdate else { return }
+        NSWorkspace.shared.open(pendingUpdate.assetURL ?? pendingUpdate.releaseURL)
+        self.pendingUpdate = nil
+    }
+
+    func dismissPendingUpdate() {
+        self.pendingUpdate = nil
+    }
+
+    func revealDiagnosticsLog() {
+        Task {
+            await self.diagnosticsRecorder.record(level: .info, category: "diagnostics", message: "Diagnostics log revealed.")
+            let fileURL = await self.diagnosticsRecorder.fileURL
+            await MainActor.run {
+                NSWorkspace.shared.activateFileViewerSelecting([fileURL])
+            }
+        }
+    }
+
+    private func recordError(_ error: Error, category: String) {
+        self.recordDiagnostic(level: .error, category: category, message: error.localizedDescription)
+    }
+
+    private func recordDiagnostic(level: DiagnosticLevel, category: String, message: String) {
+        Task {
+            await self.diagnosticsRecorder.record(level: level, category: category, message: message)
+        }
+    }
+
+    private func notifyInBackground(title: String, body: String, identifier: String = UUID().uuidString) {
+        self.notificationController.notifyIfBackground(
+            isEnabled: self.preferences.backgroundNotificationsEnabled,
+            title: title,
+            body: body,
+            identifier: identifier
+        )
+    }
+
     func refreshLocal() async {
         do {
             self.localItems = try await self.localFileSystem.listDirectory(at: self.session.localPath, preferences: self.preferences.fileList)
             self.saveActiveTabSnapshot()
         } catch {
+            self.recordError(error, category: "local.list")
             self.localItems = []
             self.session.lastErrorMessage = error.localizedDescription
             self.statusMessage = error.localizedDescription
@@ -265,6 +356,7 @@ final class AppModel: @unchecked Sendable {
                     completion(children)
                 }
             } catch {
+                self.recordError(error, category: "browser.children")
                 self.statusMessage = error.localizedDescription
                 completion([])
             }
@@ -326,6 +418,15 @@ final class AppModel: @unchecked Sendable {
         self.downloadItems(items)
     }
 
+    func runSyncPlan(_ plan: SyncRunPlan) {
+        self.syncPreview = nil
+        let total = plan.uploads.count + plan.downloads.count
+        guard total > 0 else { return }
+        self.uploadItems(plan.uploads, conflictPolicy: plan.conflictPolicy)
+        self.downloadItems(plan.downloads, conflictPolicy: plan.conflictPolicy)
+        self.statusMessage = total == 1 ? "Started 1 sync transfer." : "Started \(total) sync transfers."
+    }
+
     private func copyLocalItems(_ items: [FileItem]) {
         Task {
             var copiedCount = 0
@@ -335,6 +436,7 @@ final class AppModel: @unchecked Sendable {
                     try FileManager.default.copyItem(atPath: item.path, toPath: destination.path)
                     copiedCount += 1
                 } catch {
+                    self.recordError(error, category: "local.copy")
                     self.statusMessage = error.localizedDescription
                     return
                 }
@@ -412,6 +514,7 @@ final class AppModel: @unchecked Sendable {
             self.saveActiveTabSnapshot()
             self.isConnecting = false
         } catch {
+            self.recordError(error, category: "connection")
             self.remoteItems = []
             if case let RemoteClientError.hostNotTrusted(host, port, algorithm, fingerprint, knownHostsLine) = error {
                 self.pendingHostTrust = PendingHostTrust(host: host, port: port, algorithm: algorithm, fingerprint: fingerprint, knownHostsLine: knownHostsLine)
@@ -448,6 +551,7 @@ final class AppModel: @unchecked Sendable {
                 self.pendingHostTrust = nil
                 await self.connectSelectedServer()
             } catch {
+                self.recordError(error, category: "host-trust")
                 self.session.lastErrorMessage = error.localizedDescription
             }
         }
@@ -459,6 +563,12 @@ final class AppModel: @unchecked Sendable {
             self.remoteItems = try await self.remoteClientForCurrentPreference().listDirectory(at: self.session.remotePath, profile: profile, session: self.session, preferences: self.preferences.fileList)
             self.saveActiveTabSnapshot()
         } catch {
+            self.notifyInBackground(
+                title: "Server Disconnected",
+                body: "\(profile.displayName) is no longer reachable.",
+                identifier: "server-disconnected-\(profile.id.rawValue.uuidString)"
+            )
+            self.recordError(error, category: "remote.list")
             self.session.state = .failed(message: error.localizedDescription)
             self.session.lastErrorMessage = error.localizedDescription
             self.statusMessage = error.localizedDescription
@@ -491,6 +601,7 @@ final class AppModel: @unchecked Sendable {
                 self.profiles = try await self.profileRepository.list()
                 self.statusMessage = selectedProfile.isFavorite ? "Added to favorites." : "Removed from favorites."
             } catch {
+                self.recordError(error, category: "profile.favorite")
                 self.statusMessage = error.localizedDescription
             }
         }
@@ -510,6 +621,7 @@ final class AppModel: @unchecked Sendable {
                 self.bookmarks = try await self.bookmarkRepository.list()
                 self.statusMessage = "Saved bookmark."
             } catch {
+                self.recordError(error, category: "bookmark.save")
                 self.statusMessage = error.localizedDescription
             }
         }
@@ -585,10 +697,12 @@ final class AppModel: @unchecked Sendable {
                         await self.connect(profile)
                     }
                 } catch {
+                    self.recordError(error, category: "profile.save")
                     self.profileEditorError = error.localizedDescription
                 }
             }
         } catch {
+            self.recordError(error, category: "profile.validate")
             self.profileEditorError = error.localizedDescription
         }
     }
@@ -637,6 +751,7 @@ final class AppModel: @unchecked Sendable {
                 self.profiles = try await self.profileRepository.list()
                 self.selectedSidebarItem = copy.id.rawValue.uuidString
             } catch {
+                self.recordError(error, category: "profile.duplicate")
                 self.session.lastErrorMessage = error.localizedDescription
             }
         }
@@ -655,6 +770,7 @@ final class AppModel: @unchecked Sendable {
                     self.disconnect()
                 }
             } catch {
+                self.recordError(error, category: "profile.delete")
                 self.session.lastErrorMessage = error.localizedDescription
             }
         }
@@ -746,6 +862,7 @@ final class AppModel: @unchecked Sendable {
                     await self.refreshRemote()
                 }
             } catch {
+                self.recordError(error, category: "file.create-folder")
                 self.session.lastErrorMessage = error.localizedDescription
             }
         }
@@ -764,6 +881,7 @@ final class AppModel: @unchecked Sendable {
                     await self.refreshRemote()
                 }
             } catch {
+                self.recordError(error, category: "file.rename")
                 self.session.lastErrorMessage = error.localizedDescription
             }
         }
@@ -788,6 +906,7 @@ final class AppModel: @unchecked Sendable {
                     await self.refreshRemote()
                 }
             } catch {
+                self.recordError(error, category: "file.delete")
                 self.session.lastErrorMessage = error.localizedDescription
             }
         }
@@ -801,13 +920,13 @@ final class AppModel: @unchecked Sendable {
         self.uploadItems([item])
     }
 
-    func uploadItems(_ items: [FileItem]) {
+    func uploadItems(_ items: [FileItem], conflictPolicy: TransferConflictPolicy = .ask) {
         for item in items {
-            self.uploadItemImmediately(item)
+            self.uploadItemImmediately(item, conflictPolicy: conflictPolicy)
         }
     }
 
-    private func uploadItemImmediately(_ item: FileItem) {
+    private func uploadItemImmediately(_ item: FileItem, conflictPolicy: TransferConflictPolicy = .ask) {
         guard item.source == .local,
               let profile = activeProfile,
               session.state == .connected
@@ -828,9 +947,18 @@ final class AppModel: @unchecked Sendable {
             protocolKind: profile.protocolKind,
             backendKind: self.preferences.remoteBackendKind
         )
-        if self.preferences.confirmBeforeOverwrite, self.remoteItems.contains(where: { $0.path == destination }) {
-            self.queueTransferConflict(TransferConflict(job: job, profile: profile, existingPath: destination))
-            return
+        if self.remoteItems.contains(where: { $0.path == destination }) {
+            switch conflictPolicy {
+            case .ask:
+                if self.preferences.confirmBeforeOverwrite {
+                    self.queueTransferConflict(TransferConflict(job: job, profile: profile, existingPath: destination))
+                    return
+                }
+            case .replace:
+                break
+            case .skip:
+                return
+            }
         }
         self.enqueueTransfer(job, profile: profile)
     }
@@ -855,13 +983,13 @@ final class AppModel: @unchecked Sendable {
         self.downloadItems([item])
     }
 
-    func downloadItems(_ items: [FileItem]) {
+    func downloadItems(_ items: [FileItem], conflictPolicy: TransferConflictPolicy = .ask) {
         for item in items {
-            self.downloadItemImmediately(item)
+            self.downloadItemImmediately(item, conflictPolicy: conflictPolicy)
         }
     }
 
-    private func downloadItemImmediately(_ item: FileItem) {
+    private func downloadItemImmediately(_ item: FileItem, conflictPolicy: TransferConflictPolicy = .ask) {
         guard item.source == .remote,
               let profile = activeProfile,
               session.state == .connected
@@ -882,9 +1010,18 @@ final class AppModel: @unchecked Sendable {
             protocolKind: profile.protocolKind,
             backendKind: self.preferences.remoteBackendKind
         )
-        if self.preferences.confirmBeforeOverwrite, FileManager.default.fileExists(atPath: destination) {
-            self.queueTransferConflict(TransferConflict(job: job, profile: profile, existingPath: destination))
-            return
+        if FileManager.default.fileExists(atPath: destination) {
+            switch conflictPolicy {
+            case .ask:
+                if self.preferences.confirmBeforeOverwrite {
+                    self.queueTransferConflict(TransferConflict(job: job, profile: profile, existingPath: destination))
+                    return
+                }
+            case .replace:
+                break
+            case .skip:
+                return
+            }
         }
         self.enqueueTransfer(job, profile: profile)
     }
@@ -960,6 +1097,7 @@ final class AppModel: @unchecked Sendable {
             }
             if let completed = transferJobs.first(where: { $0.id == job.id }) {
                 try? await self.transferHistoryRepository.append(completed)
+                self.notifyTransferCompleted(completed)
             }
             self.transferProfiles[job.id] = nil
             await self.refreshLocal()
@@ -972,14 +1110,42 @@ final class AppModel: @unchecked Sendable {
             self.transferProfiles[job.id] = nil
             try? await self.transferHistoryRepository.append(cancelled)
         } catch {
+            self.recordError(error, category: "transfer.run")
             var failed = job
             failed.status = .failed(message: error.localizedDescription)
             failed.finishedAt = Date()
             self.replaceTransferJob(failed)
             self.transferProfiles[job.id] = nil
             try? await self.transferHistoryRepository.append(failed)
+            self.notifyTransferFailed(failed)
         }
         self.processTransferQueue()
+    }
+
+    private func notifyTransferCompleted(_ job: TransferJob) {
+        guard case .succeeded = job.status else { return }
+        let displayPath = job.direction == .download ? job.destinationPath : job.sourcePath
+        let fileName = URL(fileURLWithPath: displayPath).lastPathComponent
+        let itemKind = job.isFolder ? "folder" : "file"
+        let action = job.direction == .download ? "Downloaded" : "Uploaded"
+        let serverName = job.serverName ?? "server"
+        self.notifyInBackground(
+            title: "\(action) \(itemKind)",
+            body: "\(fileName) finished on \(serverName).",
+            identifier: "transfer-completed-\(job.id.rawValue.uuidString)"
+        )
+    }
+
+    private func notifyTransferFailed(_ job: TransferJob) {
+        let displayPath = job.direction == .download ? job.destinationPath : job.sourcePath
+        let fileName = URL(fileURLWithPath: displayPath).lastPathComponent
+        let action = job.direction == .download ? "Download" : "Upload"
+        let serverName = job.serverName ?? "server"
+        self.notifyInBackground(
+            title: "\(action) Failed",
+            body: "\(fileName) failed on \(serverName).",
+            identifier: "transfer-failed-\(job.id.rawValue.uuidString)"
+        )
     }
 
     func skipPendingConflict() {
@@ -1071,9 +1237,9 @@ final class AppModel: @unchecked Sendable {
     private func renamedDestinationPath(for job: TransferJob, name: String) -> String {
         switch job.direction {
         case .upload:
-            return self.remotePathAppending(self.remoteParentPath(of: job.destinationPath), name)
+            self.remotePathAppending(self.remoteParentPath(of: job.destinationPath), name)
         case .download:
-            return URL(fileURLWithPath: job.destinationPath).deletingLastPathComponent().appendingPathComponent(name).path
+            URL(fileURLWithPath: job.destinationPath).deletingLastPathComponent().appendingPathComponent(name).path
         }
     }
 
@@ -1301,12 +1467,11 @@ enum AppIconController {
     }
 
     private static func iconPath(for variant: AppIconVariant) -> String {
-        let iconName: String
-        switch variant {
+        let iconName = switch variant {
         case .light:
-            iconName = "Driftline"
+            "Driftline"
         case .dark:
-            iconName = "DriftlineDark"
+            "DriftlineDark"
         }
 
         if let bundledPath = Bundle.main.path(forResource: iconName, ofType: "icns") {
@@ -1323,14 +1488,13 @@ enum AppIconController {
 @MainActor
 enum AppThemeController {
     static func apply(_ variant: AppThemeVariant) {
-        let appearance: NSAppearance?
-        switch variant {
+        let appearance: NSAppearance? = switch variant {
         case .light:
-            appearance = NSAppearance(named: .aqua)
+            NSAppearance(named: .aqua)
         case .dark:
-            appearance = NSAppearance(named: .darkAqua)
+            NSAppearance(named: .darkAqua)
         case .system:
-            appearance = nil
+            nil
         }
 
         NSApplication.shared.appearance = appearance
@@ -1358,6 +1522,12 @@ struct TransferConflict: Identifiable {
     var job: TransferJob
     var profile: ServerProfile
     var existingPath: String
+}
+
+enum TransferConflictPolicy {
+    case ask
+    case replace
+    case skip
 }
 
 struct FileOperationPrompt: Identifiable, Equatable {
@@ -1472,12 +1642,12 @@ struct ServerProfileDraft: Identifiable, Equatable {
             self.password = ""
             self.passphrase = ""
             self.storePassphrase = false
-        case let .privateKey(path, _):
+        case let .privateKey(path, passphraseReference):
             self.authKind = .privateKey
             self.privateKeyPath = path
             self.password = ""
             self.passphrase = ""
-            self.storePassphrase = false
+            self.storePassphrase = passphraseReference != nil
         case .none:
             self.authKind = .none
             self.privateKeyPath = "~/.ssh/id_ed25519"

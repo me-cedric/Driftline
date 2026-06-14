@@ -50,6 +50,8 @@ public struct ViewPreferences: Codable, Equatable, Sendable {
     public var remoteBackendKind: RemoteBackendKind
     public var appIconVariant: AppIconVariant
     public var appThemeVariant: AppThemeVariant
+    public var checkForUpdatesOnStartup: Bool
+    public var backgroundNotificationsEnabled: Bool
 
     enum CodingKeys: String, CodingKey {
         case fileList
@@ -62,6 +64,8 @@ public struct ViewPreferences: Codable, Equatable, Sendable {
         case remoteBackendKind
         case appIconVariant
         case appThemeVariant
+        case checkForUpdatesOnStartup
+        case backgroundNotificationsEnabled
     }
 
     public init(
@@ -74,7 +78,9 @@ public struct ViewPreferences: Codable, Equatable, Sendable {
         confirmBeforeOverwrite: Bool = true,
         remoteBackendKind: RemoteBackendKind = .systemSSH,
         appIconVariant: AppIconVariant = .light,
-        appThemeVariant: AppThemeVariant = .system
+        appThemeVariant: AppThemeVariant = .system,
+        checkForUpdatesOnStartup: Bool = true,
+        backgroundNotificationsEnabled: Bool = true
     ) {
         self.fileList = fileList
         self.showInspector = showInspector
@@ -86,6 +92,8 @@ public struct ViewPreferences: Codable, Equatable, Sendable {
         self.remoteBackendKind = remoteBackendKind
         self.appIconVariant = appIconVariant
         self.appThemeVariant = appThemeVariant
+        self.checkForUpdatesOnStartup = checkForUpdatesOnStartup
+        self.backgroundNotificationsEnabled = backgroundNotificationsEnabled
     }
 
     public init(from decoder: Decoder) throws {
@@ -100,5 +108,7 @@ public struct ViewPreferences: Codable, Equatable, Sendable {
         self.remoteBackendKind = try container.decodeIfPresent(RemoteBackendKind.self, forKey: .remoteBackendKind) ?? .systemSSH
         self.appIconVariant = try container.decodeIfPresent(AppIconVariant.self, forKey: .appIconVariant) ?? .light
         self.appThemeVariant = try container.decodeIfPresent(AppThemeVariant.self, forKey: .appThemeVariant) ?? .system
+        self.checkForUpdatesOnStartup = try container.decodeIfPresent(Bool.self, forKey: .checkForUpdatesOnStartup) ?? true
+        self.backgroundNotificationsEnabled = try container.decodeIfPresent(Bool.self, forKey: .backgroundNotificationsEnabled) ?? true
     }
 }

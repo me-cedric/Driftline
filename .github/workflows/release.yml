@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Release version (e.g. 0.2.0)
+        description: Release version (e.g. 0.5.0 or v0.5.0)
         required: true
       sign:
         description: "Code sign the app bundle (requires secrets set up)"
@@ -17,13 +17,14 @@ on:
 
 jobs:
   package:
-    runs-on: macos-14
+    runs-on: macos-15
+    timeout-minutes: 45
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - name: Select Xcode (Swift 6.x)
+      - name: Select latest Xcode
         run: |
           latest=$(ls /Applications | grep -E 'Xcode_[0-9]+\.[0-9]+\.app' | sort -V | tail -1)
           if [ -n "$latest" ]; then
@@ -31,11 +32,21 @@ jobs:
           fi
           swift --version
 
+      - name: Normalize release version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          app_version="${INPUT_VERSION#v}"
+          tag_name="v$app_version"
+          echo "DRIFTLINE_VERSION=$app_version" >> "$GITHUB_ENV"
+          echo "DRIFTLINE_BUILD_NUMBER=${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
+          echo "DRIFTLINE_TAG=$tag_name" >> "$GITHUB_ENV"
+
       - name: Cache SwiftPM dependencies
         uses: actions/cache@v4
         with:
           path: .build
-          key: ${{ runner.os }}-spm-${{ hashFiles('Package.resolved') }}
+          key: ${{ runner.os }}-spm-${{ hashFiles('Package.swift', 'Package.resolved') }}
           restore-keys: |
             ${{ runner.os }}-spm-
 
@@ -64,7 +75,7 @@ jobs:
           security set-keychain-settings -t 3600 -u "$KEYCHAIN_PATH"
 
           # Make the keychain the default for signing
-          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> $GITHUB_ENV
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
 
       - name: Set up notarytool keychain profile
         if: inputs.notarize
@@ -77,9 +88,13 @@ jobs:
             --apple-id "$APPLE_ID" \
             --team-id "$APPLE_TEAM_ID" \
             --password "$APPLE_APP_PASSWORD"
-          echo "DRIFTLINE_NOTARY_PROFILE=driftline-ci" >> $GITHUB_ENV
+          echo "DRIFTLINE_NOTARY_PROFILE=driftline-ci" >> "$GITHUB_ENV"
 
-      - run: swift test
+      - name: Lint
+        run: ./scripts/lint.sh
+
+      - name: Test
+        run: swift test
 
       - name: Build and sign app bundle
         env:
@@ -98,15 +113,17 @@ jobs:
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Driftline-${{ inputs.version }}
+          name: Driftline-${{ env.DRIFTLINE_VERSION }}
+          if-no-files-found: error
           path: |
             dist/Driftline.dmg
             dist/Driftline.dmg.sha256
 
       - name: Draft GitHub release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ inputs.version }}
+          tag_name: ${{ env.DRIFTLINE_TAG }}
+          name: Driftline ${{ env.DRIFTLINE_VERSION }}
           draft: true
           files: |
             dist/Driftline.dmg

@@ -2,6 +2,14 @@
 import XCTest
 
 final class NativeSFTPClientTests: XCTestCase {
+    func testNativeSFTPCapabilitiesDocumentAuthSupport() {
+        let capabilities = NativeSFTPBackendCapabilities()
+
+        XCTAssertTrue(capabilities.supportsPasswordCredentialRetrieval)
+        XCTAssertTrue(capabilities.supportsPassphraseProtectedKeys)
+        XCTAssertFalse(capabilities.supportsAgentAuthentication)
+    }
+
     func testPassphraseProtectedOpenSSHEd25519KeyParsesWithCorrectPassphrase() throws {
         let sshKeygen = try XCTUnwrap(Self.executablePath(named: "ssh-keygen"), "ssh-keygen is required for encrypted OpenSSH key coverage.")
         let passphrase = "driftline-test-passphrase"

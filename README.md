@@ -110,6 +110,7 @@ Driftline solves a common problem for developers and sysadmins: file transfers o
 | **SCP fallback** | Simpler fallback transfer backend |
 | **Recursive transfers** | Full folder upload/download with progress |
 | **Conflict handling** | Skip, overwrite, or rename before transfer |
+| **Two-way compare plans** | Compare local/remote folders, choose upload/download winners, and run the selected plan |
 | **Transfer queue** | Sortable transfer panel with inline progress, retry, cancellation, stats, and persistent history |
 
 ### Native Swift SFTP
@@ -135,7 +136,8 @@ An in-process SSH/SFTP implementation built on SwiftNIO SSH:
 | **Terminal integration** | Open SSH sessions in Terminal.app without exposing passwords |
 | **CLI launch** | `driftline .`, `--open`, `--bookmark`, `--new-tab` — zero-password CLI |
 | **Bookmarks & favorites** | Quick access sidebar with recent servers |
-| **Settings** | Remote backend, theme, app icon, default sort, and About/Ko-fi support panes |
+| **Settings** | Remote backend, theme, app icon, update checks, background notifications, default sort, and About/Ko-fi support panes |
+| **Updates & diagnostics** | Manual/startup GitHub release checks, background-only useful notifications, and a local redacted diagnostics log |
 | **Empty-first state** | No fake example servers or seeded transfer queues |
 
 ---
@@ -169,7 +171,7 @@ An in-process SSH/SFTP implementation built on SwiftNIO SSH:
 │  └─────────────┘  └──────────────┘  └──────────────┘    │
 │                                                           │
 │  ┌──────────────────────────────────────────────────┐    │
-│  │ Logging (Redactor)                               │    │
+│  │ Logging (Redactor, Diagnostics) │ Updates        │    │
 │  └──────────────────────────────────────────────────┘    │
 └──────────────┬────────────────────────────────────────────┘
                │
@@ -195,7 +197,8 @@ Driftline/
 │   │   │   └── NativeSFTP/    # SwiftNIO SSH/SFTP implementation
 │   │   ├── Persistence/       # JSONFileStore, Repositories
 │   │   ├── Terminal/          # Command generation, Terminal.app launch
-│   │   ├── Logging/           # Redaction utilities
+│   │   ├── Logging/           # Redaction and local diagnostics utilities
+│   │   ├── Updates/           # GitHub release update checks
 │   │   └── Utilities/         # StreamingProcess, CLIRequest, ViewPreferences
 │   └── driftline/             # CLI entry point
 ├── Tests/

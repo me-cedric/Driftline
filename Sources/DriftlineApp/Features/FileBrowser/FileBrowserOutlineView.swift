@@ -422,16 +422,15 @@ extension FileBrowserOutlineView {
                 if lhs.kind == .folder { return true }
                 if rhs.kind == .folder { return false }
             }
-            let orderedAscending: Bool
-            switch self.sortColumn {
+            let orderedAscending: Bool = switch self.sortColumn {
             case "size":
-                orderedAscending = (lhs.size ?? -1) < (rhs.size ?? -1)
+                (lhs.size ?? -1) < (rhs.size ?? -1)
             case "type":
-                orderedAscending = lhs.kind.rawValue.localizedCaseInsensitiveCompare(rhs.kind.rawValue) == .orderedAscending
+                lhs.kind.rawValue.localizedCaseInsensitiveCompare(rhs.kind.rawValue) == .orderedAscending
             case "modified":
-                orderedAscending = (lhs.modifiedAt ?? .distantPast) < (rhs.modifiedAt ?? .distantPast)
+                (lhs.modifiedAt ?? .distantPast) < (rhs.modifiedAt ?? .distantPast)
             default:
-                orderedAscending = lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+                lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
             }
             return self.sortAscending ? orderedAscending : !orderedAscending
         }

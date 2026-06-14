@@ -22,17 +22,23 @@ public enum RemoteBackendKind: String, CaseIterable, Codable, Sendable, Identifi
 public struct NativeSFTPBackendCapabilities: Equatable, Sendable {
     public var sshFoundation: String
     public var supportsPasswordCredentialRetrieval: Bool
+    public var supportsPassphraseProtectedKeys: Bool
+    public var supportsAgentAuthentication: Bool
     public var supportsStructuredCancellation: Bool
     public var supportsProductionSFTPSubsystem: Bool
 
     public init(
         sshFoundation: String = "SwiftNIO SSH",
         supportsPasswordCredentialRetrieval: Bool = true,
+        supportsPassphraseProtectedKeys: Bool = true,
+        supportsAgentAuthentication: Bool = false,
         supportsStructuredCancellation: Bool = true,
         supportsProductionSFTPSubsystem: Bool = true
     ) {
         self.sshFoundation = sshFoundation
         self.supportsPasswordCredentialRetrieval = supportsPasswordCredentialRetrieval
+        self.supportsPassphraseProtectedKeys = supportsPassphraseProtectedKeys
+        self.supportsAgentAuthentication = supportsAgentAuthentication
         self.supportsStructuredCancellation = supportsStructuredCancellation
         self.supportsProductionSFTPSubsystem = supportsProductionSFTPSubsystem
     }
@@ -118,11 +124,10 @@ public struct NativeSFTPClient: RemoteFileSystemClient {
                 hostTrustStore: hostTrustStore
             )
         case let .privateKey(path, passphraseRef):
-            let resolvedPassphrase: String?
-            if let passphraseRef {
-                resolvedPassphrase = try await credentialStore.readString(reference: passphraseRef)
+            let resolvedPassphrase: String? = if let passphraseRef {
+                try await credentialStore.readString(reference: passphraseRef)
             } else {
-                resolvedPassphrase = nil
+                nil
             }
             let contents = try String(contentsOfFile: NSString(string: path).expandingTildeInPath, encoding: .utf8)
             let key = try NativeSFTPPrivateKeyParser.parse(contents: contents, passphrase: resolvedPassphrase)
@@ -140,7 +145,7 @@ public struct NativeSFTPClient: RemoteFileSystemClient {
             guard !identities.isEmpty else {
                 throw RemoteClientError.nativeBackendUnavailable("The SSH agent has no loaded identities. Run ssh-add to load your keys.")
             }
-            throw RemoteClientError.nativeBackendUnavailable("SSH agent signing is not directly supported by the SwiftNIO SSH 0.11.0 API. Use System SSH backend for agent-based connections.")
+            throw RemoteClientError.nativeBackendUnavailable("Native Swift SSH cannot use ssh-agent signing yet. Switch this profile to the System SSH backend for agent-based connections.")
         case .none:
             throw RemoteClientError.unsupportedAuthentication("Native Swift SFTP requires password or private-key authentication.")
         }

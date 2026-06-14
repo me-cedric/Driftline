@@ -35,15 +35,15 @@ public struct SFTPStatus: Equatable, Sendable {
     public func remoteError(fallbackPath: String? = nil) -> RemoteClientError? {
         switch self.code {
         case .ok, .eof:
-            return nil
+            nil
         case .noSuchFile:
-            return .commandFailed(self.message.isEmpty ? "Remote file not found\(fallbackPath.map { ": \($0)" } ?? "")." : self.message)
+            .commandFailed(self.message.isEmpty ? "Remote file not found\(fallbackPath.map { ": \($0)" } ?? "")." : self.message)
         case .permissionDenied:
-            return .commandFailed(self.message.isEmpty ? "Permission denied." : self.message)
+            .commandFailed(self.message.isEmpty ? "Permission denied." : self.message)
         case .operationUnsupported:
-            return .unsupportedAuthentication(self.message.isEmpty ? "The SFTP server does not support this operation." : self.message)
+            .unsupportedAuthentication(self.message.isEmpty ? "The SFTP server does not support this operation." : self.message)
         case .failure, .badMessage, .noConnection, .connectionLost:
-            return .commandFailed(self.message.isEmpty ? "SFTP operation failed." : self.message)
+            .commandFailed(self.message.isEmpty ? "SFTP operation failed." : self.message)
         }
     }
 }

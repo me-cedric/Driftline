@@ -4,8 +4,21 @@ import SwiftUI
 struct SyncPreviewView: View {
     var preview: SyncPreview
     var onClose: () -> Void
-    var onUpload: ([FileItem]) -> Void
-    var onDownload: ([FileItem]) -> Void
+    var onRunPlan: (SyncRunPlan) -> Void
+
+    @State private var selectedLocalUploads: Set<String>
+    @State private var selectedRemoteDownloads: Set<String>
+    @State private var changedChoices: [String: SyncChangedChoice]
+    @State private var conflictPolicy: SyncConflictPolicy = .ask
+
+    init(preview: SyncPreview, onClose: @escaping () -> Void, onRunPlan: @escaping (SyncRunPlan) -> Void) {
+        self.preview = preview
+        self.onClose = onClose
+        self.onRunPlan = onRunPlan
+        self._selectedLocalUploads = State(initialValue: Set(preview.localOnly.map(\.id)))
+        self._selectedRemoteDownloads = State(initialValue: Set(preview.remoteOnly.map(\.id)))
+        self._changedChoices = State(initialValue: Dictionary(uniqueKeysWithValues: preview.changed.map { ($0.id, SyncChangedChoice.skip) }))
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -44,20 +57,42 @@ struct SyncPreviewView: View {
 
             Divider()
 
+            HStack {
+                Picker("Changed conflicts", selection: self.$conflictPolicy) {
+                    ForEach(SyncConflictPolicy.allCases) { policy in
+                        Text(policy.title).tag(policy)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .accessibilityHint("Controls how changed files are handled when both sides already have an item.")
+
+                Spacer()
+
+                Text("\(self.plan.uploads.count + self.plan.downloads.count) planned")
+                    .foregroundStyle(.secondary)
+
+                Button("Run Plan") {
+                    self.onRunPlan(self.plan)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(self.plan.uploads.isEmpty && self.plan.downloads.isEmpty)
+                .accessibilityHint("Starts selected uploads and downloads.")
+            }
+
             HStack(alignment: .top, spacing: 18) {
-                self.section(
+                self.selectableSection(
                     title: "Only Local",
                     items: self.preview.localOnly,
+                    selection: self.$selectedLocalUploads,
                     emptyText: "Nothing to upload.",
-                    actionTitle: "Upload All",
-                    action: { self.onUpload(self.preview.localOnly) }
+                    target: "Upload"
                 )
-                self.section(
+                self.selectableSection(
                     title: "Only Remote",
                     items: self.preview.remoteOnly,
+                    selection: self.$selectedRemoteDownloads,
                     emptyText: "Nothing to download.",
-                    actionTitle: "Download All",
-                    action: { self.onDownload(self.preview.remoteOnly) }
+                    target: "Download"
                 )
                 self.changedSection
             }
@@ -80,17 +115,43 @@ struct SyncPreviewView: View {
         .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
     }
 
-    private func section(title: String, items: [FileItem], emptyText: String, actionTitle: String, action: @escaping () -> Void) -> some View {
+    private var plan: SyncRunPlan {
+        var uploads = self.preview.localOnly.filter { self.selectedLocalUploads.contains($0.id) }
+        var downloads = self.preview.remoteOnly.filter { self.selectedRemoteDownloads.contains($0.id) }
+
+        if self.conflictPolicy != .skipChanged {
+            for difference in self.preview.changed {
+                switch self.changedChoices[difference.id] ?? .skip {
+                case .skip:
+                    break
+                case .uploadLocal:
+                    uploads.append(difference.local)
+                case .downloadRemote:
+                    downloads.append(difference.remote)
+                }
+            }
+        }
+
+        return SyncRunPlan(uploads: uploads, downloads: downloads, conflictPolicy: self.conflictPolicy.transferPolicy)
+    }
+
+    private func selectableSection(title: String, items: [FileItem], selection: Binding<Set<String>>, emptyText: String, target: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(title)
                     .font(.headline)
                 Spacer()
-                Button(actionTitle, action: action)
-                    .disabled(items.isEmpty)
-                    .accessibilityHint("Starts transfers for all items in this section.")
+                Button(selection.wrappedValue.count == items.count ? "None" : "All") {
+                    if selection.wrappedValue.count == items.count {
+                        selection.wrappedValue = []
+                    } else {
+                        selection.wrappedValue = Set(items.map(\.id))
+                    }
+                }
+                .disabled(items.isEmpty)
+                .accessibilityHint("Toggles all items in this section.")
             }
-            self.itemList(items: items, emptyText: emptyText)
+            self.selectableItemList(items: items, selection: selection, emptyText: emptyText, target: target)
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
     }
@@ -101,13 +162,17 @@ struct SyncPreviewView: View {
                 Text("Changed")
                     .font(.headline)
                 Spacer()
-                Menu("Transfer All") {
+                Menu("Set All") {
+                    Button("Skip") {
+                        self.setAllChanged(.skip)
+                    }
+                    .disabled(self.preview.changed.isEmpty)
                     Button("Upload Local Versions") {
-                        self.onUpload(self.preview.changed.map(\.local))
+                        self.setAllChanged(.uploadLocal)
                     }
                     .disabled(self.preview.changed.isEmpty)
                     Button("Download Remote Versions") {
-                        self.onDownload(self.preview.changed.map(\.remote))
+                        self.setAllChanged(.downloadRemote)
                     }
                     .disabled(self.preview.changed.isEmpty)
                 }
@@ -119,9 +184,20 @@ struct SyncPreviewView: View {
                     .frame(maxWidth: .infinity, minHeight: 250, alignment: .topLeading)
             } else {
                 List(self.preview.changed) { difference in
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(difference.name)
-                            .lineLimit(1)
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text(difference.name)
+                                .lineLimit(1)
+                            Spacer()
+                            Picker("Action", selection: self.changedChoiceBinding(for: difference)) {
+                                ForEach(SyncChangedChoice.allCases) { choice in
+                                    Text(choice.title).tag(choice)
+                                }
+                            }
+                            .labelsHidden()
+                            .frame(width: 140)
+                            .disabled(self.conflictPolicy == .skipChanged)
+                        }
                         Text(difference.reason)
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -134,7 +210,7 @@ struct SyncPreviewView: View {
         .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
-    private func itemList(items: [FileItem], emptyText: String) -> some View {
+    private func selectableItemList(items: [FileItem], selection: Binding<Set<String>>, emptyText: String, target: String) -> some View {
         Group {
             if items.isEmpty {
                 Text(emptyText)
@@ -142,18 +218,104 @@ struct SyncPreviewView: View {
                     .frame(maxWidth: .infinity, minHeight: 250, alignment: .topLeading)
             } else {
                 List(items) { item in
-                    HStack(spacing: 8) {
-                        Image(systemName: item.kind == .folder ? "folder" : "doc")
-                            .foregroundStyle(.secondary)
-                        Text(item.name)
-                            .lineLimit(1)
-                        Spacer()
+                    Toggle(isOn: Binding(
+                        get: { selection.wrappedValue.contains(item.id) },
+                        set: { isSelected in
+                            if isSelected {
+                                selection.wrappedValue.insert(item.id)
+                            } else {
+                                selection.wrappedValue.remove(item.id)
+                            }
+                        }
+                    )) {
+                        HStack(spacing: 8) {
+                            Image(systemName: item.kind == .folder ? "folder" : "doc")
+                                .foregroundStyle(.secondary)
+                            Text(item.name)
+                                .lineLimit(1)
+                            Spacer()
+                            Text(target)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                     .accessibilityLabel(item.name)
                     .accessibilityValue(item.kind.rawValue.capitalized)
                 }
                 .frame(minHeight: 250)
             }
+        }
+    }
+
+    private func changedChoiceBinding(for difference: SyncDifference) -> Binding<SyncChangedChoice> {
+        Binding(
+            get: { self.changedChoices[difference.id] ?? .skip },
+            set: { self.changedChoices[difference.id] = $0 }
+        )
+    }
+
+    private func setAllChanged(_ choice: SyncChangedChoice) {
+        for difference in self.preview.changed {
+            self.changedChoices[difference.id] = choice
+        }
+    }
+}
+
+struct SyncRunPlan {
+    var uploads: [FileItem]
+    var downloads: [FileItem]
+    var conflictPolicy: TransferConflictPolicy
+}
+
+enum SyncConflictPolicy: String, CaseIterable, Identifiable {
+    case ask
+    case replace
+    case skipChanged
+
+    var id: String {
+        self.rawValue
+    }
+
+    var title: String {
+        switch self {
+        case .ask:
+            "Ask"
+        case .replace:
+            "Replace"
+        case .skipChanged:
+            "Skip Changed"
+        }
+    }
+
+    var transferPolicy: TransferConflictPolicy {
+        switch self {
+        case .ask:
+            .ask
+        case .replace:
+            .replace
+        case .skipChanged:
+            .skip
+        }
+    }
+}
+
+enum SyncChangedChoice: String, CaseIterable, Identifiable {
+    case skip
+    case uploadLocal
+    case downloadRemote
+
+    var id: String {
+        self.rawValue
+    }
+
+    var title: String {
+        switch self {
+        case .skip:
+            "Skip"
+        case .uploadLocal:
+            "Upload"
+        case .downloadRemote:
+            "Download"
         }
     }
 }

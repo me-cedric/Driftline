@@ -141,12 +141,26 @@ struct ContentView: View {
             SyncPreviewView(
                 preview: preview,
                 onClose: { self.model.syncPreview = nil },
-                onUpload: { self.model.uploadSyncItems($0) },
-                onDownload: { self.model.downloadSyncItems($0) }
+                onRunPlan: { self.model.runSyncPlan($0) }
             )
         }
+        .alert("Update Available", isPresented: Binding(
+            get: { self.model.pendingUpdate != nil },
+            set: { if !$0 { self.model.dismissPendingUpdate() } }
+        )) {
+            Button("Later", role: .cancel) { self.model.dismissPendingUpdate() }
+            Button("Download Update") { self.model.openPendingUpdateDownload() }
+        } message: {
+            if let update = self.model.pendingUpdate {
+                Text("Driftline \(update.latestVersion) is available. You are running \(update.currentVersion).")
+            }
+        }
         .sheet(isPresented: self.$model.showAbout) {
-            AboutView()
+            AboutView(
+                isCheckingForUpdates: self.model.isCheckingForUpdates,
+                onCheckForUpdates: { self.model.checkForUpdates(showNoUpdateMessage: true) },
+                onRevealDiagnostics: { self.model.revealDiagnosticsLog() }
+            )
         }
     }
 

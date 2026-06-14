@@ -23,12 +23,11 @@ public enum RsyncProgressParser {
               let value = Double(chunk[valueRange])
         else { return nil }
 
-        let multiplier: Double
-        switch chunk[unitRange].lowercased() {
-        case "kb": multiplier = 1000
-        case "mb": multiplier = 1_000_000
-        case "gb": multiplier = 1_000_000_000
-        default: multiplier = 1
+        let multiplier: Double = switch chunk[unitRange].lowercased() {
+        case "kb": 1000
+        case "mb": 1_000_000
+        case "gb": 1_000_000_000
+        default: 1
         }
         return Int64(value * multiplier)
     }

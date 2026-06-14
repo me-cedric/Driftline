@@ -16,12 +16,11 @@ public enum RemoteFindParser {
             let isHidden = name.hasPrefix(".")
             guard preferences.showHiddenFiles || !isHidden else { return nil }
 
-            let kind: FileItemKind
-            switch typeCode {
-            case "d": kind = .folder
-            case "f": kind = .file
-            case "l": kind = .symbolicLink
-            default: kind = .unknown
+            let kind: FileItemKind = switch typeCode {
+            case "d": .folder
+            case "f": .file
+            case "l": .symbolicLink
+            default: .unknown
             }
 
             return FileItem(

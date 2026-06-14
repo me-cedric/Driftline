@@ -72,12 +72,11 @@ public struct SFTPPacket: Equatable, Sendable {
             throw SFTPPacketError.unknownPacketType(rawType)
         }
 
-        let requestID: UInt32?
-        switch type {
+        let requestID: UInt32? = switch type {
         case .initialize, .version:
-            requestID = nil
+            nil
         default:
-            requestID = try packetReader.readUInt32()
+            try packetReader.readUInt32()
         }
         let payload = try packetReader.readData(count: packetReader.remainingCount)
         return (SFTPPacket(type: type, requestID: requestID, payload: payload), remaining)

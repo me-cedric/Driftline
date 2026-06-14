@@ -40,6 +40,12 @@ struct DriftlineCommands: Commands {
                 .keyboardShortcut("j")
         }
 
+        CommandMenu("Help") {
+            Button("Check for Updates") { self.model.checkForUpdates(showNoUpdateMessage: true) }
+                .disabled(self.model.isCheckingForUpdates)
+            Button("Reveal Diagnostics Log") { self.model.revealDiagnosticsLog() }
+        }
+
         CommandGroup(replacing: .pasteboard) {
             Button("Copy") { self.model.copySelectedItems() }
                 .keyboardShortcut("c")

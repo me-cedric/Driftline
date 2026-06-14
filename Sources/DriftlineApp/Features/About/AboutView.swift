@@ -1,14 +1,26 @@
 import SwiftUI
 
 struct AboutView: View {
+    var isCheckingForUpdates = false
+    var onCheckForUpdates: () -> Void = {}
+    var onRevealDiagnostics: () -> Void = {}
+
     var body: some View {
-        AppAboutContent()
-            .padding(32)
-            .frame(width: 380)
+        AppAboutContent(
+            isCheckingForUpdates: self.isCheckingForUpdates,
+            onCheckForUpdates: self.onCheckForUpdates,
+            onRevealDiagnostics: self.onRevealDiagnostics
+        )
+        .padding(32)
+        .frame(width: 380)
     }
 }
 
 struct AppAboutContent: View {
+    var isCheckingForUpdates = false
+    var onCheckForUpdates: () -> Void = {}
+    var onRevealDiagnostics: () -> Void = {}
+
     private let donationURL = URL(string: "https://ko-fi.com/mecedric")!
 
     var body: some View {
@@ -41,6 +53,21 @@ struct AppAboutContent: View {
             }
             .buttonStyle(.borderedProminent)
 
+            HStack {
+                Button {
+                    self.onCheckForUpdates()
+                } label: {
+                    Label(self.isCheckingForUpdates ? "Checking..." : "Check for Updates", systemImage: "arrow.triangle.2.circlepath")
+                }
+                .disabled(self.isCheckingForUpdates)
+
+                Button {
+                    self.onRevealDiagnostics()
+                } label: {
+                    Label("Diagnostics", systemImage: "doc.text.magnifyingglass")
+                }
+            }
+
             Link("GitHub", destination: URL(string: "https://github.com/me-cedric/Driftline")!)
                 .font(.caption)
         }
@@ -55,9 +82,19 @@ enum AppMetadata {
     }
 
     static var versionDisplay: String {
-        let version = self.bundleString("CFBundleShortVersionString") ?? "0.4.0"
-        let build = self.bundleString("CFBundleVersion") ?? "4"
-        return "Version \(version) (\(build))"
+        "Version \(self.shortVersion) (\(self.buildNumber))"
+    }
+
+    static var shortVersion: String {
+        self.bundleString("CFBundleShortVersionString") ?? "0.4.0"
+    }
+
+    static var buildNumber: String {
+        self.bundleString("CFBundleVersion") ?? "4"
+    }
+
+    static var updateCurrentVersion: String {
+        self.bundleString("CFBundleShortVersionString") ?? "0.4.0"
     }
 
     private static func bundleString(_ key: String) -> String? {

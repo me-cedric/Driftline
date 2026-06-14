@@ -35,7 +35,7 @@ final class HostFingerprintTests: XCTestCase {
         XCTAssertEqual(session.state, .connected)
     }
 
-    func testSystemSFTPClientBlocksChangedHostFingerprint() async throws {
+    func testSystemSFTPClientBlocksChangedHostFingerprint() async {
         let trustStore = InMemoryHostTrustStore(records: [
             HostTrustRecord(host: "example.com", port: 22, algorithm: "ED25519", fingerprint: "SHA256:old"),
         ])
@@ -43,7 +43,9 @@ final class HostFingerprintTests: XCTestCase {
         let client = SystemSFTPClient(hostTrustStore: trustStore, hostFingerprintProvider: fingerprintProvider)
         let profile = ServerProfile(displayName: "Server", host: "example.com", protocolKind: .sftp, username: "deploy", authenticationMethod: .agent)
 
-        await XCTAssertThrowsErrorAsync(try await client.connect(to: profile)) { error in
+        await XCTAssertThrowsErrorAsync {
+            try await client.connect(to: profile)
+        } handler: { error in
             XCTAssertEqual(error as? RemoteClientError, .hostFingerprintChanged)
         }
     }
@@ -66,8 +68,8 @@ private struct RecordingHostProcessExecutor: SystemProcessExecuting {
 }
 
 private func XCTAssertThrowsErrorAsync(
-    _ expression: @autoclosure () async throws -> some Any,
-    _ handler: (Error) -> Void,
+    _ expression: () async throws -> some Any,
+    handler: (Error) -> Void,
     file: StaticString = #filePath,
     line: UInt = #line
 ) async {

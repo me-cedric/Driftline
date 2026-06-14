@@ -12,6 +12,7 @@ Driftline is a SwiftPM-first native macOS app. Treat this file as repo-local gui
 - Run app bundle: `./script/build_and_run.sh`
 - Verify app bundle launches: `./script/build_and_run.sh --verify`
 - UI smoke test: `./scripts/ui-smoke.sh`
+- Lint/format check: `./scripts/lint.sh`
 - Package DMG: `./scripts/package-dmg.sh`
 - Release readiness: `./scripts/release-check.sh`
 - Start SFTP integration server: `./scripts/integration-sftp-server.sh start`
@@ -40,6 +41,7 @@ Driftline is a SwiftPM-first native macOS app. Treat this file as repo-local gui
 ## Architecture Rules
 
 - Keep `DriftlineCore` UI-free and testable.
+- Always run `./scripts/lint.sh` during final verification for code changes; CI treats lint/format drift as a failure.
 - Keep SwiftUI app state in `Sources/DriftlineApp`.
 - Do not store secrets in JSON, logs, command arguments, docs, or fixtures.
 - Credentials belong behind `CredentialStore`.

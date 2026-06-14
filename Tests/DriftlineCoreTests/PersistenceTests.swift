@@ -39,7 +39,9 @@ final class PersistenceTests: XCTestCase {
             confirmBeforeDelete: true,
             confirmBeforeOverwrite: false,
             appIconVariant: .dark,
-            appThemeVariant: .dark
+            appThemeVariant: .dark,
+            checkForUpdatesOnStartup: false,
+            backgroundNotificationsEnabled: false
         )
 
         try await repository.save(preferences)
@@ -73,6 +75,8 @@ final class PersistenceTests: XCTestCase {
         XCTAssertEqual(decoded.remoteBackendKind, .systemSSH)
         XCTAssertEqual(decoded.appIconVariant, .light)
         XCTAssertEqual(decoded.appThemeVariant, .system)
+        XCTAssertTrue(decoded.checkForUpdatesOnStartup)
+        XCTAssertTrue(decoded.backgroundNotificationsEnabled)
         XCTAssertEqual(decoded.transferConcurrency, 2)
     }
 

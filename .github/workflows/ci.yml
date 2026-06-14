@@ -4,35 +4,47 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
-  test:
-    runs-on: macos-14
+  build-test:
+    name: Build, lint, test
+    runs-on: macos-15
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - name: Select Xcode (Swift 6.x)
+      - uses: actions/checkout@v5
+
+      - name: Select latest Xcode
         run: |
           latest=$(ls /Applications | grep -E 'Xcode_[0-9]+\.[0-9]+\.app' | sort -V | tail -1)
           if [ -n "$latest" ]; then
             sudo xcode-select -s "/Applications/$latest"
           fi
           swift --version
+
       - name: Cache SwiftPM dependencies
         uses: actions/cache@v4
         with:
           path: .build
-          key: ${{ runner.os }}-spm-${{ hashFiles('Package.resolved') }}
+          key: ${{ runner.os }}-spm-${{ hashFiles('Package.swift', 'Package.resolved') }}
           restore-keys: |
             ${{ runner.os }}-spm-
+
       - name: Build
         run: swift build
+
       - name: Lint
         run: ./scripts/lint.sh
+
       - name: Test
         run: swift test
+
       - name: UI Smoke Test
         run: ./scripts/ui-smoke.sh

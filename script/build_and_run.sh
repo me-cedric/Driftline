@@ -6,6 +6,8 @@ APP_NAME="Driftline"
 BUNDLE_ID="app.driftline.Driftline"
 MIN_SYSTEM_VERSION="14.0"
 BUILD_CONFIGURATION="${DRIFTLINE_BUILD_CONFIGURATION:-debug}"
+APP_VERSION="${DRIFTLINE_VERSION:-0.4.0}"
+APP_BUILD="${DRIFTLINE_BUILD_NUMBER:-4}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist"
@@ -53,9 +55,9 @@ cat >"$INFO_PLIST" <<PLIST
   <key>CFBundleDisplayName</key>
   <string>$APP_NAME</string>
   <key>CFBundleShortVersionString</key>
-  <string>0.3.0</string>
+  <string>$APP_VERSION</string>
   <key>CFBundleVersion</key>
-  <string>3</string>
+  <string>$APP_BUILD</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleIconFile</key>

@@ -54,6 +54,11 @@ struct ContentView: View {
                 }
                 .disabled(self.model.selectedRemoteFiles.isEmpty || self.model.session.state != .connected)
                 .accessibilityHint("Downloads the selected remote item to the current local folder.")
+                Button { self.model.prepareSyncPreview() } label: {
+                    Label("Compare", systemImage: "arrow.left.arrow.right")
+                }
+                .disabled(self.model.session.state != .connected)
+                .accessibilityHint("Compares the current local and remote folders.")
                 Button { self.model.beginCreateFolder(source: self.model.selectedFile?.source ?? .local) } label: {
                     Label("New Folder", systemImage: "folder.badge.plus")
                 }
@@ -125,9 +130,19 @@ struct ContentView: View {
             TransferConflictView(
                 conflict: conflict,
                 renameText: self.$model.conflictRenameText,
+                applyToRemaining: self.$model.conflictApplyToRemaining,
+                remainingCount: self.model.queuedTransferConflicts.count,
                 onSkip: { self.model.skipPendingConflict() },
                 onOverwrite: { self.model.overwritePendingConflict() },
                 onRename: { self.model.renameAndRunPendingConflict() }
+            )
+        }
+        .sheet(item: self.$model.syncPreview) { preview in
+            SyncPreviewView(
+                preview: preview,
+                onClose: { self.model.syncPreview = nil },
+                onUpload: { self.model.uploadSyncItems($0) },
+                onDownload: { self.model.downloadSyncItems($0) }
             )
         }
         .sheet(isPresented: self.$model.showAbout) {
@@ -272,7 +287,6 @@ struct ContentView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
-
 }
 
 struct SidebarView: View {

@@ -9,10 +9,12 @@ swift test
 swift build -c release
 DRIFTLINE_BUILD_CONFIGURATION=release ./scripts/ui-smoke.sh
 ./scripts/package-dmg.sh
+./scripts/verify-artifacts.sh
 
 echo "== Artifact =="
 test -f dist/Driftline.dmg
 test -f dist/Driftline.dmg.sha256
+test -f dist/Driftline.release.json
 cat dist/Driftline.dmg.sha256
 
 echo "== Signing status =="

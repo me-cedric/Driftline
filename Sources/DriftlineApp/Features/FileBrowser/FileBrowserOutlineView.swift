@@ -30,6 +30,7 @@ struct FileBrowserOutlineView: NSViewRepresentable {
         scrollView.borderType = .noBorder
 
         let outlineView = FileBrowserNativeOutlineView()
+        outlineView.setAccessibilityLabel("\(self.source.rawValue.capitalized) file browser")
         outlineView.headerView = NSTableHeaderView()
         outlineView.rowSizeStyle = .medium
         outlineView.rowHeight = 24
@@ -138,7 +139,7 @@ extension FileBrowserOutlineView {
             return !node.isPlaceholder && node.item.kind == .folder
         }
 
-        func outlineView(_ outlineView: NSOutlineView, viewFor tableColumn: NSTableColumn?, item: Any) -> NSView? {
+        func outlineView(_: NSOutlineView, viewFor tableColumn: NSTableColumn?, item: Any) -> NSView? {
             guard let node = item as? FileBrowserNode else { return nil }
             let columnID = tableColumn?.identifier.rawValue ?? "name"
             if columnID == "name" {
@@ -148,6 +149,7 @@ extension FileBrowserOutlineView {
             }
             let cell = NSTableCellView()
             let textField = NSTextField(labelWithString: self.value(for: columnID, node: node))
+            textField.setAccessibilityLabel("\(columnID.capitalized): \(textField.stringValue)")
             textField.lineBreakMode = .byTruncatingMiddle
             textField.textColor = .secondaryLabelColor
             textField.translatesAutoresizingMaskIntoConstraints = false
@@ -155,7 +157,7 @@ extension FileBrowserOutlineView {
             NSLayoutConstraint.activate([
                 textField.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 4),
                 textField.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -4),
-                textField.centerYAnchor.constraint(equalTo: cell.centerYAnchor)
+                textField.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
             ])
             return cell
         }
@@ -206,7 +208,7 @@ extension FileBrowserOutlineView {
             }
         }
 
-        func outlineView(_ outlineView: NSOutlineView, pasteboardWriterForItem item: Any) -> NSPasteboardWriting? {
+        func outlineView(_: NSOutlineView, pasteboardWriterForItem item: Any) -> NSPasteboardWriting? {
             guard let node = item as? FileBrowserNode, !node.isPlaceholder else { return nil }
             let pasteboardItem = NSPasteboardItem()
             if let data = try? JSONEncoder().encode(node.item) {
@@ -260,8 +262,29 @@ extension FileBrowserOutlineView {
             self.parent.onCopy(items)
         }
 
+        func transferSelectedItems() {
+            let items = self.selectedItems()
+            guard !items.isEmpty else { return }
+            self.parent.onTransfer(items)
+        }
+
         func pasteItems() {
             self.parent.onPaste()
+        }
+
+        func renameSelectedItem() {
+            guard self.selectedItems().count == 1 else { return }
+            self.parent.onRename()
+        }
+
+        func deleteSelectedItems() {
+            guard !self.selectedItems().isEmpty else { return }
+            self.parent.onDelete()
+        }
+
+        func showSelectedInfo() {
+            guard !self.selectedItems().isEmpty else { return }
+            self.parent.onShowInfo()
         }
 
         func contextMenu() -> NSMenu {
@@ -442,7 +465,9 @@ private final class FileBrowserNode: NSObject {
     var loaded = false
     var loading = false
     var isPlaceholder: Bool
-    var id: String { self.item.id }
+    var id: String {
+        self.item.id
+    }
 
     init(item: FileItem, isPlaceholder: Bool = false) {
         self.item = item
@@ -465,7 +490,11 @@ private final class FileBrowserNode: NSObject {
 private protocol FileBrowserOutlineActionHandler: AnyObject {
     func contextMenu() -> NSMenu
     func copySelectedItems()
+    func transferSelectedItems()
     func pasteItems()
+    func renameSelectedItem()
+    func deleteSelectedItems()
+    func showSelectedInfo()
 }
 
 private final class FileBrowserNativeOutlineView: NSOutlineView {
@@ -488,6 +517,26 @@ private final class FileBrowserNativeOutlineView: NSOutlineView {
         }
         if modifierFlags == .command, event.charactersIgnoringModifiers == "v" {
             self.actionHandler?.pasteItems()
+            return
+        }
+        if modifierFlags == [], event.charactersIgnoringModifiers == "\r" {
+            self.actionHandler?.renameSelectedItem()
+            return
+        }
+        if modifierFlags == [], event.charactersIgnoringModifiers == " " {
+            self.actionHandler?.showSelectedInfo()
+            return
+        }
+        if modifierFlags == [], event.charactersIgnoringModifiers == "\u{7F}" {
+            self.actionHandler?.deleteSelectedItems()
+            return
+        }
+        if modifierFlags == .command, event.charactersIgnoringModifiers == "\u{7F}" {
+            self.actionHandler?.deleteSelectedItems()
+            return
+        }
+        if modifierFlags == .command, event.charactersIgnoringModifiers == "\r" {
+            self.actionHandler?.transferSelectedItems()
             return
         }
         super.keyDown(with: event)
@@ -514,6 +563,19 @@ private final class FileBrowserNameCellView: NSTableCellView {
         self.imageView?.image = node.isPlaceholder ? nil : FileBrowserIconProvider.icon(for: node.item, source: source)
         self.textField?.stringValue = node.isPlaceholder ? "Loading..." : node.item.name
         self.textField?.textColor = node.isPlaceholder ? .secondaryLabelColor : .labelColor
+        self.setAccessibilityLabel(node.isPlaceholder ? "Loading" : node.item.name)
+        self.setAccessibilityValue(node.isPlaceholder ? nil : self.accessibilityValue(for: node.item))
+    }
+
+    private func accessibilityValue(for item: FileItem) -> String {
+        var parts = [item.kind.rawValue.capitalized]
+        if let size = item.size, item.kind != .folder {
+            parts.append(ByteCountFormatter.string(fromByteCount: size, countStyle: .file))
+        }
+        if let modifiedAt = item.modifiedAt {
+            parts.append("Modified \(modifiedAt.formatted(date: .abbreviated, time: .shortened))")
+        }
+        return parts.joined(separator: ", ")
     }
 
     private func setup() {
@@ -532,7 +594,7 @@ private final class FileBrowserNameCellView: NSTableCellView {
             self.iconView.heightAnchor.constraint(equalToConstant: 18),
             self.nameField.leadingAnchor.constraint(equalTo: self.iconView.trailingAnchor, constant: 8),
             self.nameField.trailingAnchor.constraint(equalTo: self.trailingAnchor, constant: -4),
-            self.nameField.centerYAnchor.constraint(equalTo: self.centerYAnchor)
+            self.nameField.centerYAnchor.constraint(equalTo: self.centerYAnchor),
         ])
     }
 }

@@ -8,6 +8,7 @@ extension NativeSFTPConnection {
         onProgress: @Sendable (Double, Int64?) async -> Void,
         cancellation: @Sendable () async -> Bool
     ) async throws {
+        try await self.checkTransferCancellation(cancellation)
         let localURL = URL(fileURLWithPath: localPath).resolvingSymlinksInPath()
         let entries = try localEntries(under: localURL)
         let totalBytes = entries.reduce(into: Int64(0)) { acc, entry in
@@ -16,20 +17,20 @@ extension NativeSFTPConnection {
             acc += (try? FileManager.default.attributesOfItem(atPath: entry.path)[.size] as? NSNumber)?.int64Value ?? 0
         }
 
-        try await expectStatusOK(SFTPRequestBuilder.mkdir(id: nextID(), path: remotePath))
+        try await self.createDirectoryIfNeeded(at: remotePath)
 
         var bytesCompleted: Int64 = 0
         let started = Date()
 
         for entry in entries {
-            if await cancellation() || Task.isCancelled { throw CancellationError() }
+            try await self.checkTransferCancellation(cancellation)
 
             let relative = self.relativePath(from: localURL, to: entry)
             let remoteEntry = remotePath + relative.replacingOccurrences(of: "\\", with: "/")
 
             let entryIsDir = (try? entry.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
             if entryIsDir {
-                try await expectStatusOK(SFTPRequestBuilder.mkdir(id: nextID(), path: remoteEntry))
+                try await self.createDirectoryIfNeeded(at: remoteEntry)
             } else {
                 let fileSize = (try? FileManager.default.attributesOfItem(atPath: entry.path)[.size] as? NSNumber)?.int64Value ?? 0
                 let capturedCompleted = bytesCompleted
@@ -62,6 +63,7 @@ extension NativeSFTPConnection {
         onProgress: @Sendable (Double, Int64?) async -> Void,
         cancellation: @Sendable () async -> Bool
     ) async throws {
+        try await self.checkTransferCancellation(cancellation)
         let tree = try await buildRemoteTree(at: remotePath)
         let totalBytes = tree.reduce(into: Int64(0)) { acc, entry in
             if entry.kind == .file { acc += entry.size ?? 0 }
@@ -76,7 +78,7 @@ extension NativeSFTPConnection {
         let started = Date()
 
         for entry in tree {
-            if await cancellation() || Task.isCancelled { throw CancellationError() }
+            try await self.checkTransferCancellation(cancellation)
 
             let relative = String(entry.path.dropFirst(remotePath.count))
             let localEntry = localPath + relative

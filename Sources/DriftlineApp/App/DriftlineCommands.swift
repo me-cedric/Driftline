@@ -31,6 +31,9 @@ struct DriftlineCommands: Commands {
                 .keyboardShortcut("u", modifiers: [.command, .option])
             Button("Download") { self.model.downloadSelectedItem() }
                 .keyboardShortcut("d", modifiers: [.command, .option])
+            Button("Compare Folders") { self.model.prepareSyncPreview() }
+                .keyboardShortcut("=", modifiers: [.command, .option])
+                .disabled(self.model.session.state != .connected)
             Button("Show Inspector") { self.model.preferences.showInspector.toggle() }
                 .keyboardShortcut("i")
             Button("View Options") { self.model.showViewOptions.toggle() }

@@ -107,7 +107,10 @@ private struct PathBreadcrumbBar: View {
 }
 
 private struct PathBreadcrumb: Identifiable {
-    var id: String { self.path }
+    var id: String {
+        self.path
+    }
+
     var title: String
     var path: String
     var systemImage: String

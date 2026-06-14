@@ -63,7 +63,10 @@ final class AppModel: @unchecked Sendable {
     var fileOperationText = ""
     var pendingDeleteItem: FileItem?
     var pendingTransferConflict: TransferConflict?
+    var queuedTransferConflicts: [TransferConflict] = []
     var conflictRenameText = ""
+    var conflictApplyToRemaining = false
+    var syncPreview: SyncPreview?
     var bookmarks: [ServerBookmark] = []
     var recents: [RecentServer] = []
     var connectAfterSavingDraft = false
@@ -303,6 +306,24 @@ final class AppModel: @unchecked Sendable {
         case .remote:
             self.statusMessage = "Remote-to-remote copy is not supported yet."
         }
+    }
+
+    func prepareSyncPreview() {
+        guard self.session.state == .connected else {
+            self.statusMessage = "Connect to a server before comparing folders."
+            return
+        }
+        self.syncPreview = SyncPreview(localPath: self.session.localPath, remotePath: self.session.remotePath, localItems: self.localItems, remoteItems: self.remoteItems)
+    }
+
+    func uploadSyncItems(_ items: [FileItem]) {
+        self.syncPreview = nil
+        self.uploadItems(items)
+    }
+
+    func downloadSyncItems(_ items: [FileItem]) {
+        self.syncPreview = nil
+        self.downloadItems(items)
     }
 
     private func copyLocalItems(_ items: [FileItem]) {
@@ -808,8 +829,7 @@ final class AppModel: @unchecked Sendable {
             backendKind: self.preferences.remoteBackendKind
         )
         if self.preferences.confirmBeforeOverwrite, self.remoteItems.contains(where: { $0.path == destination }) {
-            self.pendingTransferConflict = TransferConflict(job: job, profile: profile, existingPath: destination)
-            self.conflictRenameText = self.suggestedConflictName(for: item.name)
+            self.queueTransferConflict(TransferConflict(job: job, profile: profile, existingPath: destination))
             return
         }
         self.enqueueTransfer(job, profile: profile)
@@ -863,8 +883,7 @@ final class AppModel: @unchecked Sendable {
             backendKind: self.preferences.remoteBackendKind
         )
         if self.preferences.confirmBeforeOverwrite, FileManager.default.fileExists(atPath: destination) {
-            self.pendingTransferConflict = TransferConflict(job: job, profile: profile, existingPath: destination)
-            self.conflictRenameText = self.suggestedConflictName(for: item.name)
+            self.queueTransferConflict(TransferConflict(job: job, profile: profile, existingPath: destination))
             return
         }
         self.enqueueTransfer(job, profile: profile)
@@ -964,15 +983,25 @@ final class AppModel: @unchecked Sendable {
     }
 
     func skipPendingConflict() {
+        if self.conflictApplyToRemaining {
+            self.queuedTransferConflicts.removeAll()
+        }
         self.pendingTransferConflict = nil
-        self.conflictRenameText = ""
+        self.showNextTransferConflict()
     }
 
     func overwritePendingConflict() {
         guard let conflict = pendingTransferConflict else { return }
+        let remaining = self.conflictApplyToRemaining ? self.queuedTransferConflicts : []
         self.pendingTransferConflict = nil
-        self.conflictRenameText = ""
         self.enqueueTransfer(conflict.job, profile: conflict.profile)
+        for conflict in remaining {
+            self.enqueueTransfer(conflict.job, profile: conflict.profile)
+        }
+        if self.conflictApplyToRemaining {
+            self.queuedTransferConflicts.removeAll()
+        }
+        self.showNextTransferConflict()
     }
 
     func renameAndRunPendingConflict() {
@@ -980,22 +1009,79 @@ final class AppModel: @unchecked Sendable {
         let name = self.conflictRenameText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { return }
         var renamed = conflict.job
-        switch renamed.direction {
-        case .upload:
-            renamed.destinationPath = self.remotePathAppending(self.session.remotePath, name)
-        case .download:
-            renamed.destinationPath = URL(fileURLWithPath: self.session.localPath).appendingPathComponent(name).path
-        }
+        renamed.destinationPath = self.renamedDestinationPath(for: renamed, name: name)
         self.pendingTransferConflict = nil
-        self.conflictRenameText = ""
         self.enqueueTransfer(renamed, profile: conflict.profile)
+        self.showNextTransferConflict()
     }
 
-    private func suggestedConflictName(for original: String) -> String {
+    private func queueTransferConflict(_ conflict: TransferConflict) {
+        if self.pendingTransferConflict == nil {
+            self.pendingTransferConflict = conflict
+            self.conflictRenameText = self.suggestedConflictName(for: conflict)
+            self.conflictApplyToRemaining = false
+        } else {
+            self.queuedTransferConflicts.append(conflict)
+        }
+    }
+
+    private func showNextTransferConflict() {
+        self.conflictApplyToRemaining = false
+        if self.queuedTransferConflicts.isEmpty {
+            self.conflictRenameText = ""
+            return
+        }
+        let next = self.queuedTransferConflicts.removeFirst()
+        self.pendingTransferConflict = next
+        self.conflictRenameText = self.suggestedConflictName(for: next)
+    }
+
+    private func suggestedConflictName(for conflict: TransferConflict) -> String {
+        let original = URL(fileURLWithPath: conflict.job.destinationPath).lastPathComponent
+        let existingNames: Set<String>
+        switch conflict.job.direction {
+        case .upload:
+            existingNames = Set(self.remoteItems.map(\.name))
+        case .download:
+            let parent = URL(fileURLWithPath: conflict.job.destinationPath).deletingLastPathComponent()
+            existingNames = self.localNames(in: parent)
+        }
+        return self.suggestedConflictName(for: original, avoiding: existingNames)
+    }
+
+    private func suggestedConflictName(for original: String, avoiding existingNames: Set<String>) -> String {
         let url = URL(fileURLWithPath: original)
         let base = url.deletingPathExtension().lastPathComponent
         let ext = url.pathExtension
-        return ext.isEmpty ? "\(base) copy" : "\(base) copy.\(ext)"
+        let first = ext.isEmpty ? "\(base) copy" : "\(base) copy.\(ext)"
+        guard existingNames.contains(first) else { return first }
+        for index in 2 ... 999 {
+            let candidate = ext.isEmpty ? "\(base) copy \(index)" : "\(base) copy \(index).\(ext)"
+            if !existingNames.contains(candidate) {
+                return candidate
+            }
+        }
+        return ext.isEmpty ? "\(base) copy \(UUID().uuidString)" : "\(base) copy \(UUID().uuidString).\(ext)"
+    }
+
+    private func localNames(in directory: URL) -> Set<String> {
+        Set((try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? [])
+    }
+
+    private func renamedDestinationPath(for job: TransferJob, name: String) -> String {
+        switch job.direction {
+        case .upload:
+            return self.remotePathAppending(self.remoteParentPath(of: job.destinationPath), name)
+        case .download:
+            return URL(fileURLWithPath: job.destinationPath).deletingLastPathComponent().appendingPathComponent(name).path
+        }
+    }
+
+    private func remoteParentPath(of path: String) -> String {
+        let trimmed = path.hasSuffix("/") && path.count > 1 ? String(path.dropLast()) : path
+        guard let slash = trimmed.lastIndex(of: "/") else { return "/" }
+        if slash == trimmed.startIndex { return "/" }
+        return String(trimmed[..<slash])
     }
 
     private func remotePathAppending(_ base: String, _ name: String) -> String {

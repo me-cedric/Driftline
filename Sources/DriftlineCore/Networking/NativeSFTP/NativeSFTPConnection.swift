@@ -170,6 +170,7 @@ public actor NativeSFTPConnection {
         onProgress: @Sendable (Double, Int64?) async -> Void,
         cancellation: @Sendable () async -> Bool
     ) async throws {
+        try await self.checkTransferCancellation(cancellation)
         let localURL = URL(fileURLWithPath: localPath)
         let fileHandle = try FileHandle(forReadingFrom: localURL)
         defer { try? fileHandle.close() }
@@ -185,9 +186,7 @@ public actor NativeSFTPConnection {
         let started = Date()
         do {
             while true {
-                if await cancellation() || Task.isCancelled {
-                    throw CancellationError()
-                }
+                try await self.checkTransferCancellation(cancellation)
                 let data = try fileHandle.read(upToCount: Int(Self.transferChunkSize)) ?? Data()
                 if data.isEmpty { break }
                 try await self.expectStatusOK(SFTPRequestBuilder.write(id: self.nextID(), handle: handle, offset: offset, data: data))
@@ -209,23 +208,27 @@ public actor NativeSFTPConnection {
         onProgress: @Sendable (Double, Int64?) async -> Void,
         cancellation: @Sendable () async -> Bool
     ) async throws {
+        try await self.checkTransferCancellation(cancellation)
         let attrs = try await stat(path: remotePath)
         let total = attrs.size.map(Int64.init) ?? 0
         let handle = try await expectHandle(SFTPRequestBuilder.open(id: self.nextID(), path: remotePath, pflags: SFTPOpenPFlags.read))
 
         let localURL = URL(fileURLWithPath: localPath)
-        try FileManager.default.createDirectory(at: localURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        FileManager.default.createFile(atPath: localPath, contents: nil)
-        let fileHandle = try FileHandle(forWritingTo: localURL)
-        defer { try? fileHandle.close() }
+        let destination = AtomicDownloadDestination(finalURL: localURL)
+        let fileHandle = try destination.prepare()
+        var committed = false
+        defer {
+            try? fileHandle.close()
+            if !committed {
+                destination.cleanup()
+            }
+        }
 
         var offset: UInt64 = 0
         let started = Date()
         do {
             while true {
-                if await cancellation() || Task.isCancelled {
-                    throw CancellationError()
-                }
+                try await self.checkTransferCancellation(cancellation)
                 let packet = try await send(SFTPRequestBuilder.read(id: self.nextID(), handle: handle, offset: offset, length: Self.transferChunkSize))
                 switch packet.type {
                 case .data:
@@ -239,6 +242,9 @@ public actor NativeSFTPConnection {
                     let status = try SFTPStatus.parse(payload: packet.payload)
                     if status.code == .eof {
                         try await self.expectStatusOK(SFTPRequestBuilder.close(id: self.nextID(), handle: handle))
+                        try fileHandle.close()
+                        try destination.commit()
+                        committed = true
                         await onProgress(1, self.speed(done: Int64(offset), started: started))
                         return
                     }
@@ -290,6 +296,24 @@ public actor NativeSFTPConnection {
         let status = try SFTPStatus.parse(payload: response.payload)
         if let error = status.remoteError() {
             throw error
+        }
+    }
+
+    func createDirectoryIfNeeded(at path: String) async throws {
+        do {
+            try await self.expectStatusOK(SFTPRequestBuilder.mkdir(id: self.nextID(), path: path))
+        } catch {
+            let attrs = try? await self.stat(path: path)
+            if attrs?.fileKind == .folder {
+                return
+            }
+            throw error
+        }
+    }
+
+    func checkTransferCancellation(_ cancellation: @Sendable () async -> Bool) async throws {
+        if await cancellation() || Task.isCancelled {
+            throw CancellationError()
         }
     }
 

@@ -15,14 +15,24 @@ Use this checklist before tagging a release. Record results in `docs/implementat
 
 ## SFTP With Real Server
 
+- Run the automated real-server matrix in `docs/testing/real-server-qa-matrix.md` for at least one key-backed host and one password-backed host.
 - Connect with SSH agent auth.
 - Connect with private-key auth.
 - Confirm unknown host fingerprint prompt appears before first connection.
 - Trust the host and confirm a Driftline-owned `known_hosts` entry is written.
 - Browse remote folders.
+- Select files and folders with click, Command-click, and Shift-click.
+- Double-click folders to navigate.
+- Double-click files to transfer.
+- Expand and collapse folders with the disclosure arrow.
+- Sort local and remote columns.
+- Drag one or more selected items between panes.
+- Use the context menu to transfer, rename, delete, copy, paste, and get info.
+- Use Command-C and Command-V for same-pane copy and cross-pane transfer.
 - Create, rename, and delete a remote folder.
 - Upload a local file.
 - Download a remote file.
+- Upload and download a recursive folder.
 - Trigger a file conflict and test skip, overwrite, and rename.
 - Disconnect and reconnect.
 - Open SSH in Terminal and confirm no password appears in the command.
@@ -35,6 +45,8 @@ Use this checklist before tagging a release. Record results in `docs/implementat
 - Retry a failed transfer.
 - Clear completed transfers.
 - Clear failed transfers.
+- Sort transfer columns.
+- Confirm the progress bar and percentage render on the same row.
 - Confirm transfer history persists after restart without showing fake seed data.
 
 ## CLI

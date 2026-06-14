@@ -92,8 +92,11 @@ Driftline solves a common problem for developers and sysadmins: file transfers o
 
 | Feature | Description |
 |---------|-------------|
-| **Local browsing** | File listing with sorting, hidden file filtering, Finder-style metadata |
-| **Remote browsing** | SFTP directory listing through System SSH or native Swift SFTP |
+| **Local browsing** | Finder-style local file browsing with macOS file icons/previews, sorting, hidden file filtering, and metadata |
+| **Remote browsing** | SFTP directory listing through System SSH or native Swift SFTP, with macOS default icons for known remote file types |
+| **Native outline view** | Multi-select, column sorting, disclosure expansion, double-click navigation/transfer, and drag-and-drop transfers |
+| **Context actions** | Right-click upload/download, copy, paste, copy path, reveal in Finder, get info, rename, and delete |
+| **Keyboard workflow** | `Cmd-C` / `Cmd-V` copy and paste files; same-side local paste duplicates, cross-pane paste transfers |
 | **Folder operations** | Create, rename, delete — local and remote |
 | **Per-tab state** | Independent local/remote paths and listings per tab |
 | **View options** | Sort order, hidden files toggle, panel visibility popover |
@@ -107,7 +110,7 @@ Driftline solves a common problem for developers and sysadmins: file transfers o
 | **SCP fallback** | Simpler fallback transfer backend |
 | **Recursive transfers** | Full folder upload/download with progress |
 | **Conflict handling** | Skip, overwrite, or rename before transfer |
-| **Transfer history** | Persistent job records with retry, cancellation, and stats |
+| **Transfer queue** | Sortable transfer panel with inline progress, retry, cancellation, stats, and persistent history |
 
 ### Native Swift SFTP
 
@@ -128,10 +131,11 @@ An in-process SSH/SFTP implementation built on SwiftNIO SSH:
 
 | Feature | Description |
 |---------|-------------|
-| **SwiftUI shell** | Sidebar, toolbar, tabs, dual-pane browser, inspector, transfer panel |
+| **SwiftUI + AppKit shell** | Sidebar, toolbar, tabs, native outline-based dual-pane browser, inspector, transfer panel |
 | **Terminal integration** | Open SSH sessions in Terminal.app without exposing passwords |
 | **CLI launch** | `driftline .`, `--open`, `--bookmark`, `--new-tab` — zero-password CLI |
 | **Bookmarks & favorites** | Quick access sidebar with recent servers |
+| **Settings** | Remote backend, theme, app icon, default sort, and About/Ko-fi support panes |
 | **Empty-first state** | No fake example servers or seeded transfer queues |
 
 ---
@@ -222,6 +226,8 @@ Driftline/
 
 ### Build & Run
 
+Download the latest DMG from [GitHub Releases](https://github.com/me-cedric/Driftline/releases/latest), or build locally:
+
 ```bash
 git clone https://github.com/me-cedric/Driftline.git
 cd Driftline
@@ -232,6 +238,8 @@ swift test
 ./script/build_and_run.sh
 ./scripts/package-dmg.sh
 ```
+
+Local release artifacts are written to `dist/Driftline.dmg` and `dist/Driftline.dmg.sha256`. Unless signing/notarization credentials are configured, local DMGs are unsigned and unnotarized.
 
 ---
 
@@ -292,6 +300,8 @@ DRIFTLINE_INTEGRATION_SFTP=1 DRIFTLINE_NATIVE_INTEGRATION_SFTP=1 \
 ```
 
 Test coverage includes System SSH transfers, native password auth, native private-key auth, native upload/download, recursive folder transfers, cancellation, and large-file round-trips.
+
+For real-host QA, use the matrix in [`docs/testing/real-server-qa-matrix.md`](docs/testing/real-server-qa-matrix.md) or run `./scripts/real-server-qa.sh` with `DRIFTLINE_TEST_HOST`, `DRIFTLINE_TEST_USER`, and a writable `DRIFTLINE_TEST_REMOTE_PATH`.
 
 ### Code Quality
 

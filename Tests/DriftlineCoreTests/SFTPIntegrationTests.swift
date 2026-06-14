@@ -13,6 +13,7 @@ final class SFTPIntegrationTests: XCTestCase {
         let port = Int(env["DRIFTLINE_TEST_PORT"] ?? "22222") ?? 22222
         let user = env["DRIFTLINE_TEST_USER"] ?? "driftline"
         let key = env["DRIFTLINE_TEST_KEY"] ?? ""
+        let remoteRoot = self.integrationRemoteRoot(env)
         let profile = ServerProfile(
             displayName: "Integration",
             host: host,
@@ -20,7 +21,7 @@ final class SFTPIntegrationTests: XCTestCase {
             protocolKind: .sftp,
             username: user,
             authenticationMethod: .privateKey(path: key, passphrase: nil),
-            remoteDefaultPath: "/config"
+            remoteDefaultPath: remoteRoot
         )
         let trustStore = InMemoryHostTrustStore()
         let fingerprintProvider = SystemHostFingerprintProvider()
@@ -37,16 +38,16 @@ final class SFTPIntegrationTests: XCTestCase {
         let session = try await firstClient.connect(to: profile)
         let folderName = "driftline-\(UUID().uuidString)"
         try await firstClient.createFolder(named: folderName, in: profile.remoteDefaultPath, profile: profile, session: session)
-        let createdExists = try await firstClient.itemExists(at: "/config/\(folderName)", profile: profile, session: session)
+        let createdExists = try await firstClient.itemExists(at: self.remotePath(root: remoteRoot, folderName), profile: profile, session: session)
         XCTAssertTrue(createdExists)
 
         let renamed = "\(folderName)-renamed"
-        try await firstClient.renameItem(at: "/config/\(folderName)", to: renamed, profile: profile, session: session)
-        let renamedExists = try await firstClient.itemExists(at: "/config/\(renamed)", profile: profile, session: session)
+        try await firstClient.renameItem(at: self.remotePath(root: remoteRoot, folderName), to: renamed, profile: profile, session: session)
+        let renamedExists = try await firstClient.itemExists(at: self.remotePath(root: remoteRoot, renamed), profile: profile, session: session)
         XCTAssertTrue(renamedExists)
 
-        try await firstClient.deleteItem(at: "/config/\(renamed)", profile: profile, session: session)
-        let existsAfterDelete = try await firstClient.itemExists(at: "/config/\(renamed)", profile: profile, session: session)
+        try await firstClient.deleteItem(at: self.remotePath(root: remoteRoot, renamed), profile: profile, session: session)
+        let existsAfterDelete = try await firstClient.itemExists(at: self.remotePath(root: remoteRoot, renamed), profile: profile, session: session)
         XCTAssertFalse(existsAfterDelete)
     }
 
@@ -62,6 +63,7 @@ final class SFTPIntegrationTests: XCTestCase {
         let host = env["DRIFTLINE_TEST_HOST"] ?? "127.0.0.1"
         let port = Int(env["DRIFTLINE_TEST_PORT"] ?? "22222") ?? 22222
         let user = env["DRIFTLINE_TEST_USER"] ?? "driftline"
+        let remoteRoot = self.integrationRemoteRoot(env)
         let reference = CredentialReference(service: "app.driftline.integration", account: "\(user)@\(host)")
         let credentials = InMemoryCredentialStore()
         try await credentials.saveString(password, reference: reference)
@@ -73,7 +75,7 @@ final class SFTPIntegrationTests: XCTestCase {
             protocolKind: .sftp,
             username: user,
             authenticationMethod: .password(reference),
-            remoteDefaultPath: "/config"
+            remoteDefaultPath: remoteRoot
         )
         let trustStore = InMemoryHostTrustStore()
         let client = NativeSFTPClient(credentialStore: credentials, hostTrustStore: trustStore)
@@ -89,19 +91,19 @@ final class SFTPIntegrationTests: XCTestCase {
 
         let folderName = "driftline-native-\(UUID().uuidString)"
         try await client.createFolder(named: folderName, in: profile.remoteDefaultPath, profile: profile, session: session)
-        let createdExists = try await client.itemExists(at: "/config/\(folderName)", profile: profile, session: session)
+        let createdExists = try await client.itemExists(at: self.remotePath(root: remoteRoot, folderName), profile: profile, session: session)
         XCTAssertTrue(createdExists)
 
         let renamed = "\(folderName)-renamed"
-        try await client.renameItem(at: "/config/\(folderName)", to: renamed, profile: profile, session: session)
-        let renamedExists = try await client.itemExists(at: "/config/\(renamed)", profile: profile, session: session)
+        try await client.renameItem(at: self.remotePath(root: remoteRoot, folderName), to: renamed, profile: profile, session: session)
+        let renamedExists = try await client.itemExists(at: self.remotePath(root: remoteRoot, renamed), profile: profile, session: session)
         XCTAssertTrue(renamedExists)
 
-        let listed = try await client.listDirectory(at: "/config", profile: profile, session: session, preferences: FileListPreferences(showHiddenFiles: true))
+        let listed = try await client.listDirectory(at: remoteRoot, profile: profile, session: session, preferences: FileListPreferences(showHiddenFiles: true))
         XCTAssertTrue(listed.contains { $0.name == renamed && $0.kind == .folder })
 
-        try await client.deleteItem(at: "/config/\(renamed)", profile: profile, session: session)
-        let existsAfterDelete = try await client.itemExists(at: "/config/\(renamed)", profile: profile, session: session)
+        try await client.deleteItem(at: self.remotePath(root: remoteRoot, renamed), profile: profile, session: session)
+        let existsAfterDelete = try await client.itemExists(at: self.remotePath(root: remoteRoot, renamed), profile: profile, session: session)
         XCTAssertFalse(existsAfterDelete)
         try await client.disconnect(session: session)
     }
@@ -116,6 +118,7 @@ final class SFTPIntegrationTests: XCTestCase {
         let port = Int(env["DRIFTLINE_TEST_PORT"] ?? "22222") ?? 22222
         let user = env["DRIFTLINE_TEST_USER"] ?? "driftline"
         let key = env["DRIFTLINE_TEST_KEY"] ?? ""
+        let remoteRoot = self.integrationRemoteRoot(env)
         guard !key.isEmpty else {
             throw XCTSkip("Set DRIFTLINE_TEST_KEY to the Docker harness private key.")
         }
@@ -127,13 +130,13 @@ final class SFTPIntegrationTests: XCTestCase {
             protocolKind: .sftp,
             username: user,
             authenticationMethod: .privateKey(path: key, passphrase: nil),
-            remoteDefaultPath: "/config"
+            remoteDefaultPath: remoteRoot
         )
         let trustStore = try await trustedStore(host: host, port: port)
         let client = NativeSFTPClient(credentialStore: InMemoryCredentialStore(), hostTrustStore: trustStore)
         let session = try await client.connect(to: profile)
 
-        _ = try await client.listDirectory(at: "/config", profile: profile, session: session, preferences: FileListPreferences(showHiddenFiles: true))
+        _ = try await client.listDirectory(at: remoteRoot, profile: profile, session: session, preferences: FileListPreferences(showHiddenFiles: true))
         try await client.disconnect(session: session)
     }
 
@@ -149,6 +152,7 @@ final class SFTPIntegrationTests: XCTestCase {
         let host = env["DRIFTLINE_TEST_HOST"] ?? "127.0.0.1"
         let port = Int(env["DRIFTLINE_TEST_PORT"] ?? "22222") ?? 22222
         let user = env["DRIFTLINE_TEST_USER"] ?? "driftline"
+        let remoteRoot = self.integrationRemoteRoot(env)
         let reference = CredentialReference(service: "app.driftline.integration", account: "transfer-\(user)@\(host)")
         let credentials = InMemoryCredentialStore()
         try await credentials.saveString(password, reference: reference)
@@ -160,7 +164,7 @@ final class SFTPIntegrationTests: XCTestCase {
             protocolKind: .sftp,
             username: user,
             authenticationMethod: .password(reference),
-            remoteDefaultPath: "/config"
+            remoteDefaultPath: remoteRoot
         )
 
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent("driftline-native-transfer-\(UUID().uuidString)", isDirectory: true)
@@ -171,9 +175,9 @@ final class SFTPIntegrationTests: XCTestCase {
         let body = "native transfer \(UUID().uuidString)\n"
         try body.write(to: uploadURL, atomically: true, encoding: .utf8)
 
-        let remotePath = "/config/driftline-transfer-\(UUID().uuidString).txt"
+        let remoteFilePath = self.remotePath(root: remoteRoot, "driftline-transfer-\(UUID().uuidString).txt")
         let transferClient = NativeSFTPTransferClient(credentialStore: credentials, hostTrustStore: trustStore)
-        let upload = TransferJob(direction: .upload, sourcePath: uploadURL.path, destinationPath: remotePath, byteCount: Int64(body.utf8.count), serverName: profile.displayName, protocolKind: .sftp)
+        let upload = TransferJob(direction: .upload, sourcePath: uploadURL.path, destinationPath: remoteFilePath, byteCount: Int64(body.utf8.count), serverName: profile.displayName, protocolKind: .sftp)
         let progressRecorder = TransferProgressRecorder()
         try await transferClient.enqueue(upload, profile: profile) { updated in
             if case let .running(progress, _) = updated.status {
@@ -183,13 +187,13 @@ final class SFTPIntegrationTests: XCTestCase {
         let uploadProgress = await progressRecorder.values()
         XCTAssertTrue(uploadProgress.contains { $0 > 0 })
 
-        let download = TransferJob(direction: .download, sourcePath: remotePath, destinationPath: downloadURL.path, byteCount: Int64(body.utf8.count), serverName: profile.displayName, protocolKind: .sftp)
+        let download = TransferJob(direction: .download, sourcePath: remoteFilePath, destinationPath: downloadURL.path, byteCount: Int64(body.utf8.count), serverName: profile.displayName, protocolKind: .sftp)
         try await transferClient.enqueue(download, profile: profile)
         XCTAssertEqual(try String(contentsOf: downloadURL, encoding: .utf8), body)
 
         let cleanupClient = NativeSFTPClient(credentialStore: credentials, hostTrustStore: trustStore)
         let session = try await cleanupClient.connect(to: profile)
-        try await cleanupClient.deleteItem(at: remotePath, profile: profile, session: session)
+        try await cleanupClient.deleteItem(at: remoteFilePath, profile: profile, session: session)
         try await cleanupClient.disconnect(session: session)
     }
 
@@ -205,6 +209,7 @@ final class SFTPIntegrationTests: XCTestCase {
         let host = env["DRIFTLINE_TEST_HOST"] ?? "127.0.0.1"
         let port = Int(env["DRIFTLINE_TEST_PORT"] ?? "22222") ?? 22222
         let user = env["DRIFTLINE_TEST_USER"] ?? "driftline"
+        let remoteRoot = self.integrationRemoteRoot(env)
         let reference = CredentialReference(service: "app.driftline.integration", account: "cancel-\(user)@\(host)")
         let credentials = InMemoryCredentialStore()
         try await credentials.saveString(password, reference: reference)
@@ -216,7 +221,7 @@ final class SFTPIntegrationTests: XCTestCase {
             protocolKind: .sftp,
             username: user,
             authenticationMethod: .password(reference),
-            remoteDefaultPath: "/config"
+            remoteDefaultPath: remoteRoot
         )
 
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent("driftline-native-cancel-\(UUID().uuidString)", isDirectory: true)
@@ -230,7 +235,7 @@ final class SFTPIntegrationTests: XCTestCase {
         do {
             try await connection.uploadFile(
                 localPath: uploadURL.path,
-                remotePath: "/config/driftline-cancel-\(UUID().uuidString).txt",
+                remotePath: self.remotePath(root: remoteRoot, "driftline-cancel-\(UUID().uuidString).txt"),
                 jobID: TransferJobID(),
                 onProgress: { _, _ in },
                 cancellation: { true }
@@ -252,6 +257,7 @@ final class SFTPIntegrationTests: XCTestCase {
         let port = Int(env["DRIFTLINE_TEST_PORT"] ?? "22222") ?? 22222
         let user = env["DRIFTLINE_TEST_USER"] ?? "driftline"
         let key = env["DRIFTLINE_TEST_KEY"] ?? ""
+        let remoteRoot = self.integrationRemoteRoot(env)
 
         let trustStore = try await trustedStore(host: host, port: port)
         let profile = ServerProfile(
@@ -261,7 +267,7 @@ final class SFTPIntegrationTests: XCTestCase {
             protocolKind: .sftp,
             username: user,
             authenticationMethod: .privateKey(path: key, passphrase: nil),
-            remoteDefaultPath: "/config"
+            remoteDefaultPath: remoteRoot
         )
 
         let temp = FileManager.default.temporaryDirectory
@@ -275,14 +281,14 @@ final class SFTPIntegrationTests: XCTestCase {
         let randomData = Data((0 ..< fileSize).map { _ in UInt8.random(in: 0 ... 255) })
         try randomData.write(to: uploadURL)
 
-        let remotePath = "/config/driftline-large-\(UUID().uuidString).bin"
+        let remoteFilePath = self.remotePath(root: remoteRoot, "driftline-large-\(UUID().uuidString).bin")
         let credentials = InMemoryCredentialStore()
         let transferClient = NativeSFTPTransferClient(credentialStore: credentials, hostTrustStore: trustStore)
 
         let upload = TransferJob(
             direction: .upload,
             sourcePath: uploadURL.path,
-            destinationPath: remotePath,
+            destinationPath: remoteFilePath,
             byteCount: Int64(fileSize),
             serverName: profile.displayName,
             protocolKind: .sftp
@@ -291,7 +297,7 @@ final class SFTPIntegrationTests: XCTestCase {
 
         let download = TransferJob(
             direction: .download,
-            sourcePath: remotePath,
+            sourcePath: remoteFilePath,
             destinationPath: downloadURL.path,
             byteCount: Int64(fileSize),
             serverName: profile.displayName,
@@ -306,7 +312,7 @@ final class SFTPIntegrationTests: XCTestCase {
 
         let cleanupClient = NativeSFTPClient(credentialStore: credentials, hostTrustStore: trustStore)
         let session = try await cleanupClient.connect(to: profile)
-        try await cleanupClient.deleteItem(at: remotePath, profile: profile, session: session)
+        try await cleanupClient.deleteItem(at: remoteFilePath, profile: profile, session: session)
         try await cleanupClient.disconnect(session: session)
     }
 
@@ -322,6 +328,7 @@ final class SFTPIntegrationTests: XCTestCase {
         let host = env["DRIFTLINE_TEST_HOST"] ?? "127.0.0.1"
         let port = Int(env["DRIFTLINE_TEST_PORT"] ?? "22222") ?? 22222
         let user = env["DRIFTLINE_TEST_USER"] ?? "driftline"
+        let remoteRoot = self.integrationRemoteRoot(env)
         let reference = CredentialReference(service: "app.driftline.largefile", account: "\(user)@\(host)")
         let credentials = InMemoryCredentialStore()
         try await credentials.saveString(password, reference: reference)
@@ -333,7 +340,7 @@ final class SFTPIntegrationTests: XCTestCase {
             protocolKind: .sftp,
             username: user,
             authenticationMethod: .password(reference),
-            remoteDefaultPath: "/config"
+            remoteDefaultPath: remoteRoot
         )
 
         let temp = FileManager.default.temporaryDirectory
@@ -347,13 +354,13 @@ final class SFTPIntegrationTests: XCTestCase {
         let randomData = Data((0 ..< fileSize).map { _ in UInt8.random(in: 0 ... 255) })
         try randomData.write(to: uploadURL)
 
-        let remotePath = "/config/driftline-native-large-\(UUID().uuidString).bin"
+        let remoteFilePath = self.remotePath(root: remoteRoot, "driftline-native-large-\(UUID().uuidString).bin")
         let transferClient = NativeSFTPTransferClient(credentialStore: credentials, hostTrustStore: trustStore)
 
         let upload = TransferJob(
             direction: .upload,
             sourcePath: uploadURL.path,
-            destinationPath: remotePath,
+            destinationPath: remoteFilePath,
             byteCount: Int64(fileSize),
             serverName: profile.displayName,
             protocolKind: .sftp
@@ -362,7 +369,7 @@ final class SFTPIntegrationTests: XCTestCase {
 
         let download = TransferJob(
             direction: .download,
-            sourcePath: remotePath,
+            sourcePath: remoteFilePath,
             destinationPath: downloadURL.path,
             byteCount: Int64(fileSize),
             serverName: profile.displayName,
@@ -377,7 +384,7 @@ final class SFTPIntegrationTests: XCTestCase {
 
         let cleanupClient = NativeSFTPClient(credentialStore: credentials, hostTrustStore: trustStore)
         let session = try await cleanupClient.connect(to: profile)
-        try await cleanupClient.deleteItem(at: remotePath, profile: profile, session: session)
+        try await cleanupClient.deleteItem(at: remoteFilePath, profile: profile, session: session)
         try await cleanupClient.disconnect(session: session)
     }
 
@@ -393,6 +400,7 @@ final class SFTPIntegrationTests: XCTestCase {
         let host = env["DRIFTLINE_TEST_HOST"] ?? "127.0.0.1"
         let port = Int(env["DRIFTLINE_TEST_PORT"] ?? "22222") ?? 22222
         let user = env["DRIFTLINE_TEST_USER"] ?? "driftline"
+        let remoteRoot = self.integrationRemoteRoot(env)
         let reference = CredentialReference(service: "app.driftline.folder", account: "\(user)@\(host)")
         let credentials = InMemoryCredentialStore()
         try await credentials.saveString(password, reference: reference)
@@ -404,7 +412,7 @@ final class SFTPIntegrationTests: XCTestCase {
             protocolKind: .sftp,
             username: user,
             authenticationMethod: .password(reference),
-            remoteDefaultPath: "/config"
+            remoteDefaultPath: remoteRoot
         )
 
         let rootName = "driftline-folder-\(UUID().uuidString)"
@@ -432,7 +440,7 @@ final class SFTPIntegrationTests: XCTestCase {
             expectedSizes[relativePath] = size
         }
 
-        let remoteFolderPath = "/config/\(rootName)"
+        let remoteFolderPath = self.remotePath(root: remoteRoot, rootName)
         let transferClient = NativeSFTPTransferClient(credentialStore: credentials, hostTrustStore: trustStore)
 
         let upload = TransferJob(
@@ -475,6 +483,20 @@ final class SFTPIntegrationTests: XCTestCase {
     private func sha256(of data: Data) -> String {
         let digest = SHA256.hash(data: data)
         return digest.map { String(format: "%02x", $0) }.joined()
+    }
+
+    private func integrationRemoteRoot(_ env: [String: String]) -> String {
+        guard var root = env["DRIFTLINE_TEST_REMOTE_PATH"], !root.isEmpty else {
+            return "/config"
+        }
+        while root.count > 1 && root.hasSuffix("/") {
+            root.removeLast()
+        }
+        return root.hasPrefix("/") ? root : "/\(root)"
+    }
+
+    private func remotePath(root: String, _ child: String) -> String {
+        root == "/" ? "/\(child)" : "\(root)/\(child)"
     }
 
     private func trustedStore(host: String, port: Int) async throws -> InMemoryHostTrustStore {

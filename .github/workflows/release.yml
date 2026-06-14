@@ -43,7 +43,7 @@ jobs:
           echo "DRIFTLINE_TAG=$tag_name" >> "$GITHUB_ENV"
 
       - name: Cache SwiftPM dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .build
           key: ${{ runner.os }}-spm-${{ hashFiles('Package.swift', 'Package.resolved') }}

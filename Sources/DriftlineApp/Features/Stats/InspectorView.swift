@@ -6,29 +6,32 @@ struct InspectorView: View {
     var session: ConnectionSession
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                InspectorSection(title: "Selection") {
-                    if let file {
-                        LabeledContent("Name", value: file.name)
-                        LabeledContent("Path", value: file.path)
-                        LabeledContent("Type", value: file.kind.rawValue.capitalized)
-                        LabeledContent("Size", value: file.size.map(ByteCountFormatter.string) ?? "--")
-                        LabeledContent("Source", value: file.source.rawValue.capitalized)
-                    } else {
-                        Text("Select a local or remote item.")
-                            .foregroundStyle(.secondary)
+        GeometryReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    InspectorSection(title: "Selection") {
+                        if let file {
+                            LabeledContent("Name", value: file.name)
+                            LabeledContent("Path", value: file.path)
+                            LabeledContent("Type", value: file.kind.rawValue.capitalized)
+                            LabeledContent("Size", value: file.size.map(ByteCountFormatter.string) ?? "--")
+                            LabeledContent("Source", value: file.source.rawValue.capitalized)
+                        } else {
+                            Text("Select a local or remote item.")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    InspectorSection(title: "Connection") {
+                        LabeledContent("State", value: String(describing: self.session.state))
+                        LabeledContent("Protocol", value: self.session.protocolKind?.rawValue.uppercased() ?? "--")
+                        LabeledContent("Local Path", value: self.session.localPath)
+                        LabeledContent("Remote Path", value: self.session.remotePath)
                     }
                 }
-
-                InspectorSection(title: "Connection") {
-                    LabeledContent("State", value: String(describing: self.session.state))
-                    LabeledContent("Protocol", value: self.session.protocolKind?.rawValue.uppercased() ?? "--")
-                    LabeledContent("Local Path", value: self.session.localPath)
-                    LabeledContent("Remote Path", value: self.session.remotePath)
-                }
+                .frame(width: max(0, proxy.size.width - 32), alignment: .topLeading)
+                .padding(16)
             }
-            .padding(16)
         }
     }
 }

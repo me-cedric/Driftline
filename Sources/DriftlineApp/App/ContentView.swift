@@ -3,142 +3,193 @@ import SwiftUI
 
 struct ContentView: View {
     @Bindable var model: AppModel
+    @State private var inspectorWidth: CGFloat = 280
+    @State private var inspectorResizeStartWidth: CGFloat?
+    private let inspectorChromeTopExtension: CGFloat = 64
 
     var body: some View {
-        NavigationSplitView {
-            SidebarView(model: self.model)
-                .navigationSplitViewColumnWidth(min: 300, ideal: 320, max: 360)
-        } detail: {
-            HSplitView {
-                VStack(spacing: 0) {
-                    ConnectionToolbar(model: self.model)
-                    TabStrip(model: self.model)
-                    if let message = model.statusMessage {
-                        StatusBanner(message: message) {
-                            self.model.statusMessage = nil
-                        }
-                    }
-                    self.fileBrowserSplit
-                    if self.model.preferences.showTransferQueue {
-                        StatsDashboardView(stats: self.model.transferStats, lastConnection: self.model.lastConnectionDisplay)
-                        TransferPanel(
-                            jobs: self.model.transferJobs,
-                            onClearCompleted: { self.model.clearCompletedTransfers() },
-                            onClearFailed: { self.model.clearFailedTransfers() },
-                            onRetryFailed: { self.model.retryFailedTransfers() },
-                            onCancelActive: { self.model.cancelActiveTransfers() },
-                            onCancelTransfer: { self.model.cancelTransfer(id: $0) }
-                        )
-                        .frame(height: 170)
-                    }
-                }
-                .frame(minWidth: 640)
-                if self.model.preferences.showInspector {
-                    InspectorView(file: self.model.selectedFile, session: self.model.session)
-                        .frame(minWidth: 240, idealWidth: 280, maxWidth: 360)
-                        .background(.bar)
-                }
+        ZStack(alignment: .trailing) {
+            NavigationSplitView {
+                SidebarView(model: self.model)
+                    .navigationSplitViewColumnWidth(min: 300, ideal: 320, max: 360)
+            } detail: {
+                self.detailContent
             }
-            .toolbar {
-                ToolbarItemGroup {
-                    Button { Task { await self.model.refreshLocal() } } label: {
-                        Label("Refresh", systemImage: "arrow.clockwise")
-                    }
-                    .accessibilityHint("Refreshes the local file list.")
-                    Button { Task { await self.model.refreshRemote() } } label: {
-                        Label("Refresh Remote", systemImage: "network")
-                    }
-                    .accessibilityHint("Refreshes the remote file list.")
-                    Button { self.model.uploadSelectedItem() } label: {
-                        Label("Upload", systemImage: "arrow.up.circle")
-                    }
-                    .disabled(self.model.selectedFile?.source != .local || self.model.session.state != .connected)
-                    .accessibilityHint("Uploads the selected local item to the current remote folder.")
-                    Button { self.model.downloadSelectedItem() } label: {
-                        Label("Download", systemImage: "arrow.down.circle")
-                    }
-                    .disabled(self.model.selectedFile?.source != .remote || self.model.session.state != .connected)
-                    .accessibilityHint("Downloads the selected remote item to the current local folder.")
-                    Button { self.model.beginCreateFolder(source: self.model.selectedFile?.source ?? .local) } label: {
-                        Label("New Folder", systemImage: "folder.badge.plus")
-                    }
-                    Button { self.model.showViewOptions.toggle() } label: {
-                        Label("View Options", systemImage: "slider.horizontal.3")
-                    }
-                    .popover(isPresented: self.$model.showViewOptions) {
-                        ViewOptionsView(preferences: self.$model.preferences) {
-                            self.model.savePreferences()
-                            Task {
-                                await self.model.refreshLocal()
-                                await self.model.refreshRemote()
-                            }
-                        }
-                    }
-                    Button { self.model.preferences.showInspector.toggle() } label: {
-                        Label("Inspector", systemImage: "sidebar.right")
-                    }
-                }
-            }
-            .sheet(item: self.$model.profileDraft) { draft in
-                ServerProfileEditorView(
-                    draft: Binding(
-                        get: { self.model.profileDraft ?? draft },
-                        set: { self.model.profileDraft = $0 }
-                    ),
-                    savesAndConnects: self.model.connectAfterSavingDraft,
-                    errorMessage: self.model.profileEditorError,
-                    onCancel: {
-                        self.model.profileDraft = nil
-                        self.model.profileEditorError = nil
-                        self.model.connectAfterSavingDraft = false
-                    },
-                    onSave: {
-                        self.model.saveProfileDraft()
-                    }
-                )
-            }
-            .sheet(item: self.$model.pendingHostTrust) { trust in
-                HostTrustPromptView(
-                    trust: trust,
-                    onCancel: { self.model.pendingHostTrust = nil },
-                    onTrust: { self.model.trustPendingHostAndReconnect() }
-                )
-            }
-            .sheet(item: self.$model.fileOperationPrompt) { prompt in
-                FileOperationPromptView(
-                    title: prompt.title,
-                    text: self.$model.fileOperationText,
-                    onCancel: {
-                        self.model.fileOperationPrompt = nil
-                        self.model.fileOperationText = ""
-                    },
-                    onCommit: {
-                        self.model.commitFileOperationPrompt()
-                    }
-                )
-            }
-            .alert("Delete Item?", isPresented: Binding(
-                get: { self.model.pendingDeleteItem != nil },
-                set: { if !$0 { self.model.pendingDeleteItem = nil } }
-            )) {
-                Button("Cancel", role: .cancel) { self.model.pendingDeleteItem = nil }
-                Button("Delete", role: .destructive) { self.model.deletePendingItem() }
-            } message: {
-                Text(self.model.pendingDeleteItem?.name ?? "This item will be deleted.")
-            }
-            .sheet(item: self.$model.pendingTransferConflict) { conflict in
-                TransferConflictView(
-                    conflict: conflict,
-                    renameText: self.$model.conflictRenameText,
-                    onSkip: { self.model.skipPendingConflict() },
-                    onOverwrite: { self.model.overwritePendingConflict() },
-                    onRename: { self.model.renameAndRunPendingConflict() }
-                )
-            }
-            .sheet(isPresented: self.$model.showAbout) {
-                AboutView()
+            if self.model.preferences.showInspector {
+                self.inspectorOverlay
             }
         }
+    }
+
+    private var detailContent: some View {
+        VStack(spacing: 0) {
+            ConnectionToolbar(model: self.model)
+            TabStrip(model: self.model)
+            if let message = model.statusMessage {
+                StatusBanner(message: message) {
+                    self.model.statusMessage = nil
+                }
+            }
+            self.browserAndTransfers
+        }
+        .frame(minWidth: 640, maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.trailing, self.model.preferences.showInspector ? self.inspectorWidth + 1 : 0)
+        .toolbar {
+            ToolbarItemGroup {
+                Button { Task { await self.model.refreshLocal() } } label: {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+                .accessibilityHint("Refreshes the local file list.")
+                Button { Task { await self.model.refreshRemote() } } label: {
+                    Label("Refresh Remote", systemImage: "network")
+                }
+                .accessibilityHint("Refreshes the remote file list.")
+                Button { self.model.uploadSelectedItem() } label: {
+                    Label("Upload", systemImage: "arrow.up.circle")
+                }
+                .disabled(self.model.selectedFile?.source != .local || self.model.session.state != .connected)
+                .accessibilityHint("Uploads the selected local item to the current remote folder.")
+                Button { self.model.downloadSelectedItem() } label: {
+                    Label("Download", systemImage: "arrow.down.circle")
+                }
+                .disabled(self.model.selectedFile?.source != .remote || self.model.session.state != .connected)
+                .accessibilityHint("Downloads the selected remote item to the current local folder.")
+                Button { self.model.beginCreateFolder(source: self.model.selectedFile?.source ?? .local) } label: {
+                    Label("New Folder", systemImage: "folder.badge.plus")
+                }
+                Button { self.model.showViewOptions.toggle() } label: {
+                    Label("View Options", systemImage: "slider.horizontal.3")
+                }
+                .popover(isPresented: self.$model.showViewOptions) {
+                    ViewOptionsView(preferences: self.$model.preferences) {
+                        self.model.savePreferences()
+                        Task {
+                            await self.model.refreshLocal()
+                            await self.model.refreshRemote()
+                        }
+                    }
+                }
+                Button { self.model.preferences.showInspector.toggle() } label: {
+                    Label("Inspector", systemImage: "sidebar.right")
+                }
+            }
+        }
+        .sheet(item: self.$model.profileDraft) { draft in
+            ServerProfileEditorView(
+                draft: Binding(
+                    get: { self.model.profileDraft ?? draft },
+                    set: { self.model.profileDraft = $0 }
+                ),
+                savesAndConnects: self.model.connectAfterSavingDraft,
+                errorMessage: self.model.profileEditorError,
+                onCancel: {
+                    self.model.profileDraft = nil
+                    self.model.profileEditorError = nil
+                    self.model.connectAfterSavingDraft = false
+                },
+                onSave: {
+                    self.model.saveProfileDraft()
+                }
+            )
+        }
+        .sheet(item: self.$model.pendingHostTrust) { trust in
+            HostTrustPromptView(
+                trust: trust,
+                onCancel: { self.model.pendingHostTrust = nil },
+                onTrust: { self.model.trustPendingHostAndReconnect() }
+            )
+        }
+        .sheet(item: self.$model.fileOperationPrompt) { prompt in
+            FileOperationPromptView(
+                title: prompt.title,
+                text: self.$model.fileOperationText,
+                onCancel: {
+                    self.model.fileOperationPrompt = nil
+                    self.model.fileOperationText = ""
+                },
+                onCommit: {
+                    self.model.commitFileOperationPrompt()
+                }
+            )
+        }
+        .alert("Delete Item?", isPresented: Binding(
+            get: { self.model.pendingDeleteItem != nil },
+            set: { if !$0 { self.model.pendingDeleteItem = nil } }
+        )) {
+            Button("Cancel", role: .cancel) { self.model.pendingDeleteItem = nil }
+            Button("Delete", role: .destructive) { self.model.deletePendingItem() }
+        } message: {
+            Text(self.model.pendingDeleteItem?.name ?? "This item will be deleted.")
+        }
+        .sheet(item: self.$model.pendingTransferConflict) { conflict in
+            TransferConflictView(
+                conflict: conflict,
+                renameText: self.$model.conflictRenameText,
+                onSkip: { self.model.skipPendingConflict() },
+                onOverwrite: { self.model.overwritePendingConflict() },
+                onRename: { self.model.renameAndRunPendingConflict() }
+            )
+        }
+        .sheet(isPresented: self.$model.showAbout) {
+            AboutView()
+        }
+    }
+
+    private var inspectorOverlay: some View {
+        HStack(spacing: 0) {
+            Rectangle()
+                .fill(Color.primary.opacity(0.18))
+                .frame(width: 1)
+                .overlay {
+                    Rectangle()
+                        .fill(.clear)
+                        .frame(width: 8)
+                        .contentShape(Rectangle())
+                        .gesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    let startWidth = self.inspectorResizeStartWidth ?? self.inspectorWidth
+                                    self.inspectorResizeStartWidth = startWidth
+                                    self.inspectorWidth = min(420, max(240, startWidth - value.translation.width))
+                                }
+                                .onEnded { _ in
+                                    self.inspectorResizeStartWidth = nil
+                                }
+                        )
+                }
+            InspectorView(file: self.model.selectedFile, session: self.model.session)
+                .frame(width: self.inspectorWidth)
+                .padding(.top, self.inspectorChromeTopExtension)
+                .background(.bar)
+        }
+        .frame(maxHeight: .infinity)
+        .ignoresSafeArea(.container, edges: [.top, .bottom])
+    }
+
+    private var browserAndTransfers: some View {
+        Group {
+            if self.model.preferences.showTransferQueue {
+                VSplitView {
+                    GeometryReader { proxy in
+                        self.fileBrowserSplit
+                            .frame(width: proxy.size.width, height: proxy.size.height)
+                    }
+                    .frame(minHeight: 280)
+                    GeometryReader { proxy in
+                        self.transferQueue
+                            .frame(width: proxy.size.width, height: proxy.size.height)
+                    }
+                    .frame(minHeight: 140, idealHeight: 170)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                GeometryReader { proxy in
+                    self.fileBrowserSplit
+                        .frame(width: proxy.size.width, height: proxy.size.height)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var fileBrowserSplit: some View {
@@ -155,7 +206,8 @@ struct ContentView: View {
                 onRename: { self.model.beginRenameSelectedItem() },
                 onDelete: { self.model.requestDeleteSelectedItem() }
             )
-            .frame(minWidth: 360)
+            .frame(minWidth: 360, maxWidth: .infinity)
+            .layoutPriority(1)
             FileBrowserPane(
                 title: "Remote",
                 path: self.model.session.remotePath,
@@ -168,8 +220,25 @@ struct ContentView: View {
                 onRename: { self.model.beginRenameSelectedItem() },
                 onDelete: { self.model.requestDeleteSelectedItem() }
             )
-            .frame(minWidth: 360)
+            .frame(minWidth: 360, maxWidth: .infinity)
+            .layoutPriority(1)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var transferQueue: some View {
+        VStack(spacing: 0) {
+            StatsDashboardView(stats: self.model.transferStats, lastConnection: self.model.lastConnectionDisplay)
+            TransferPanel(
+                jobs: self.model.transferJobs,
+                onClearCompleted: { self.model.clearCompletedTransfers() },
+                onClearFailed: { self.model.clearFailedTransfers() },
+                onRetryFailed: { self.model.retryFailedTransfers() },
+                onCancelActive: { self.model.cancelActiveTransfers() },
+                onCancelTransfer: { self.model.cancelTransfer(id: $0) }
+            )
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var selectedFileBinding: Binding<FileItem?> {

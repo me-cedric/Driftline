@@ -96,6 +96,7 @@ struct InspectorSection<Content: View>: View {
             self.content
                 .font(.callout)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
     }

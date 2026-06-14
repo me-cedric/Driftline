@@ -32,6 +32,7 @@ struct FileBrowserPane: View {
                     .help("Refresh")
                     .accessibilityLabel("Refresh \(self.title)")
             }
+            .frame(maxWidth: .infinity)
             .padding(12)
             .background(.regularMaterial)
 
@@ -59,8 +60,9 @@ struct FileBrowserPane: View {
                     Text(item.modifiedAt?.formatted(date: .abbreviated, time: .shortened) ?? "--")
                         .foregroundStyle(.primary.opacity(0.72))
                 }
-                .width(min: 112, ideal: 150, max: 190)
+                .width(min: 112, ideal: 190)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .contextMenu(forSelectionType: String.self) { _ in
                 Button("New Folder", action: self.onCreateFolder)
                 Divider()
@@ -98,6 +100,7 @@ struct FileBrowserPane: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.ultraThinMaterial)
     }
 }

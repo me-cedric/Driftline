@@ -1,5 +1,44 @@
 import Foundation
 
+public enum AppIconVariant: String, CaseIterable, Codable, Sendable, Identifiable {
+    case light
+    case dark
+
+    public var id: String {
+        self.rawValue
+    }
+
+    public var displayName: String {
+        switch self {
+        case .light:
+            "Light"
+        case .dark:
+            "Dark"
+        }
+    }
+}
+
+public enum AppThemeVariant: String, CaseIterable, Codable, Sendable, Identifiable {
+    case system
+    case light
+    case dark
+
+    public var id: String {
+        self.rawValue
+    }
+
+    public var displayName: String {
+        switch self {
+        case .system:
+            "System"
+        case .light:
+            "Light"
+        case .dark:
+            "Dark"
+        }
+    }
+}
+
 public struct ViewPreferences: Codable, Equatable, Sendable {
     public var fileList: FileListPreferences
     public var showInspector: Bool
@@ -9,6 +48,8 @@ public struct ViewPreferences: Codable, Equatable, Sendable {
     public var confirmBeforeDelete: Bool
     public var confirmBeforeOverwrite: Bool
     public var remoteBackendKind: RemoteBackendKind
+    public var appIconVariant: AppIconVariant
+    public var appThemeVariant: AppThemeVariant
 
     enum CodingKeys: String, CodingKey {
         case fileList
@@ -19,6 +60,8 @@ public struct ViewPreferences: Codable, Equatable, Sendable {
         case confirmBeforeDelete
         case confirmBeforeOverwrite
         case remoteBackendKind
+        case appIconVariant
+        case appThemeVariant
     }
 
     public init(
@@ -29,7 +72,9 @@ public struct ViewPreferences: Codable, Equatable, Sendable {
         transferConcurrency: Int = 3,
         confirmBeforeDelete: Bool = true,
         confirmBeforeOverwrite: Bool = true,
-        remoteBackendKind: RemoteBackendKind = .systemSSH
+        remoteBackendKind: RemoteBackendKind = .systemSSH,
+        appIconVariant: AppIconVariant = .light,
+        appThemeVariant: AppThemeVariant = .system
     ) {
         self.fileList = fileList
         self.showInspector = showInspector
@@ -39,6 +84,8 @@ public struct ViewPreferences: Codable, Equatable, Sendable {
         self.confirmBeforeDelete = confirmBeforeDelete
         self.confirmBeforeOverwrite = confirmBeforeOverwrite
         self.remoteBackendKind = remoteBackendKind
+        self.appIconVariant = appIconVariant
+        self.appThemeVariant = appThemeVariant
     }
 
     public init(from decoder: Decoder) throws {
@@ -51,5 +98,7 @@ public struct ViewPreferences: Codable, Equatable, Sendable {
         self.confirmBeforeDelete = try container.decodeIfPresent(Bool.self, forKey: .confirmBeforeDelete) ?? true
         self.confirmBeforeOverwrite = try container.decodeIfPresent(Bool.self, forKey: .confirmBeforeOverwrite) ?? true
         self.remoteBackendKind = try container.decodeIfPresent(RemoteBackendKind.self, forKey: .remoteBackendKind) ?? .systemSSH
+        self.appIconVariant = try container.decodeIfPresent(AppIconVariant.self, forKey: .appIconVariant) ?? .light
+        self.appThemeVariant = try container.decodeIfPresent(AppThemeVariant.self, forKey: .appThemeVariant) ?? .system
     }
 }

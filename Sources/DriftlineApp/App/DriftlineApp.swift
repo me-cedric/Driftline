@@ -19,6 +19,8 @@ struct DriftlineApp: App {
         Settings {
             SettingsView(preferences: self.$model.preferences)
                 .onChange(of: self.model.preferences) { _, _ in
+                    AppIconController.apply(self.model.preferences.appIconVariant)
+                    AppThemeController.apply(self.model.preferences.appThemeVariant)
                     self.model.savePreferences()
                 }
         }
@@ -135,6 +137,8 @@ final class AppModel: @unchecked Sendable {
     func loadInitialState() async {
         do {
             self.preferences = try await self.preferencesRepository.load()
+            AppIconController.apply(self.preferences.appIconVariant)
+            AppThemeController.apply(self.preferences.appThemeVariant)
             self.profiles = try await self.profileRepository.list()
             self.bookmarks = try await self.bookmarkRepository.list()
             self.recents = try await self.recentRepository.list(limit: 10)
@@ -975,6 +979,57 @@ final class AppModel: @unchecked Sendable {
             self.selectedLocalFile
         case .remote:
             self.selectedRemoteFile
+        }
+    }
+}
+
+@MainActor
+enum AppIconController {
+    static func apply(_ variant: AppIconVariant) {
+        guard let image = NSImage(contentsOfFile: self.iconPath(for: variant)) else {
+            NSApplication.shared.applicationIconImage = nil
+            return
+        }
+        NSApplication.shared.applicationIconImage = image
+    }
+
+    private static func iconPath(for variant: AppIconVariant) -> String {
+        let iconName: String
+        switch variant {
+        case .light:
+            iconName = "Driftline"
+        case .dark:
+            iconName = "DriftlineDark"
+        }
+
+        if let bundledPath = Bundle.main.path(forResource: iconName, ofType: "icns") {
+            return bundledPath
+        }
+
+        return URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("assets")
+            .appendingPathComponent("\(iconName).icns")
+            .path
+    }
+}
+
+@MainActor
+enum AppThemeController {
+    static func apply(_ variant: AppThemeVariant) {
+        let appearance: NSAppearance?
+        switch variant {
+        case .light:
+            appearance = NSAppearance(named: .aqua)
+        case .dark:
+            appearance = NSAppearance(named: .darkAqua)
+        case .system:
+            appearance = nil
+        }
+
+        NSApplication.shared.appearance = appearance
+        for window in NSApplication.shared.windows {
+            window.appearance = appearance
+            window.contentView?.appearance = appearance
         }
     }
 }

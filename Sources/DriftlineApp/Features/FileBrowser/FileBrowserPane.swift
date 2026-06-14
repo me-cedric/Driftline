@@ -25,12 +25,8 @@ struct FileBrowserPane: View {
                         .lineLimit(1)
                 }
                 Spacer()
-                Button(action: self.onParent) { Image(systemName: "chevron.up") }
-                    .help("Parent Folder")
-                    .accessibilityLabel("Parent Folder")
-                Button(action: self.onRefresh) { Image(systemName: "arrow.clockwise") }
-                    .help("Refresh")
-                    .accessibilityLabel("Refresh \(self.title)")
+                PaneToolbarButton(title: "Up One Folder", systemImage: "chevron.up", action: self.onParent)
+                PaneToolbarButton(title: "Refresh \(self.title)", systemImage: "arrow.clockwise", action: self.onRefresh)
             }
             .frame(maxWidth: .infinity)
             .padding(12)
@@ -102,6 +98,23 @@ struct FileBrowserPane: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.ultraThinMaterial)
+    }
+}
+
+private struct PaneToolbarButton: View {
+    var title: String
+    var systemImage: String
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: self.action) {
+            Image(systemName: self.systemImage)
+                .font(.system(size: 15, weight: .semibold))
+                .frame(width: 28, height: 20)
+                .contentShape(Rectangle())
+        }
+        .help(self.title)
+        .accessibilityLabel(self.title)
     }
 }
 

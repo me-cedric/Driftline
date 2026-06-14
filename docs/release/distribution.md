@@ -73,13 +73,13 @@ Do not claim a release is signed or notarized unless `codesign --verify`, `notar
 
 ## Icon Workflow
 
-`assets/app-icon-concept.svg` contains the icon concept. Export a 1024x1024 PNG to `assets/app-icon-1024.png`, then run:
+`assets/app-icon-1024.png` and `assets/app-icon-dark-1024.png` are the canonical app icon sources from the Driftline icon pack. To refresh generated icon assets, replace those PNGs with 1024x1024 exports from the icon pack, then run:
 
 ```bash
 ./scripts/generate-iconset.sh
 ```
 
-The script creates `assets/Driftline.icns`. The SwiftPM app wrapper copies it into `Contents/Resources` when present and declares it through `CFBundleIconFile`.
+The script refreshes the local `.iconset` folders and creates `assets/Driftline.icns` plus `assets/DriftlineDark.icns`. The SwiftPM app wrapper copies both icons into `Contents/Resources`; `CFBundleIconFile` keeps the light icon as the bundle default, while the in-app setting can switch the runtime Dock icon.
 
 ## Smoke Test
 

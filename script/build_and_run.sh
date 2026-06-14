@@ -35,6 +35,10 @@ if [[ -f "$ROOT_DIR/assets/Driftline.icns" ]]; then
   cp "$ROOT_DIR/assets/Driftline.icns" "$APP_RESOURCES/Driftline.icns"
 fi
 
+if [[ -f "$ROOT_DIR/assets/DriftlineDark.icns" ]]; then
+  cp "$ROOT_DIR/assets/DriftlineDark.icns" "$APP_RESOURCES/DriftlineDark.icns"
+fi
+
 cat >"$INFO_PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

@@ -26,6 +26,6 @@ Last reviewed: 2026-05-26.
 ## Placeholder Sweep Results
 
 - No fake sample server or fake transfer queue is seeded in the app.
-- Asset names no longer use "placeholder" for active README/app branding. `assets/app-icon-concept.svg` remains as source artwork documentation; `assets/app-icon-1024.png`, `assets/Driftline.icns`, and `assets/banner.svg` are the active assets.
+- Asset names no longer use "placeholder" for active README/app branding. `assets/app-icon-1024.png`, `assets/app-icon-dark-1024.png`, `assets/Driftline.icns`, and `assets/DriftlineDark.icns` are the active tracked app icon assets; `.iconset` folders are generated locally.
 - Remaining "planned", "future", and "unsupported" language is limited to explicit roadmap, release, or protocol-scope documentation.
 - Code paths that are intentionally unavailable return typed `RemoteClientError` values rather than silent no-ops.

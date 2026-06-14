@@ -5,6 +5,26 @@ struct SettingsView: View {
     @Binding var preferences: ViewPreferences
 
     var body: some View {
+        TabView {
+            SettingsGeneralPane(preferences: self.$preferences)
+                .tabItem {
+                    Label("General", systemImage: "gearshape")
+                }
+
+            AppAboutContent()
+                .tabItem {
+                    Label("About", systemImage: "info.circle")
+                }
+        }
+        .padding(20)
+        .frame(width: 460, height: 390)
+    }
+}
+
+private struct SettingsGeneralPane: View {
+    @Binding var preferences: ViewPreferences
+
+    var body: some View {
         Form {
             Toggle("Show hidden files", isOn: self.$preferences.fileList.showHiddenFiles)
             Toggle("Confirm before delete", isOn: self.$preferences.confirmBeforeDelete)
@@ -20,13 +40,24 @@ struct SettingsView: View {
                 : "Recommended: uses macOS SSH shell tools with strict host verification, SSH agent support, and rsync transfers.")
                 .font(.caption)
                 .foregroundStyle(.primary.opacity(0.68))
+            Picker("App icon", selection: self.$preferences.appIconVariant) {
+                ForEach(AppIconVariant.allCases) { variant in
+                    Text(variant.displayName).tag(variant)
+                }
+            }
+            .pickerStyle(.segmented)
+            Picker("Theme", selection: self.$preferences.appThemeVariant) {
+                ForEach(AppThemeVariant.allCases) { variant in
+                    Text(variant.displayName).tag(variant)
+                }
+            }
+            .pickerStyle(.segmented)
             Picker("Default sort", selection: self.$preferences.fileList.sortKey) {
                 ForEach(FileSortKey.allCases, id: \.self) { key in
                     Text(key.rawValue.capitalized).tag(key)
                 }
             }
         }
-        .padding(24)
-        .frame(width: 420)
+        .padding(.top, 12)
     }
 }

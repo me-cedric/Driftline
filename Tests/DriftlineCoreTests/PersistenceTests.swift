@@ -37,7 +37,9 @@ final class PersistenceTests: XCTestCase {
             showSidebar: true,
             transferConcurrency: 6,
             confirmBeforeDelete: true,
-            confirmBeforeOverwrite: false
+            confirmBeforeOverwrite: false,
+            appIconVariant: .dark,
+            appThemeVariant: .dark
         )
 
         try await repository.save(preferences)
@@ -69,6 +71,8 @@ final class PersistenceTests: XCTestCase {
         let decoded = try JSONDecoder().decode(ViewPreferences.self, from: payload)
 
         XCTAssertEqual(decoded.remoteBackendKind, .systemSSH)
+        XCTAssertEqual(decoded.appIconVariant, .light)
+        XCTAssertEqual(decoded.appThemeVariant, .system)
         XCTAssertEqual(decoded.transferConcurrency, 2)
     }
 

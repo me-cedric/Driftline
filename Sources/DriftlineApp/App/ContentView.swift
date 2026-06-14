@@ -373,27 +373,70 @@ struct ConnectionToolbar: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.primary.opacity(0.72))
             Spacer()
-            Button(self.model.isConnecting ? "Connecting..." : "Connect") { self.model.connectToSelectedServer() }
-                .buttonStyle(.borderedProminent)
-                .disabled(self.model.isConnecting)
-                .accessibilityHint("Connects to the selected saved server.")
-            Button("New") { self.model.beginQuickConnect() }
-                .accessibilityHint("Opens a new connection form with credentials.")
-            Button("Edit Server") { self.model.beginEditingSelectedProfile() }
-                .disabled(self.model.selectedProfile == nil)
-            Button("Favorite") { self.model.toggleSelectedFavorite() }
-                .disabled(self.model.selectedProfile == nil)
-            Button("Bookmark") { self.model.saveCurrentConnectionAsBookmark() }
-                .disabled(self.model.activeProfile == nil || self.model.session.state != .connected)
-            Button("Terminal") { self.model.openTerminalSession() }
-                .disabled(self.model.activeProfile == nil)
-                .accessibilityHint("Opens an SSH session in Terminal.")
-            Button("Disconnect") { self.model.disconnect() }
-                .disabled(self.model.session.state == .disconnected)
+            Button {
+                self.model.connectToSelectedServer()
+            } label: {
+                Label(self.model.isConnecting ? "Connecting..." : "Connect", systemImage: self.model.isConnecting ? "arrow.triangle.2.circlepath" : "link")
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(self.model.isConnecting)
+            .help("Connect to the selected saved server.")
+            .accessibilityLabel(self.model.isConnecting ? "Connecting" : "Connect")
+            .accessibilityHint("Connects to the selected saved server.")
+            Button {
+                self.model.beginQuickConnect()
+            } label: {
+                Label("New", systemImage: "plus.circle")
+            }
+            .help("Create a new connection.")
+            .accessibilityLabel("New connection")
+            .accessibilityHint("Opens a new connection form with credentials.")
+            Button {
+                self.model.beginEditingSelectedProfile()
+            } label: {
+                Label("Edit", systemImage: "pencil")
+            }
+            .disabled(self.model.selectedProfile == nil)
+            .help("Edit the selected server.")
+            .accessibilityLabel("Edit selected server")
+            Button {
+                self.model.toggleSelectedFavorite()
+            } label: {
+                Label("Favorite", systemImage: self.model.selectedProfile?.isFavorite == true ? "star.fill" : "star")
+            }
+            .disabled(self.model.selectedProfile == nil)
+            .help(self.model.selectedProfile?.isFavorite == true ? "Remove the selected server from favorites." : "Add the selected server to favorites.")
+            .accessibilityLabel(self.model.selectedProfile?.isFavorite == true ? "Remove favorite" : "Add favorite")
+            Button {
+                self.model.saveCurrentConnectionAsBookmark()
+            } label: {
+                Label("Bookmark", systemImage: "bookmark")
+            }
+            .disabled(self.model.activeProfile == nil || self.model.session.state != .connected)
+            .help("Save the current local and remote paths as a bookmark.")
+            .accessibilityLabel("Bookmark current connection")
+            Button {
+                self.model.openTerminalSession()
+            } label: {
+                Label("Terminal", systemImage: "terminal")
+            }
+            .disabled(self.model.activeProfile == nil)
+            .help("Open an SSH session in Terminal.")
+            .accessibilityLabel("Open Terminal session")
+            .accessibilityHint("Opens an SSH session in Terminal.")
+            Button {
+                self.model.disconnect()
+            } label: {
+                Label("Disconnect", systemImage: "xmark.circle")
+            }
+            .disabled(self.model.session.state == .disconnected)
+            .help("Disconnect from the current server.")
+            .accessibilityLabel("Disconnect")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .background(.bar)
+        .labelStyle(.titleAndIcon)
     }
 }
 

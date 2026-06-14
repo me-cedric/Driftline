@@ -4,7 +4,7 @@
 
 | Name | Rationale | CLI | Repository | Bundle Identifier | Logo Direction | Visual Identity |
 | --- | --- | --- | --- | --- | --- | --- |
-| Driftline | Suggests a clean path across distance, calm movement, and file flow. Short and memorable. | `driftline` | `Driftline` | `app.driftline.Driftline` | Connected path line crossing two panes | Deep teal, glacier blue, warm amber accent |
+| Driftline | Suggests a clean path across distance, calm movement, and file flow. Short and memorable. | `driftline` | `Driftline` | `app.driftline.Driftline` | Blue folder route mark | White glass, vivid blue, soft shadow |
 | Portage | Evokes carrying data across endpoints. Strong but slightly generic. | `portage` | `Portage` | `app.portage.Portage` | Carry handle plus folder outline | Navy, mint, graphite |
 | Waypoint | Strong navigation metaphor, good for saved servers and bookmarks. Slightly broad. | `waypoint` | `Waypoint` | `app.waypoint.Waypoint` | Pin connected to folder/terminal | Blue, violet, silver |
 | RelayBay | Friendly transfer metaphor with network and dock imagery. More playful. | `relaybay` | `RelayBay` | `app.relaybay.RelayBay` | Dock posts with crossing arrows | Cyan, sea green, coral |
@@ -27,11 +27,11 @@ Driftline is selected. It works as an app name, CLI command, Homebrew formula, d
 
 ## Visual Direction
 
-The logo should show a thin luminous route line between two soft rounded panes, suggesting local and remote endpoints. Avoid busy arrows. The icon can use a dark glass base with teal path highlights and a warm amber endpoint.
+The selected app icon is a polished macOS-style rounded square with a blue folder-route mark, suggesting file movement and connection without busy arrows. Driftline ships light and dark icon variants; the light icon remains the bundle default, and users can switch the runtime Dock icon in Settings.
 
 App icon generation prompt:
 
-> macOS app icon, polished Apple-quality, dark translucent rounded square glass base, two minimal file pane shapes connected by a luminous teal drift line, subtle amber endpoint dot, high depth, clean SF Symbols-inspired geometry, no text, no busy details, suitable for a secure professional file transfer app
+> macOS app icon, polished Apple-quality, glass rounded square base, minimal blue folder outline connected to a route node, clean file-transfer metaphor, high depth, crisp SF Symbols-inspired geometry, no text, suitable for a secure professional file transfer app
 
 Social preview prompt:
 

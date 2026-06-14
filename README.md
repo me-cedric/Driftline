@@ -1,7 +1,11 @@
 <div align="center">
 <br />
-<img src="assets/banner.svg" width="100%" alt="Driftline banner" />
-<br /><br />
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/app-icon-dark-1024.png">
+  <img src="assets/app-icon-1024.png" width="128" height="128" alt="Driftline app icon">
+</picture>
+<h1>Driftline</h1>
+<p><strong>Native file transfer, calmly secure.</strong></p>
 <p align="center">
 <a href="#-overview">Overview</a> •
 <a href="#-features">Features</a> •

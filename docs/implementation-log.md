@@ -254,7 +254,7 @@
 - Added `NativeSFTPTransferClient` with progress callbacks and cancellation support.
 - Routed app transfers to the native transfer client when the native Swift backend is selected in Settings.
 - Added Docker integration coverage for native private-key listing, native upload/download, and native upload cancellation.
-- Generated `assets/app-icon-1024.png` and `assets/Driftline.icns` from the Driftline icon concept and kept the generated iconset out of git.
+- Generated `assets/app-icon-1024.png` and `assets/Driftline.icns` from the Driftline icon source artwork.
 - Refreshed README status, protocol support, security notes, test commands, and roadmap language.
 - Validation passed:
   - `swift package clean && DRIFTLINE_INTEGRATION_SFTP=1 DRIFTLINE_NATIVE_INTEGRATION_SFTP=1 ... swift test --filter SFTPIntegrationTests`: passed, 5 Docker SFTP integration tests.

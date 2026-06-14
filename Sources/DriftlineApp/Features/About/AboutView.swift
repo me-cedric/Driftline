@@ -55,7 +55,7 @@ enum AppMetadata {
     }
 
     static var versionDisplay: String {
-        let version = self.bundleString("CFBundleShortVersionString") ?? "0.2.0"
+        let version = self.bundleString("CFBundleShortVersionString") ?? "0.3.0"
         let build = self.bundleString("CFBundleVersion") ?? "2"
         return "Version \(version) (\(build))"
     }

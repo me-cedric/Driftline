@@ -1,15 +1,98 @@
 import DriftlineCore
 import SwiftUI
 
+enum DriftlineRadius {
+    static let window: CGFloat = 20
+    static let panel: CGFloat = 16
+    static let card: CGFloat = 14
+    static let control: CGFloat = 10
+    static let pill: CGFloat = 999
+}
+
+enum DriftlineSpacing {
+    static let xs: CGFloat = 4
+    static let sm: CGFloat = 8
+    static let md: CGFloat = 12
+    static let lg: CGFloat = 16
+    static let xl: CGFloat = 24
+}
+
+enum DriftlineOpacity {
+    static let glassPanel = 0.56
+    static let glassToolbar = 0.58
+    static let hover = 0.08
+    static let selected = 0.18
+    static let separator = 0.055
+    static let stroke = 0.08
+}
+
+struct GlassPanel<Content: View>: View {
+    var cornerRadius: CGFloat
+    var material: Material
+    @ViewBuilder var content: Content
+
+    init(cornerRadius: CGFloat = DriftlineRadius.panel, material: Material = .regularMaterial, @ViewBuilder content: () -> Content) {
+        self.cornerRadius = cornerRadius
+        self.material = material
+        self.content = content()
+    }
+
+    var body: some View {
+        self.content
+            .background(self.material, in: RoundedRectangle(cornerRadius: self.cornerRadius, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: self.cornerRadius, style: .continuous)
+                    .stroke(Color.primary.opacity(DriftlineOpacity.stroke), lineWidth: 1)
+            }
+            .overlay(alignment: .top) {
+                RoundedRectangle(cornerRadius: self.cornerRadius, style: .continuous)
+                    .stroke(Color.white.opacity(0.06), lineWidth: 1)
+                    .blendMode(.plusLighter)
+            }
+            .shadow(color: .black.opacity(0.16), radius: 18, y: 10)
+    }
+}
+
+struct GlassButtonStyle: ButtonStyle {
+    var isPrimary = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.callout.weight(.semibold))
+            .foregroundStyle(self.isPrimary ? .white : .primary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background {
+                Capsule(style: .continuous)
+                    .fill(self.fill(isPressed: configuration.isPressed))
+            }
+            .overlay {
+                Capsule(style: .continuous)
+                    .stroke(Color.primary.opacity(self.isPrimary ? 0 : DriftlineOpacity.stroke), lineWidth: 1)
+            }
+    }
+
+    private func fill(isPressed: Bool) -> Color {
+        if self.isPrimary {
+            return Color.accentColor.opacity(isPressed ? 0.82 : 0.98)
+        }
+        return Color.primary.opacity(isPressed ? 0.14 : 0.08)
+    }
+}
+
 struct ConnectionStatusPill: View {
     var state: ConnectionState
 
     var body: some View {
         Label(self.label, systemImage: self.icon)
             .font(.caption.weight(.semibold))
-            .padding(.horizontal, 9)
-            .padding(.vertical, 5)
-            .background(self.color.opacity(0.16), in: Capsule())
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(.thinMaterial, in: Capsule())
+            .overlay {
+                Capsule()
+                    .stroke(self.color.opacity(0.28), lineWidth: 1)
+            }
             .foregroundStyle(self.color)
             .accessibilityLabel("\(String(format: LocalizationManager.shared.localized("connection.connectionStatus"), self.label))")
     }
@@ -90,15 +173,19 @@ struct InspectorSection<Content: View>: View {
     @ViewBuilder var content: Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             Text(self.title)
-                .font(.headline)
+                .font(.headline.weight(.semibold))
             self.content
                 .font(.callout)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+        .padding(13)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: DriftlineRadius.card, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: DriftlineRadius.card, style: .continuous)
+                .stroke(Color.primary.opacity(DriftlineOpacity.stroke), lineWidth: 1)
+        }
     }
 }
 

@@ -34,7 +34,9 @@ struct FileBrowserOutlineView: NSViewRepresentable {
         outlineView.headerView = NSTableHeaderView()
         outlineView.rowSizeStyle = .medium
         outlineView.rowHeight = 24
-        outlineView.usesAlternatingRowBackgroundColors = true
+        outlineView.usesAlternatingRowBackgroundColors = false
+        outlineView.backgroundColor = .clear
+        outlineView.selectionHighlightStyle = .regular
         outlineView.allowsMultipleSelection = true
         outlineView.allowsEmptySelection = true
         outlineView.allowsColumnSelection = false

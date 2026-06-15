@@ -73,51 +73,8 @@ struct ContentView: View {
             }
         }
         .frame(minWidth: 640, maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.trailing, self.model.preferences.showInspector ? self.inspectorWidth + 1 : 0).toolbar {
-            ToolbarItemGroup {
-                Button { Task { await self.model.refreshLocal() } } label: {
-                    Label(loc("browser.refresh"), systemImage: "arrow.clockwise")
-                }
-                .accessibilityHint(loc("browser.refreshHint"))
-                Button { Task { await self.model.refreshRemote() } } label: {
-                    Label(loc("browser.refreshRemote"), systemImage: "network")
-                }
-                .accessibilityHint(loc("browser.refreshRemoteHint"))
-                Button { self.model.uploadSelectedItem() } label: {
-                    Label(loc("browser.upload"), systemImage: "arrow.up.circle")
-                }
-                .disabled(self.model.selectedLocalFiles.isEmpty || self.model.session.state != .connected)
-                .accessibilityHint(loc("browser.uploadHint"))
-                Button { self.model.downloadSelectedItem() } label: {
-                    Label(loc("browser.download"), systemImage: "arrow.down.circle")
-                }
-                .disabled(self.model.selectedRemoteFiles.isEmpty || self.model.session.state != .connected)
-                .accessibilityHint(loc("browser.downloadHint"))
-                Button { self.model.prepareSyncPreview() } label: {
-                    Label(loc("browser.compare"), systemImage: "arrow.left.arrow.right")
-                }
-                .disabled(self.model.session.state != .connected)
-                .accessibilityHint(loc("browser.compareHint"))
-                Button { self.model.beginCreateFolder(source: self.model.selectedFile?.source ?? .local) } label: {
-                    Label(loc("browser.newFolder"), systemImage: "folder.badge.plus")
-                }
-                Button { self.model.showViewOptions.toggle() } label: {
-                    Label(loc("browser.viewOptions"), systemImage: "slider.horizontal.3")
-                }
-                .popover(isPresented: self.$model.showViewOptions) {
-                    ViewOptionsView(preferences: self.$model.preferences) {
-                        self.model.savePreferences()
-                        Task {
-                            await self.model.refreshLocal()
-                            await self.model.refreshRemote()
-                        }
-                    }
-                }
-                Button { self.model.preferences.showInspector.toggle() } label: {
-                    Label(loc("browser.inspector"), systemImage: "sidebar.right")
-                }
-            }
-        }
+        .padding(.trailing, self.model.preferences.showInspector ? self.inspectorWidth + 1 : 0)
+        .background(Color(nsColor: .windowBackgroundColor))
         .sheet(item: self.$model.profileDraft) { draft in
             ServerProfileEditorView(
                 draft: Binding(
@@ -255,10 +212,17 @@ struct ContentView: View {
                                 }
                         )
                 }
-            InspectorView(file: self.model.selectedFile, session: self.model.session)
-                .frame(width: self.inspectorWidth)
-                .padding(.top, self.inspectorChromeTopExtension)
-                .background(.bar)
+            InspectorView(
+                file: self.model.selectedFile,
+                session: self.model.session,
+                profile: self.model.activeProfile,
+                transferStats: self.model.transferStats,
+                lastConnection: self.model.lastConnectionDisplay,
+                onConnect: { self.model.connectToSelectedServer() }
+            )
+            .frame(width: self.inspectorWidth)
+            .padding(.top, self.inspectorChromeTopExtension)
+            .background(.ultraThinMaterial)
         }
         .frame(maxHeight: .infinity)
         .ignoresSafeArea(.container, edges: [.top, .bottom])
@@ -288,6 +252,8 @@ struct ContentView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 12)
+        .padding(.bottom, 12)
     }
 
     private var fileBrowserSplit: some View {
@@ -331,6 +297,7 @@ struct ContentView: View {
                 path: self.model.session.remotePath,
                 items: self.model.remoteItems,
                 source: .remote,
+                isConnected: self.model.session.state == .connected,
                 selectionIDs: self.$model.selectedRemoteFileIDs,
                 onSelectionChange: { self.model.selectItems($0, in: .remote) },
                 onOpen: { self.model.navigateRemote(to: $0) },
@@ -348,6 +315,8 @@ struct ContentView: View {
                     self.model.activePane = .remote
                     self.model.preferences.showInspector = true
                 },
+                onConnect: { self.model.connectToSelectedServer() },
+                onNewConnection: { self.model.beginQuickConnect() },
                 loadChildren: { item, completion in self.model.loadChildren(of: item, completion: completion) }
             )
             .frame(minWidth: 360, maxWidth: .infinity)
@@ -357,17 +326,15 @@ struct ContentView: View {
     }
 
     private var transferQueue: some View {
-        VStack(spacing: 0) {
-            StatsDashboardView(stats: self.model.transferStats, lastConnection: self.model.lastConnectionDisplay)
-            TransferPanel(
-                jobs: self.model.transferJobs,
-                onClearCompleted: { self.model.clearCompletedTransfers() },
-                onClearFailed: { self.model.clearFailedTransfers() },
-                onRetryFailed: { self.model.retryFailedTransfers() },
-                onCancelActive: { self.model.cancelActiveTransfers() },
-                onCancelTransfer: { self.model.cancelTransfer(id: $0) }
-            )
-        }
+        TransferPanel(
+            jobs: self.model.transferJobs,
+            lastConnection: self.model.lastConnectionDisplay,
+            onClearCompleted: { self.model.clearCompletedTransfers() },
+            onClearFailed: { self.model.clearFailedTransfers() },
+            onRetryFailed: { self.model.retryFailedTransfers() },
+            onCancelActive: { self.model.cancelActiveTransfers() },
+            onCancelTransfer: { self.model.cancelTransfer(id: $0) }
+        )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
@@ -381,29 +348,62 @@ struct SidebarView: View {
                 SidebarSection(title: loc("sidebar.driftline")) {
                     SidebarNavRow(
                         title: loc("sidebar.newConnection"),
-                        systemImage: "plus.circle",
-                        isSelected: false
+                        systemImage: "plus",
+                        isSelected: false,
+                        isPrimary: true
                     ) {
                         self.model.beginQuickConnect()
                     }
-                    SidebarNavRow(
-                        title: loc("sidebar.saveServer"),
-                        systemImage: "server.rack",
-                        isSelected: false
-                    ) {
-                        self.model.beginCreatingProfile()
+                }
+                SidebarSection(title: loc("sidebar.favorites"), systemImage: "star") {
+                    let favorites = self.model.profiles.filter(\.isFavorite)
+                    if favorites.isEmpty {
+                        SidebarEmptyRow(loc("sidebar.markFavorites"))
+                    } else {
+                        ForEach(favorites) { profile in
+                            SidebarNavRow(
+                                title: profile.displayName,
+                                subtitle: self.profileSubtitle(profile),
+                                systemImage: "star.fill",
+                                isSelected: self.isSelected(profile),
+                                statusColor: self.statusColor(for: profile)
+                            ) {
+                                self.model.selectedSidebarItem = self.sidebarID(for: profile)
+                                self.model.connectToSelectedServer()
+                            }
+                            .contextMenu {
+                                Button(loc("sidebar.contextConnect")) {
+                                    self.model.selectedSidebarItem = self.sidebarID(for: profile)
+                                    self.model.connectToSelectedServer()
+                                }
+                                Button(loc("sidebar.contextEdit")) {
+                                    self.model.selectedSidebarItem = self.sidebarID(for: profile)
+                                    self.model.beginEditingSelectedProfile()
+                                }
+                                Button(loc("menu.duplicate")) {
+                                    self.model.selectedSidebarItem = self.sidebarID(for: profile)
+                                    self.model.duplicateSelectedProfile()
+                                }
+                                Divider()
+                                Button(loc("menu.delete"), role: .destructive) {
+                                    self.model.selectedSidebarItem = self.sidebarID(for: profile)
+                                    self.model.deleteSelectedProfile()
+                                }
+                            }
+                        }
                     }
                 }
-                SidebarSection(title: loc("sidebar.savedServers")) {
+                SidebarSection(title: loc("sidebar.savedServers"), systemImage: "server.rack") {
                     if self.model.profiles.isEmpty {
                         SidebarEmptyRow(loc("sidebar.noSavedServers"))
                     } else {
                         ForEach(self.model.profiles) { profile in
                             SidebarNavRow(
                                 title: profile.displayName,
-                                subtitle: "\(profile.username)@\(profile.host):\(profile.port)",
-                                systemImage: profile.isFavorite ? "star.fill" : "network",
-                                isSelected: self.isSelected(profile)
+                                subtitle: self.profileSubtitle(profile),
+                                systemImage: "network",
+                                isSelected: self.isSelected(profile),
+                                statusColor: self.statusColor(for: profile)
                             ) {
                                 self.model.selectedSidebarItem = self.sidebarID(for: profile)
                             }
@@ -429,27 +429,9 @@ struct SidebarView: View {
                         }
                     }
                 }
-                SidebarSection(title: loc("sidebar.favorites")) {
-                    let favorites = self.model.profiles.filter(\.isFavorite)
-                    if favorites.isEmpty {
-                        SidebarEmptyRow(loc("sidebar.markFavorites"))
-                    } else {
-                        ForEach(favorites) { profile in
-                            SidebarNavRow(
-                                title: profile.displayName,
-                                subtitle: "\(profile.username)@\(profile.host):\(profile.port)",
-                                systemImage: "star.fill",
-                                isSelected: self.isSelected(profile)
-                            ) {
-                                self.model.selectedSidebarItem = self.sidebarID(for: profile)
-                                self.model.connectToSelectedServer()
-                            }
-                        }
-                    }
-                }
-                SidebarSection(title: loc("sidebar.bookmarks")) {
+                SidebarSection(title: loc("sidebar.bookmarks"), systemImage: "bookmark") {
                     if self.model.bookmarks.isEmpty {
-                        SidebarEmptyRow(loc("sidebar.noBookmarks"))
+                        SidebarEmptyRow(loc("sidebar.noBookmarks"), detail: loc("sidebar.noBookmarksDetail"))
                     } else {
                         ForEach(self.model.bookmarks) { bookmark in
                             SidebarNavRow(
@@ -462,13 +444,14 @@ struct SidebarView: View {
                         }
                     }
                 }
-                SidebarSection(title: loc("sidebar.recent")) {
+                SidebarSection(title: loc("sidebar.recent"), systemImage: "clock") {
                     if self.model.recents.isEmpty {
                         SidebarEmptyRow(loc("sidebar.noRecent"))
                     } else {
                         ForEach(self.model.recents) { recent in
                             SidebarNavRow(
                                 title: recent.displayName,
+                                subtitle: self.recentSubtitle(recent),
                                 systemImage: "clock",
                                 isSelected: false
                             ) {
@@ -491,20 +474,57 @@ struct SidebarView: View {
     private func isSelected(_ profile: ServerProfile) -> Bool {
         self.model.selectedSidebarItem == self.sidebarID(for: profile)
     }
+
+    private func profileSubtitle(_ profile: ServerProfile) -> String {
+        "\(profile.protocolKind.rawValue.uppercased()) · \(profile.host)"
+    }
+
+    private func recentSubtitle(_ recent: RecentServer) -> String {
+        recent.connectedAt.formatted(date: .omitted, time: .shortened)
+    }
+
+    private func statusColor(for profile: ServerProfile) -> Color {
+        guard self.model.activeProfile?.id == profile.id else { return .secondary.opacity(0.58) }
+        switch self.model.session.state {
+        case .connected:
+            return .green
+        case .connecting, .reconnecting:
+            return .blue
+        case .failed:
+            return .red
+        case .cancelling:
+            return .orange
+        case .disconnected:
+            return .secondary.opacity(0.58)
+        }
+    }
 }
 
 struct SidebarSection<Content: View>: View {
     var title: String
+    var systemImage: String?
     @ViewBuilder var content: Content
+
+    init(title: String, systemImage: String? = nil, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.systemImage = systemImage
+        self.content = content()
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(self.title)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
-                .lineLimit(1)
-                .padding(.horizontal, 10)
+            HStack(spacing: 6) {
+                if let systemImage {
+                    Image(systemName: systemImage)
+                        .frame(width: 14)
+                }
+                Text(self.title)
+                    .lineLimit(1)
+                Spacer()
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 10)
             self.content
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -516,6 +536,8 @@ struct SidebarNavRow: View {
     var subtitle: String?
     var systemImage: String
     var isSelected: Bool
+    var isPrimary: Bool
+    var statusColor: Color?
     var action: () -> Void
 
     @State private var isHovering = false
@@ -525,12 +547,16 @@ struct SidebarNavRow: View {
         subtitle: String? = nil,
         systemImage: String,
         isSelected: Bool,
+        isPrimary: Bool = false,
+        statusColor: Color? = nil,
         action: @escaping () -> Void
     ) {
         self.title = title
         self.subtitle = subtitle
         self.systemImage = systemImage
         self.isSelected = isSelected
+        self.isPrimary = isPrimary
+        self.statusColor = statusColor
         self.action = action
     }
 
@@ -546,7 +572,7 @@ struct SidebarNavRow: View {
                     .frame(width: 22, alignment: .center)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(self.title)
-                        .font(.body.weight(self.isSelected ? .semibold : .regular))
+                        .font(.body.weight((self.isSelected || self.isPrimary) ? .semibold : .regular))
                         .foregroundStyle(self.titleColor)
                         .lineLimit(1)
                     if let subtitle {
@@ -557,6 +583,15 @@ struct SidebarNavRow: View {
                     }
                 }
                 Spacer(minLength: 8)
+                if let statusColor {
+                    Circle()
+                        .fill(statusColor)
+                        .frame(width: 8, height: 8)
+                        .overlay {
+                            Circle()
+                                .stroke(Color.primary.opacity(0.14), lineWidth: 1)
+                        }
+                }
             }
             .padding(.horizontal, 10)
             .padding(.vertical, self.subtitle == nil ? 8 : 7)
@@ -577,6 +612,9 @@ struct SidebarNavRow: View {
     }
 
     private var backgroundColor: Color {
+        if self.isPrimary {
+            return Color.accentColor.opacity(self.isHovering ? 0.88 : 0.96)
+        }
         if self.isSelected {
             return Color.accentColor.opacity(0.16)
         }
@@ -587,33 +625,179 @@ struct SidebarNavRow: View {
     }
 
     private var iconColor: Color {
-        self.isSelected ? .accentColor : Color.primary.opacity(0.74)
+        if self.isPrimary {
+            return .white
+        }
+        return self.isSelected ? Color.accentColor : Color.primary.opacity(0.74)
     }
 
     private var titleColor: Color {
-        self.isSelected ? .accentColor : .primary
+        if self.isPrimary {
+            return .white
+        }
+        return self.isSelected ? Color.accentColor : Color.primary
     }
 }
 
 struct SidebarEmptyRow: View {
     var text: String
+    var detail: String?
 
-    init(_ text: String) {
+    init(_ text: String, detail: String? = nil) {
         self.text = text
+        self.detail = detail
     }
 
     var body: some View {
-        Text(self.text)
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .lineLimit(2)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
-            .background {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color.primary.opacity(0.04))
+        VStack(alignment: .leading, spacing: 3) {
+            Text(self.text)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+            if let detail {
+                Text(detail)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(2)
             }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
+        .background {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Color.primary.opacity(0.04))
+        }
+    }
+}
+
+struct FileActionToolbar: View {
+    @Bindable var model: AppModel
+
+    var body: some View {
+        HStack(spacing: 5) {
+            FileActionButton(
+                title: loc("browser.refresh"),
+                systemImage: "arrow.clockwise",
+                hint: loc("browser.refreshHint")
+            ) {
+                Task { await self.model.refreshLocal() }
+            }
+            FileActionButton(
+                title: loc("browser.refreshRemote"),
+                systemImage: "globe",
+                hint: loc("browser.refreshRemoteHint")
+            ) {
+                Task { await self.model.refreshRemote() }
+            }
+
+            FileActionDivider()
+
+            FileActionButton(
+                title: loc("browser.upload"),
+                systemImage: "arrow.up",
+                hint: loc("browser.uploadHint"),
+                isDisabled: self.model.selectedLocalFiles.isEmpty || self.model.session.state != .connected
+            ) {
+                self.model.uploadSelectedItem()
+            }
+            FileActionButton(
+                title: loc("browser.download"),
+                systemImage: "arrow.down",
+                hint: loc("browser.downloadHint"),
+                isDisabled: self.model.selectedRemoteFiles.isEmpty || self.model.session.state != .connected
+            ) {
+                self.model.downloadSelectedItem()
+            }
+            FileActionButton(
+                title: loc("browser.compare"),
+                systemImage: "arrow.left.arrow.right",
+                hint: loc("browser.compareHint"),
+                isDisabled: self.model.session.state != .connected
+            ) {
+                self.model.prepareSyncPreview()
+            }
+
+            FileActionDivider()
+
+            FileActionButton(
+                title: loc("browser.newFolder"),
+                systemImage: "folder.badge.plus"
+            ) {
+                self.model.beginCreateFolder(source: self.model.selectedFile?.source ?? .local)
+            }
+            Button {
+                self.model.showViewOptions.toggle()
+            } label: {
+                Image(systemName: "slider.horizontal.3")
+                    .font(.system(size: 14, weight: .medium))
+                    .frame(width: 28, height: 24)
+            }
+            .buttonStyle(.borderless)
+            .help(loc("browser.viewOptions"))
+            .accessibilityLabel(loc("browser.viewOptions"))
+            .popover(isPresented: self.$model.showViewOptions) {
+                ViewOptionsView(preferences: self.$model.preferences) {
+                    self.model.savePreferences()
+                    Task {
+                        await self.model.refreshLocal()
+                        await self.model.refreshRemote()
+                    }
+                }
+            }
+            FileActionButton(
+                title: loc("browser.inspector"),
+                systemImage: "sidebar.right"
+            ) {
+                self.model.preferences.showInspector.toggle()
+            }
+        }
+        .labelStyle(.iconOnly)
+        .padding(.horizontal, 4)
+        .padding(.vertical, 2)
+    }
+}
+
+struct FileActionButton: View {
+    var title: String
+    var systemImage: String
+    var hint: String?
+    var isDisabled: Bool
+    var action: () -> Void
+
+    init(
+        title: String,
+        systemImage: String,
+        hint: String? = nil,
+        isDisabled: Bool = false,
+        action: @escaping () -> Void
+    ) {
+        self.title = title
+        self.systemImage = systemImage
+        self.hint = hint
+        self.isDisabled = isDisabled
+        self.action = action
+    }
+
+    var body: some View {
+        Button(action: self.action) {
+            Image(systemName: self.systemImage)
+                .font(.system(size: 14, weight: .medium))
+                .frame(width: 28, height: 24)
+        }
+        .buttonStyle(.borderless)
+        .disabled(self.isDisabled)
+        .help(self.title)
+        .accessibilityLabel(self.title)
+        .accessibilityHint(self.hint ?? "")
+    }
+}
+
+struct FileActionDivider: View {
+    var body: some View {
+        Divider()
+            .frame(height: 18)
+            .padding(.horizontal, 3)
     }
 }
 
@@ -621,80 +805,141 @@ struct ConnectionToolbar: View {
     @Bindable var model: AppModel
 
     var body: some View {
-        HStack(spacing: 12) {
-            ConnectionStatusPill(state: self.model.session.state)
-            Text(self.model.activeProfile?.displayName ?? loc("connection.noServer"))
-                .font(.headline)
-                .lineLimit(1)
-                .frame(minWidth: 120, alignment: .leading)
-            Text(self.model.session.protocolKind?.rawValue.uppercased() ?? "SFTP")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.primary.opacity(0.72))
+        HStack(spacing: 14) {
+            HStack(spacing: 10) {
+                ConnectionStatusPill(state: self.model.session.state)
+                Menu {
+                    if self.model.profiles.isEmpty {
+                        Text(loc("sidebar.noSavedServers"))
+                    } else {
+                        ForEach(self.model.profiles) { profile in
+                            Button(profile.displayName) {
+                                self.model.selectedSidebarItem = profile.id.rawValue.uuidString
+                            }
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(self.model.activeProfile?.displayName ?? loc("connection.noServer"))
+                            .font(.headline)
+                            .lineLimit(1)
+                        Image(systemName: "chevron.down")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(minWidth: 150, alignment: .leading)
+                }
+                .menuStyle(.borderlessButton)
+                Text(self.model.session.protocolKind?.rawValue.uppercased() ?? "SFTP")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.primary.opacity(0.72))
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 5)
+                    .background(.thinMaterial, in: Capsule())
+                    .overlay {
+                        Capsule()
+                            .stroke(Color.primary.opacity(DriftlineOpacity.stroke), lineWidth: 1)
+                    }
+                self.primaryConnectionButton
+                self.newConnectionButton
+                Button {
+                    self.model.openTerminalSession()
+                } label: {
+                    Label(loc("connection.terminal"), systemImage: "terminal")
+                }
+                .disabled(self.model.activeProfile == nil)
+                .help(loc("connection.terminalHint"))
+                .accessibilityLabel(loc("connection.terminal"))
+                .accessibilityHint(loc("connection.terminalHint"))
+                self.connectionMoreMenu
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: DriftlineRadius.panel, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: DriftlineRadius.panel, style: .continuous)
+                    .stroke(Color.primary.opacity(DriftlineOpacity.stroke), lineWidth: 1)
+            }
             Spacer()
-            Button {
-                self.model.connectToSelectedServer()
-            } label: {
-                Label(self.model.isConnecting ? loc("connection.connecting") : loc("connection.connect"), systemImage: self.model.isConnecting ? "arrow.triangle.2.circlepath" : "link")
+            FileActionToolbar(model: self.model)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: DriftlineRadius.panel, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: DriftlineRadius.panel, style: .continuous)
+                        .stroke(Color.primary.opacity(DriftlineOpacity.stroke), lineWidth: 1)
+                }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(.ultraThinMaterial)
+        .labelStyle(.titleAndIcon)
+    }
+
+    private var primaryConnectionButton: some View {
+        Group {
+            if self.model.session.state == .connected {
+                Button {
+                    self.model.disconnect()
+                } label: {
+                    Label(loc("connection.disconnect"), systemImage: "xmark.circle")
+                }
+                .buttonStyle(GlassButtonStyle())
+                .help(loc("connection.disconnectHint"))
+                .accessibilityLabel(loc("connection.disconnect"))
+            } else {
+                Button {
+                    self.model.connectToSelectedServer()
+                } label: {
+                    Label(self.model.isConnecting ? loc("connection.connecting") : loc("connection.connect"), systemImage: self.model.isConnecting ? "arrow.triangle.2.circlepath" : "link")
+                }
+                .buttonStyle(GlassButtonStyle(isPrimary: true))
+                .disabled(self.model.isConnecting)
+                .help(loc("connection.connectHint"))
+                .accessibilityLabel(self.model.isConnecting ? loc("connection.connecting") : loc("connection.connect"))
+                .accessibilityHint(loc("connection.connectHint"))
             }
-            .buttonStyle(.borderedProminent)
-            .disabled(self.model.isConnecting)
-            .help(loc("connection.connectHint"))
-            .accessibilityLabel(self.model.isConnecting ? loc("connection.connecting") : loc("connection.connect"))
-            .accessibilityHint(loc("connection.connectHint"))
-            Button {
-                self.model.beginQuickConnect()
-            } label: {
-                Label(loc("connection.new"), systemImage: "plus.circle")
-            }
-            .help(loc("connection.newHint"))
-            .accessibilityLabel(loc("connection.new"))
-            .accessibilityHint(loc("connection.newHint"))
+        }
+    }
+
+    private var newConnectionButton: some View {
+        Button {
+            self.model.beginQuickConnect()
+        } label: {
+            Label(loc("connection.new"), systemImage: "plus.circle")
+        }
+        .buttonStyle(GlassButtonStyle())
+        .help(loc("connection.newHint"))
+        .accessibilityLabel(loc("connection.new"))
+        .accessibilityHint(loc("connection.newHint"))
+    }
+
+    private var connectionMoreMenu: some View {
+        Menu {
             Button {
                 self.model.beginEditingSelectedProfile()
             } label: {
                 Label(loc("connection.edit"), systemImage: "pencil")
             }
             .disabled(self.model.selectedProfile == nil)
-            .help(loc("connection.editHint"))
-            .accessibilityLabel(loc("connection.edit"))
             Button {
                 self.model.toggleSelectedFavorite()
             } label: {
                 Label(loc("connection.favorite"), systemImage: self.model.selectedProfile?.isFavorite == true ? "star.fill" : "star")
             }
             .disabled(self.model.selectedProfile == nil)
-            .help(self.model.selectedProfile?.isFavorite == true ? loc("connection.removeFavHint") : loc("connection.addFavHint"))
-            .accessibilityLabel(self.model.selectedProfile?.isFavorite == true ? loc("connection.removeFavHint") : loc("connection.addFavHint"))
             Button {
                 self.model.saveCurrentConnectionAsBookmark()
             } label: {
                 Label(loc("connection.bookmark"), systemImage: "bookmark")
             }
             .disabled(self.model.activeProfile == nil || self.model.session.state != .connected)
-            .help(loc("connection.bookmarkHint"))
-            .accessibilityLabel(loc("connection.bookmark"))
-            Button {
-                self.model.openTerminalSession()
-            } label: {
-                Label(loc("connection.terminal"), systemImage: "terminal")
-            }
-            .disabled(self.model.activeProfile == nil)
-            .help(loc("connection.terminalHint"))
-            .accessibilityLabel(loc("connection.terminal"))
-            .accessibilityHint(loc("connection.terminalHint"))
-            Button {
-                self.model.disconnect()
-            } label: {
-                Label(loc("connection.disconnect"), systemImage: "xmark.circle")
-            }
-            .disabled(self.model.session.state == .disconnected)
-            .help(loc("connection.disconnectHint"))
-            .accessibilityLabel(loc("connection.disconnect"))
+        } label: {
+            Image(systemName: "ellipsis.circle")
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(.bar)
-        .labelStyle(.titleAndIcon)
+        .menuStyle(.borderlessButton)
+        .help(loc("connection.more"))
+        .accessibilityLabel(loc("connection.more"))
     }
 }
 
@@ -718,74 +963,76 @@ struct TabStrip: View {
     @Bindable var model: AppModel
 
     var body: some View {
-        HStack(spacing: 6) {
-            ForEach(self.model.tabs) { tab in
-                let isSelected = self.model.selectedTabID == tab.id
-                HStack(spacing: 4) {
-                    Button {
-                        self.model.selectTab(tab.id)
-                    } label: {
-                        HStack(spacing: 5) {
-                            switch tab.session.state {
-                            case .connected:
-                                Circle()
-                                    .fill(.green)
-                                    .frame(width: 7, height: 7)
-                            case .connecting, .reconnecting:
-                                PulsingBlueDot()
-                            default:
-                                EmptyView()
-                            }
-                            Text(tab.title)
-                                .lineLimit(1)
-                                .fontWeight(isSelected ? .semibold : .regular)
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                    }
-                    .buttonStyle(.plain)
-                    if self.model.tabs.count > 1 {
+        if self.model.tabs.count > 1 {
+            HStack(spacing: 6) {
+                ForEach(self.model.tabs) { tab in
+                    let isSelected = self.model.selectedTabID == tab.id
+                    HStack(spacing: 4) {
                         Button {
-                            self.model.requestCloseTab(tab.id)
+                            self.model.selectTab(tab.id)
                         } label: {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 10, weight: .bold))
-                                .frame(width: 20, height: 20)
+                            HStack(spacing: 5) {
+                                switch tab.session.state {
+                                case .connected:
+                                    Circle()
+                                        .fill(.green)
+                                        .frame(width: 7, height: 7)
+                                case .connecting, .reconnecting:
+                                    PulsingBlueDot()
+                                default:
+                                    EmptyView()
+                                }
+                                Text(tab.title)
+                                    .lineLimit(1)
+                                    .fontWeight(isSelected ? .semibold : .regular)
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
                         }
                         .buttonStyle(.plain)
-                        .foregroundStyle(.secondary)
-                        .contentShape(Circle())
-                        .accessibilityLabel(String(format: loc("tab.closeAction"), tab.title))
-                        .padding(.trailing, 4)
+                        if self.model.tabs.count > 1 {
+                            Button {
+                                self.model.requestCloseTab(tab.id)
+                            } label: {
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .frame(width: 20, height: 20)
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(.secondary)
+                            .contentShape(Circle())
+                            .accessibilityLabel(String(format: loc("tab.closeAction"), tab.title))
+                            .padding(.trailing, 4)
+                        }
                     }
-                }
-                .background {
-                    if isSelected {
-                        RoundedRectangle(cornerRadius: 7).fill(.selection)
-                    } else {
-                        RoundedRectangle(cornerRadius: 7).fill(.tertiary)
+                    .background {
+                        if isSelected {
+                            RoundedRectangle(cornerRadius: 7).fill(.selection)
+                        } else {
+                            RoundedRectangle(cornerRadius: 7).fill(.tertiary)
+                        }
                     }
-                }
-                .overlay {
-                    if isSelected {
-                        RoundedRectangle(cornerRadius: 7).stroke(.selection.opacity(0.5), lineWidth: 1)
+                    .overlay {
+                        if isSelected {
+                            RoundedRectangle(cornerRadius: 7).stroke(.selection.opacity(0.5), lineWidth: 1)
+                        }
                     }
+                    .shadow(color: isSelected ? .black.opacity(0.10) : .clear, radius: 2, y: 1)
+                    .foregroundStyle(isSelected ? .primary : .secondary)
                 }
-                .shadow(color: isSelected ? .black.opacity(0.10) : .clear, radius: 2, y: 1)
-                .foregroundStyle(isSelected ? .primary : .secondary)
+                Button {
+                    self.model.newTab()
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 13, weight: .semibold))
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.tertiary)
+                Spacer()
             }
-            Button {
-                self.model.newTab()
-            } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 13, weight: .semibold))
-            }
-            .buttonStyle(.borderless)
-            .foregroundStyle(.tertiary)
-            Spacer()
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(.ultraThinMaterial)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(.bar)
     }
 }

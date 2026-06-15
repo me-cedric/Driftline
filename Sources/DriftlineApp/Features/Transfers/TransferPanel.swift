@@ -3,28 +3,137 @@ import SwiftUI
 
 struct TransferPanel: View {
     var jobs: [TransferJob]
+    var lastConnection: String
     var onClearCompleted: () -> Void
     var onClearFailed: () -> Void
     var onRetryFailed: () -> Void
     var onCancelActive: () -> Void
     var onCancelTransfer: (TransferJobID) -> Void
 
+    @State private var filter: TransferFilter = .all
     @State private var sortOrder = [KeyPathComparator(\TransferJob.createdAt, order: .reverse)]
 
+    private var activeCount: Int {
+        self.jobs.filter(\.isActive).count
+    }
+
+    private var failedCount: Int {
+        self.jobs.filter(\.isFailed).count
+    }
+
+    private var completedCount: Int {
+        self.jobs.filter(\.isCompleted).count
+    }
+
+    private var filteredJobs: [TransferJob] {
+        switch self.filter {
+        case .all:
+            self.jobs
+        case .active:
+            self.jobs.filter(\.isActive)
+        case .failed:
+            self.jobs.filter(\.isFailed)
+        case .completed:
+            self.jobs.filter(\.isCompleted)
+        }
+    }
+
     private var sortedJobs: [TransferJob] {
-        self.jobs.sorted(using: self.sortOrder)
+        self.filteredJobs.sorted(using: self.sortOrder)
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            ViewThatFits(in: .horizontal) {
-                self.fullHeader
-                self.compactHeader
+        GlassPanel(cornerRadius: DriftlineRadius.panel, material: .ultraThinMaterial) {
+            VStack(spacing: 0) {
+                self.header
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                Divider()
+                    .opacity(0.32)
+                self.content
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(.bar)
+        }
+    }
 
+    private var header: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) {
+                self.titleBlock
+                self.filterPicker
+                Spacer()
+                self.actions
+            }
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    self.titleBlock
+                    Spacer()
+                    self.actions
+                }
+                self.filterPicker
+            }
+        }
+    }
+
+    private var titleBlock: some View {
+        HStack(spacing: 8) {
+            Label(LocalizationManager.shared.localized("transfer.transfers"), systemImage: "arrow.up.arrow.down")
+                .font(.headline.weight(.semibold))
+            Text("· \(self.activeCount) \(LocalizationManager.shared.localized("stats.active").lowercased()) · \(self.failedCount) \(LocalizationManager.shared.localized("stats.failed").lowercased()) · \(self.completedCount) \(LocalizationManager.shared.localized("transfer.completed").lowercased())")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+    }
+
+    private var filterPicker: some View {
+        Picker(LocalizationManager.shared.localized("transfer.filter"), selection: self.$filter) {
+            ForEach(TransferFilter.allCases) { filter in
+                Text(filter.localizedTitle)
+                    .tag(filter)
+            }
+        }
+        .pickerStyle(.segmented)
+        .frame(width: 320)
+    }
+
+    private var actions: some View {
+        HStack(spacing: 8) {
+            if self.activeCount > 0 {
+                Button(LocalizationManager.shared.localized("transfer.cancelActive"), action: self.onCancelActive)
+                    .accessibilityHint(LocalizationManager.shared.localized("transfer.cancelsActiveHint"))
+            }
+            if self.failedCount > 0 {
+                Button(LocalizationManager.shared.localized("transfer.retryFailed"), action: self.onRetryFailed)
+                    .accessibilityHint(LocalizationManager.shared.localized("transfer.retriesFailedHint"))
+                Button(LocalizationManager.shared.localized("transfer.clearFailed"), action: self.onClearFailed)
+            }
+            if self.completedCount > 0 {
+                Button(LocalizationManager.shared.localized("transfer.clearCompleted"), action: self.onClearCompleted)
+            }
+        }
+        .buttonStyle(GlassButtonStyle())
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if self.jobs.isEmpty {
+            VStack(spacing: 10) {
+                Image(systemName: "arrow.up.arrow.down")
+                    .font(.system(size: 28, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 52, height: 52)
+                    .background(.thinMaterial, in: Circle())
+                Text(LocalizationManager.shared.localized("transfer.noTransfers"))
+                    .font(.title3.weight(.semibold))
+                Text(LocalizationManager.shared.localized("transfer.emptyMessage"))
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                Text(String(format: LocalizationManager.shared.localized("stats.lastConnectionFormat"), self.lastConnection))
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
             Table(self.sortedJobs, sortOrder: self.$sortOrder) {
                 TableColumn(LocalizationManager.shared.localized("transfer.column.status"), value: \.statusSortValue) { job in
                     TransferStatusBadge(status: job.status)
@@ -68,53 +177,38 @@ struct TransferPanel: View {
                 }
             }
             .overlay {
-                if self.jobs.isEmpty {
+                if self.sortedJobs.isEmpty {
                     EmptyStateView(
-                        title: LocalizationManager.shared.localized("transfer.noTransfers"),
-                        message: LocalizationManager.shared.localized("transfer.emptyMessage"),
-                        systemImage: "arrow.up.arrow.down.circle"
+                        title: LocalizationManager.shared.localized("transfer.noFilteredTransfers"),
+                        message: LocalizationManager.shared.localized("transfer.noFilteredTransfersMessage"),
+                        systemImage: "line.3.horizontal.decrease.circle"
                     )
                 }
             }
         }
-        .background(.regularMaterial)
+    }
+}
+
+private enum TransferFilter: String, CaseIterable, Identifiable {
+    case all
+    case active
+    case failed
+    case completed
+
+    var id: String {
+        self.rawValue
     }
 
-    private var fullHeader: some View {
-        HStack {
-            Label(LocalizationManager.shared.localized("transfer.transfers"), systemImage: "arrow.up.arrow.down")
-                .font(.headline)
-            Spacer()
-            Button(LocalizationManager.shared.localized("transfer.cancelActive"), action: self.onCancelActive)
-                .accessibilityHint(LocalizationManager.shared.localized("transfer.cancelsActiveHint"))
-            Button(LocalizationManager.shared.localized("transfer.retryFailed"), action: self.onRetryFailed)
-                .accessibilityHint(LocalizationManager.shared.localized("transfer.retriesFailedHint"))
-            Button(LocalizationManager.shared.localized("transfer.clearFailed"), action: self.onClearFailed)
-            Button(LocalizationManager.shared.localized("transfer.clearCompleted"), action: self.onClearCompleted)
-        }
-    }
-
-    private var compactHeader: some View {
-        HStack {
-            Label(LocalizationManager.shared.localized("transfer.transfers"), systemImage: "arrow.up.arrow.down")
-                .font(.headline)
-            Spacer()
-            Button(action: self.onCancelActive) {
-                Image(systemName: "xmark.circle")
-            }
-            .help(LocalizationManager.shared.localized("transfer.cancelActiveHelp"))
-            Button(action: self.onRetryFailed) {
-                Image(systemName: "arrow.clockwise.circle")
-            }
-            .help(LocalizationManager.shared.localized("transfer.retryFailedHelp"))
-            Button(action: self.onClearFailed) {
-                Image(systemName: "exclamationmark.triangle")
-            }
-            .help(LocalizationManager.shared.localized("transfer.clearFailedHelp"))
-            Button(action: self.onClearCompleted) {
-                Image(systemName: "checkmark.circle")
-            }
-            .help(LocalizationManager.shared.localized("transfer.clearCompletedHelp"))
+    var localizedTitle: String {
+        switch self {
+        case .all:
+            LocalizationManager.shared.localized("transfer.filter.all")
+        case .active:
+            LocalizationManager.shared.localized("transfer.filter.active")
+        case .failed:
+            LocalizationManager.shared.localized("transfer.filter.failed")
+        case .completed:
+            LocalizationManager.shared.localized("transfer.filter.completed")
         }
     }
 }
@@ -160,6 +254,15 @@ private struct TransferProgressCell: View {
 }
 
 private extension TransferJob {
+    var isActive: Bool {
+        switch status {
+        case .queued, .running:
+            true
+        case .succeeded, .failed, .cancelled:
+            false
+        }
+    }
+
     var isCancellable: Bool {
         switch status {
         case .queued, .running:
@@ -167,6 +270,20 @@ private extension TransferJob {
         case .succeeded, .failed, .cancelled:
             false
         }
+    }
+
+    var isCompleted: Bool {
+        if case .succeeded = status {
+            return true
+        }
+        return false
+    }
+
+    var isFailed: Bool {
+        if case .failed = status {
+            return true
+        }
+        return false
     }
 
     var statusSortValue: String {

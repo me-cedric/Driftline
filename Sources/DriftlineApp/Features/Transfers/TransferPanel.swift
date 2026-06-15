@@ -47,9 +47,9 @@ struct TransferPanel: View {
             VStack(spacing: 0) {
                 self.header
                     .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
+                    .padding(.vertical, 8)
                 Divider()
-                    .opacity(0.32)
+                    .opacity(0.16)
                 self.content
             }
         }
@@ -77,7 +77,7 @@ struct TransferPanel: View {
     private var titleBlock: some View {
         HStack(spacing: 8) {
             Label(LocalizationManager.shared.localized("transfer.transfers"), systemImage: "arrow.up.arrow.down")
-                .font(.headline.weight(.semibold))
+                .font(.subheadline.weight(.semibold))
             Text("· \(self.activeCount) \(LocalizationManager.shared.localized("stats.active").lowercased()) · \(self.failedCount) \(LocalizationManager.shared.localized("stats.failed").lowercased()) · \(self.completedCount) \(LocalizationManager.shared.localized("transfer.completed").lowercased())")
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -93,7 +93,10 @@ struct TransferPanel: View {
             }
         }
         .pickerStyle(.segmented)
-        .frame(width: 320)
+        .controlSize(.small)
+        .frame(width: 300)
+        .padding(3)
+        .background(.thinMaterial, in: Capsule())
     }
 
     private var actions: some View {
@@ -117,22 +120,19 @@ struct TransferPanel: View {
     @ViewBuilder
     private var content: some View {
         if self.jobs.isEmpty {
-            VStack(spacing: 10) {
-                Image(systemName: "arrow.up.arrow.down")
-                    .font(.system(size: 28, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 52, height: 52)
-                    .background(.thinMaterial, in: Circle())
+            VStack(spacing: 5) {
                 Text(LocalizationManager.shared.localized("transfer.noTransfers"))
-                    .font(.title3.weight(.semibold))
+                    .font(.callout.weight(.semibold))
                 Text(LocalizationManager.shared.localized("transfer.emptyMessage"))
-                    .font(.callout)
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                 Text(String(format: LocalizationManager.shared.localized("stats.lastConnectionFormat"), self.lastConnection))
                     .font(.caption)
                     .foregroundStyle(.tertiary)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .padding(.top, 16)
         } else {
             Table(self.sortedJobs, sortOrder: self.$sortOrder) {
                 TableColumn(LocalizationManager.shared.localized("transfer.column.status"), value: \.statusSortValue) { job in

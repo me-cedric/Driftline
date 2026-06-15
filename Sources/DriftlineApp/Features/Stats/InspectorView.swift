@@ -12,13 +12,15 @@ struct InspectorView: View {
     var body: some View {
         GeometryReader { proxy in
             ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 14) {
                     HStack {
                         Text(LocalizationManager.shared.localized("browser.inspector"))
                             .font(.title3.weight(.semibold))
                         Spacer()
                         Image(systemName: "pin")
+                            .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(.secondary)
+                            .frame(width: 24, height: 24)
                     }
 
                     InspectorSection(title: LocalizationManager.shared.localized("inspector.selection")) {
@@ -85,7 +87,9 @@ struct InspectorView: View {
                     }
                 }
                 .frame(width: max(0, proxy.size.width - 32), alignment: .topLeading)
-                .padding(16)
+                .padding(.horizontal, 16)
+                .padding(.top, 18)
+                .padding(.bottom, 16)
             }
         }
     }
@@ -93,13 +97,13 @@ struct InspectorView: View {
     private var emptySelection: some View {
         HStack(spacing: 10) {
             Image(systemName: "doc")
-                .font(.title3)
+                .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(.secondary)
                 .frame(width: 34, height: 34)
-                .background(.tertiary, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text(LocalizationManager.shared.localized("inspector.noItemSelected"))
-                    .font(.callout.weight(.semibold))
+                    .font(.callout.weight(.medium))
                 Text(LocalizationManager.shared.localized("inspector.selectItem"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -126,10 +130,10 @@ struct InspectorView: View {
     private func fileSummary(_ file: FileItem) -> some View {
         HStack(spacing: 10) {
             Image(systemName: self.iconName(for: file.kind))
-                .font(.title3)
-                .foregroundStyle(file.source == .remote ? .blue : .primary)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(file.source == .remote ? Color.accentColor.opacity(0.78) : .primary.opacity(0.86))
                 .frame(width: 34, height: 34)
-                .background(.tertiary, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text(file.name)
                     .font(.callout.weight(.semibold))
@@ -143,14 +147,18 @@ struct InspectorView: View {
     }
 
     private func inspectorRow(_ title: String, value: String) -> some View {
-        LabeledContent {
-            Text(value)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-                .multilineTextAlignment(.trailing)
-                .truncationMode(.middle)
-        } label: {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
             Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(width: 88, alignment: .leading)
+            Text(value)
+                .font(.callout)
+                .foregroundStyle(.primary.opacity(0.72))
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+                .truncationMode(.middle)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -187,7 +195,7 @@ struct InspectorView: View {
                     .padding(.vertical, 7)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(.thinMaterial, in: RoundedRectangle(cornerRadius: DriftlineRadius.control, style: .continuous))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.primary.opacity(0.68))
             }
         }
     }

@@ -28,15 +28,18 @@ struct FileBrowserOutlineView: NSViewRepresentable {
         scrollView.hasHorizontalScroller = true
         scrollView.autohidesScrollers = true
         scrollView.borderType = .noBorder
+        scrollView.drawsBackground = false
 
         let outlineView = FileBrowserNativeOutlineView()
         outlineView.setAccessibilityLabel(String(format: LocalizationManager.shared.localized("browser.fileBrowser"), self.source.localizedTitle))
         outlineView.headerView = NSTableHeaderView()
-        outlineView.rowSizeStyle = .medium
-        outlineView.rowHeight = 24
+        outlineView.rowSizeStyle = .custom
+        outlineView.rowHeight = 28
+        outlineView.intercellSpacing = NSSize(width: 0, height: 3)
         outlineView.usesAlternatingRowBackgroundColors = false
         outlineView.backgroundColor = .clear
-        outlineView.selectionHighlightStyle = .regular
+        outlineView.selectionHighlightStyle = .none
+        outlineView.gridStyleMask = []
         outlineView.allowsMultipleSelection = true
         outlineView.allowsEmptySelection = true
         outlineView.allowsColumnSelection = false
@@ -153,6 +156,7 @@ extension FileBrowserOutlineView {
             let textField = NSTextField(labelWithString: self.value(for: columnID, node: node))
             textField.setAccessibilityLabel(String(format: LocalizationManager.shared.localized("browser.column.accessibility"), self.localizedColumnTitle(for: columnID), textField.stringValue))
             textField.lineBreakMode = .byTruncatingMiddle
+            textField.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
             textField.textColor = .secondaryLabelColor
             textField.translatesAutoresizingMaskIntoConstraints = false
             cell.addSubview(textField)
@@ -162,6 +166,10 @@ extension FileBrowserOutlineView {
                 textField.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
             ])
             return cell
+        }
+
+        func outlineView(_: NSOutlineView, rowViewForItem _: Any) -> NSTableRowView? {
+            FileBrowserRowView()
         }
 
         func outlineViewItemWillExpand(_ notification: Notification) {
@@ -559,6 +567,71 @@ private final class FileBrowserNativeOutlineView: NSOutlineView {
 
 extension FileBrowserOutlineView.Coordinator: FileBrowserOutlineActionHandler {}
 
+private final class FileBrowserRowView: NSTableRowView {
+    private var trackingAreaRef: NSTrackingArea?
+    private var isHovering = false {
+        didSet {
+            if oldValue != self.isHovering {
+                self.needsDisplay = true
+            }
+        }
+    }
+
+    override var isSelected: Bool {
+        didSet {
+            self.needsDisplay = true
+        }
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let trackingAreaRef {
+            self.removeTrackingArea(trackingAreaRef)
+        }
+        let trackingArea = NSTrackingArea(
+            rect: self.bounds,
+            options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect],
+            owner: self
+        )
+        self.addTrackingArea(trackingArea)
+        self.trackingAreaRef = trackingArea
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        super.mouseEntered(with: event)
+        self.isHovering = true
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        super.mouseExited(with: event)
+        self.isHovering = false
+    }
+
+    override func drawBackground(in dirtyRect: NSRect) {
+        super.drawBackground(in: dirtyRect)
+        self.drawCapsuleState()
+    }
+
+    override func drawSelection(in _: NSRect) {
+        self.drawCapsuleState()
+    }
+
+    private func drawCapsuleState() {
+        let rowRect = self.bounds.insetBy(dx: 6, dy: 1)
+        let path = NSBezierPath(roundedRect: rowRect, xRadius: 7, yRadius: 7)
+        if self.isSelected {
+            NSColor.controlAccentColor.withAlphaComponent(0.17).setFill()
+            path.fill()
+            NSColor.controlAccentColor.withAlphaComponent(0.20).setStroke()
+            path.lineWidth = 1
+            path.stroke()
+        } else if self.isHovering {
+            NSColor.labelColor.withAlphaComponent(0.055).setFill()
+            path.fill()
+        }
+    }
+}
+
 private final class FileBrowserNameCellView: NSTableCellView {
     private let iconView = NSImageView()
     private let nameField = NSTextField(labelWithString: "")
@@ -575,8 +648,12 @@ private final class FileBrowserNameCellView: NSTableCellView {
 
     func configure(node: FileBrowserNode, source: FileSource) {
         self.imageView?.image = node.isPlaceholder ? nil : FileBrowserIconProvider.icon(for: node.item, source: source)
+        self.imageView?.contentTintColor = source == .remote && node.item.kind == .folder
+            ? NSColor.controlAccentColor.withAlphaComponent(0.72)
+            : nil
         self.textField?.stringValue = node.isPlaceholder ? LocalizationManager.shared.localized("browser.loading") : node.item.name
         self.textField?.textColor = node.isPlaceholder ? .secondaryLabelColor : .labelColor
+        self.textField?.font = .systemFont(ofSize: NSFont.systemFontSize, weight: node.isPlaceholder ? .regular : .medium)
         self.setAccessibilityLabel(node.isPlaceholder ? LocalizationManager.shared.localized("browser.loadingAccessibility") : node.item.name)
         self.setAccessibilityValue(node.isPlaceholder ? nil : self.accessibilityValue(for: node.item))
     }
@@ -617,6 +694,10 @@ private enum FileBrowserIconProvider {
     static func icon(for item: FileItem, source: FileSource) -> NSImage {
         if source == .local {
             return NSWorkspace.shared.icon(forFile: item.path)
+        }
+        if item.kind == .folder, let symbol = NSImage(systemSymbolName: "folder", accessibilityDescription: nil) {
+            symbol.isTemplate = true
+            return symbol
         }
         return NSWorkspace.shared.icon(for: self.remoteContentType(for: item))
     }

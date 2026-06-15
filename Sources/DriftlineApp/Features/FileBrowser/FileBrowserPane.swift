@@ -42,10 +42,10 @@ struct FileBrowserPane: View {
             VStack(spacing: 0) {
                 self.header
                 Divider()
-                    .opacity(0.38)
+                    .opacity(0.18)
                 self.browserBody
                 Divider()
-                    .opacity(0.28)
+                    .opacity(0.14)
                 self.footer
             }
         }
@@ -53,13 +53,14 @@ struct FileBrowserPane: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 5) {
                 Label(self.title, systemImage: self.source == .local ? "desktopcomputer" : "server.rack")
-                    .font(.headline.weight(.semibold))
-                Spacer()
-                Text(self.source == .remote && !self.isConnected ? LocalizationManager.shared.localized("connection.disconnected") : self.pathDisplay)
-                    .font(.caption)
+                    .font(.title3.weight(.semibold))
+                    .symbolRenderingMode(.hierarchical)
+
+                Text(self.headerSubtitle)
+                    .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -67,7 +68,7 @@ struct FileBrowserPane: View {
 
             PathBreadcrumbBar(sourceTitle: self.title, path: self.path, onNavigate: self.onNavigate)
 
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
                 HStack(spacing: 6) {
                     Image(systemName: "magnifyingglass")
                         .foregroundStyle(.secondary)
@@ -75,13 +76,16 @@ struct FileBrowserPane: View {
                         .textFieldStyle(.plain)
                         .disabled(self.source == .remote && !self.isConnected)
                 }
+                .frame(minWidth: 160, maxWidth: 260)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
-                .background(.black.opacity(0.12), in: RoundedRectangle(cornerRadius: DriftlineRadius.control, style: .continuous))
+                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: DriftlineRadius.control, style: .continuous))
                 .overlay {
                     RoundedRectangle(cornerRadius: DriftlineRadius.control, style: .continuous)
-                        .stroke(Color.primary.opacity(DriftlineOpacity.stroke), lineWidth: 1)
+                        .stroke(Color.primary.opacity(0.05), lineWidth: 1)
                 }
+
+                Spacer(minLength: 8)
 
                 PaneToolbarButton(title: LocalizationManager.shared.localized("browser.upOneFolder"), systemImage: "chevron.up", isDisabled: self.source == .remote && !self.isConnected, action: self.onParent)
                 PaneToolbarButton(title: LocalizationManager.shared.localized("browser.newFolder"), systemImage: "folder.badge.plus", isDisabled: self.source == .remote && !self.isConnected, action: self.onCreateFolder)
@@ -89,7 +93,9 @@ struct FileBrowserPane: View {
                 PaneToolbarButton(title: LocalizationManager.shared.localized("connection.more"), systemImage: "ellipsis", action: self.onShowInfo)
             }
         }
-        .padding(14)
+        .padding(.horizontal, 16)
+        .padding(.top, 16)
+        .padding(.bottom, 13)
     }
 
     private var browserBody: some View {
@@ -134,7 +140,7 @@ struct FileBrowserPane: View {
         HStack(spacing: 8) {
             Image(systemName: self.source == .local ? "internaldrive" : (self.isConnected ? "network" : "icloud.slash"))
                 .foregroundStyle(.secondary)
-            Text(self.source == .remote && !self.isConnected ? LocalizationManager.shared.localized("connection.disconnected") : self.path)
+            Text(self.footerStatus)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
@@ -144,8 +150,22 @@ struct FileBrowserPane: View {
                 .font(.caption)
                 .foregroundStyle(.tertiary)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 7)
+    }
+
+    private var headerSubtitle: String {
+        if self.source == .remote, !self.isConnected {
+            return "\(LocalizationManager.shared.localized("connection.disconnected")) / \(LocalizationManager.shared.localized("alert.notConnectedTitle"))"
+        }
+        return self.pathDisplay
+    }
+
+    private var footerStatus: String {
+        if self.source == .remote, !self.isConnected {
+            return LocalizationManager.shared.localized("connection.disconnected")
+        }
+        return self.source.localizedTitle
     }
 
     private var pathDisplay: String {
@@ -176,12 +196,14 @@ private struct PathBreadcrumbBar: View {
                             .lineLimit(1)
                     }
                     .buttonStyle(.plain)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                     .help(String(format: LocalizationManager.shared.localized("browser.goTo"), component.path))
 
                     if component.id != self.components.last?.id {
                         Image(systemName: "chevron.right")
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(.tertiary)
                     }
                 }
             }
@@ -243,7 +265,7 @@ private struct PaneToolbarButton: View {
         Button(action: self.action) {
             Image(systemName: self.systemImage)
                 .font(.system(size: 15, weight: .semibold))
-                .frame(width: 34, height: 26)
+                .frame(width: 32, height: 26)
                 .contentShape(RoundedRectangle(cornerRadius: DriftlineRadius.control, style: .continuous))
         }
         .buttonStyle(.plain)
@@ -253,6 +275,7 @@ private struct PaneToolbarButton: View {
                 .stroke(Color.primary.opacity(DriftlineOpacity.stroke), lineWidth: 1)
         }
         .disabled(self.isDisabled)
+        .opacity(self.isDisabled ? 0.32 : 1)
         .help(self.title)
         .accessibilityLabel(self.title)
     }
@@ -265,10 +288,16 @@ private struct RemoteEmptyConnectionCard: View {
     var body: some View {
         VStack(spacing: 14) {
             Image(systemName: "globe")
-                .font(.system(size: 34, weight: .semibold))
-                .foregroundStyle(Color.accentColor)
-                .frame(width: 56, height: 56)
+                .font(.system(size: 32, weight: .semibold))
+                .foregroundStyle(Color.accentColor.opacity(0.92))
+                .frame(width: 58, height: 58)
                 .background(.thinMaterial, in: Circle())
+                .overlay {
+                    Circle()
+                        .stroke(Color.white.opacity(0.16), lineWidth: 1)
+                        .blendMode(.plusLighter)
+                }
+                .shadow(color: Color.accentColor.opacity(0.14), radius: 18)
             VStack(spacing: 6) {
                 Text(LocalizationManager.shared.localized("browser.noRemoteConnection"))
                     .font(.title3.weight(.semibold))
@@ -283,19 +312,29 @@ private struct RemoteEmptyConnectionCard: View {
                     self.onConnect?()
                 }
                 .buttonStyle(GlassButtonStyle(isPrimary: true))
+                .disabled(self.onConnect == nil)
                 Button(LocalizationManager.shared.localized("sidebar.newConnection")) {
                     self.onNewConnection?()
                 }
                 .buttonStyle(GlassButtonStyle())
+                .disabled(self.onNewConnection == nil)
             }
         }
-        .padding(28)
+        .padding(.horizontal, 30)
+        .padding(.vertical, 26)
         .frame(maxWidth: 430)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: DriftlineRadius.panel, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: DriftlineRadius.panel, style: .continuous)
-                .stroke(Color.primary.opacity(DriftlineOpacity.stroke), lineWidth: 1)
+                .stroke(Color.primary.opacity(0.05), lineWidth: 1)
         }
+        .overlay(alignment: .top) {
+            RoundedRectangle(cornerRadius: DriftlineRadius.panel, style: .continuous)
+                .stroke(Color.white.opacity(0.16), lineWidth: 1)
+                .blendMode(.plusLighter)
+        }
+        .shadow(color: .black.opacity(0.11), radius: 22, y: 10)
+        .offset(y: -16)
         .padding(28)
     }
 }

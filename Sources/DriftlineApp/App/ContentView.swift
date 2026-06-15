@@ -241,7 +241,10 @@ struct ContentView: View {
                         self.transferQueue
                             .frame(width: proxy.size.width, height: proxy.size.height)
                     }
-                    .frame(minHeight: 140, idealHeight: 170)
+                    .frame(
+                        minHeight: self.model.transferJobs.isEmpty ? 96 : 140,
+                        idealHeight: self.model.transferJobs.isEmpty ? 118 : 170
+                    )
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -253,6 +256,7 @@ struct ContentView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.horizontal, 12)
+        .padding(.top, 6)
         .padding(.bottom, 12)
     }
 
@@ -344,7 +348,7 @@ struct SidebarView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 18) {
                 SidebarSection(title: loc("sidebar.driftline")) {
                     SidebarNavRow(
                         title: loc("sidebar.newConnection"),
@@ -461,8 +465,8 @@ struct SidebarView: View {
                     }
                 }
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 12)
+            .padding(.horizontal, 11)
+            .padding(.vertical, 14)
         }
         .navigationTitle(loc("app.name"))
     }
@@ -512,19 +516,21 @@ struct SidebarSection<Content: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 6) {
                 if let systemImage {
                     Image(systemName: systemImage)
-                        .frame(width: 14)
+                        .font(.caption2.weight(.semibold))
+                        .frame(width: 13)
                 }
                 Text(self.title)
                     .lineLimit(1)
                 Spacer()
             }
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 10)
+            .font(.caption2.weight(.semibold))
+            .textCase(.uppercase)
+            .foregroundStyle(.secondary.opacity(0.78))
+            .padding(.horizontal, 11)
             self.content
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -566,7 +572,7 @@ struct SidebarNavRow: View {
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: self.systemImage)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: 15, weight: .semibold))
                     .symbolRenderingMode(.hierarchical)
                     .foregroundStyle(self.iconColor)
                     .frame(width: 22, alignment: .center)
@@ -586,24 +592,24 @@ struct SidebarNavRow: View {
                 if let statusColor {
                     Circle()
                         .fill(statusColor)
-                        .frame(width: 8, height: 8)
+                        .frame(width: 6, height: 6)
                         .overlay {
                             Circle()
-                                .stroke(Color.primary.opacity(0.14), lineWidth: 1)
+                                .stroke(Color.primary.opacity(0.10), lineWidth: 1)
                         }
                 }
             }
             .padding(.horizontal, 10)
-            .padding(.vertical, self.subtitle == nil ? 8 : 7)
-            .frame(maxWidth: .infinity, minHeight: self.subtitle == nil ? 36 : 46, alignment: .leading)
-            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .padding(.vertical, self.subtitle == nil ? 7 : 7)
+            .frame(maxWidth: .infinity, minHeight: self.subtitle == nil ? 34 : 44, alignment: .leading)
+            .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
             .background {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
                     .fill(self.backgroundColor)
             }
             .overlay {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(Color.accentColor.opacity(self.isSelected ? 0.22 : 0), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .stroke(Color.accentColor.opacity(self.isSelected ? 0.16 : 0), lineWidth: 1)
             }
         }
         .buttonStyle(.plain)
@@ -616,10 +622,10 @@ struct SidebarNavRow: View {
             return Color.accentColor.opacity(self.isHovering ? 0.88 : 0.96)
         }
         if self.isSelected {
-            return Color.accentColor.opacity(0.16)
+            return Color.accentColor.opacity(0.12)
         }
         if self.isHovering {
-            return Color.primary.opacity(0.07)
+            return Color.primary.opacity(0.055)
         }
         return .clear
     }
@@ -662,11 +668,11 @@ struct SidebarEmptyRow: View {
             }
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
         .background {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color.primary.opacity(0.04))
+                .fill(Color.primary.opacity(0.025))
         }
     }
 }
@@ -675,7 +681,7 @@ struct FileActionToolbar: View {
     @Bindable var model: AppModel
 
     var body: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: 7) {
             FileActionButton(
                 title: loc("browser.refresh"),
                 systemImage: "arrow.clockwise",
@@ -753,7 +759,7 @@ struct FileActionToolbar: View {
             }
         }
         .labelStyle(.iconOnly)
-        .padding(.horizontal, 4)
+        .padding(.horizontal, 2)
         .padding(.vertical, 2)
     }
 }
@@ -787,6 +793,7 @@ struct FileActionButton: View {
         }
         .buttonStyle(.borderless)
         .disabled(self.isDisabled)
+        .opacity(self.isDisabled ? 0.28 : 1)
         .help(self.title)
         .accessibilityLabel(self.title)
         .accessibilityHint(self.hint ?? "")
@@ -797,7 +804,8 @@ struct FileActionDivider: View {
     var body: some View {
         Divider()
             .frame(height: 18)
-            .padding(.horizontal, 3)
+            .opacity(0.45)
+            .padding(.horizontal, 5)
     }
 }
 
@@ -805,8 +813,8 @@ struct ConnectionToolbar: View {
     @Bindable var model: AppModel
 
     var body: some View {
-        HStack(spacing: 14) {
-            HStack(spacing: 10) {
+        HStack(spacing: 18) {
+            HStack(spacing: 12) {
                 ConnectionStatusPill(state: self.model.session.state)
                 Menu {
                     if self.model.profiles.isEmpty {
@@ -821,7 +829,7 @@ struct ConnectionToolbar: View {
                 } label: {
                     HStack(spacing: 6) {
                         Text(self.model.activeProfile?.displayName ?? loc("connection.noServer"))
-                            .font(.headline)
+                            .font(.callout.weight(.semibold))
                             .lineLimit(1)
                         Image(systemName: "chevron.down")
                             .font(.caption2.weight(.bold))
@@ -841,19 +849,23 @@ struct ConnectionToolbar: View {
                             .stroke(Color.primary.opacity(DriftlineOpacity.stroke), lineWidth: 1)
                     }
                 self.primaryConnectionButton
+                Color.clear
+                    .frame(width: 2, height: 1)
                 self.newConnectionButton
                 Button {
                     self.model.openTerminalSession()
                 } label: {
                     Label(loc("connection.terminal"), systemImage: "terminal")
                 }
+                .buttonStyle(.borderless)
                 .disabled(self.model.activeProfile == nil)
+                .opacity(self.model.activeProfile == nil ? 0.35 : 1)
                 .help(loc("connection.terminalHint"))
                 .accessibilityLabel(loc("connection.terminal"))
                 .accessibilityHint(loc("connection.terminalHint"))
                 self.connectionMoreMenu
             }
-            .padding(.horizontal, 10)
+            .padding(.horizontal, 12)
             .padding(.vertical, 7)
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: DriftlineRadius.panel, style: .continuous))
             .overlay {
@@ -862,7 +874,7 @@ struct ConnectionToolbar: View {
             }
             Spacer()
             FileActionToolbar(model: self.model)
-                .padding(.horizontal, 8)
+                .padding(.horizontal, 10)
                 .padding(.vertical, 6)
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: DriftlineRadius.panel, style: .continuous))
                 .overlay {

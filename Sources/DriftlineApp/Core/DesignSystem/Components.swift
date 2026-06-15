@@ -20,10 +20,11 @@ enum DriftlineSpacing {
 enum DriftlineOpacity {
     static let glassPanel = 0.56
     static let glassToolbar = 0.58
-    static let hover = 0.08
-    static let selected = 0.18
-    static let separator = 0.055
-    static let stroke = 0.08
+    static let hover = 0.06
+    static let selected = 0.14
+    static let separator = 0.04
+    static let stroke = 0.065
+    static let topHighlight = 0.12
 }
 
 struct GlassPanel<Content: View>: View {
@@ -46,10 +47,10 @@ struct GlassPanel<Content: View>: View {
             }
             .overlay(alignment: .top) {
                 RoundedRectangle(cornerRadius: self.cornerRadius, style: .continuous)
-                    .stroke(Color.white.opacity(0.06), lineWidth: 1)
+                    .stroke(Color.white.opacity(DriftlineOpacity.topHighlight), lineWidth: 1)
                     .blendMode(.plusLighter)
             }
-            .shadow(color: .black.opacity(0.16), radius: 18, y: 10)
+            .shadow(color: .black.opacity(0.12), radius: 22, y: 12)
     }
 }
 
@@ -175,17 +176,24 @@ struct InspectorSection<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(self.title)
-                .font(.headline.weight(.semibold))
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.primary.opacity(0.9))
             self.content
                 .font(.callout)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(13)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: DriftlineRadius.card, style: .continuous))
+        .padding(14)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: DriftlineRadius.card, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: DriftlineRadius.card, style: .continuous)
-                .stroke(Color.primary.opacity(DriftlineOpacity.stroke), lineWidth: 1)
+                .stroke(Color.primary.opacity(0.045), lineWidth: 1)
         }
+        .overlay(alignment: .top) {
+            RoundedRectangle(cornerRadius: DriftlineRadius.card, style: .continuous)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                .blendMode(.plusLighter)
+        }
+        .shadow(color: .black.opacity(0.045), radius: 10, y: 4)
     }
 }
 

@@ -4,13 +4,13 @@ import XCTest
 final class TransferClientTests: XCTestCase {
     func testSCPUploadCommandUsesUppercasePortAndRemoteDestination() throws {
         let profile = ServerProfile(displayName: "Server", host: "example.com", port: 2222, protocolKind: .sftp, username: "deploy", authenticationMethod: .agent)
-        let job = TransferJob(direction: .upload, sourcePath: "/tmp/site/index.html", destinationPath: "/var/www/index.html")
+        let job = TransferJob(direction: .upload, sourcePath: "/tmp/site/index.html", destinationPath: "~/index.html")
 
         let arguments = try TransferCommandBuilder.scpArguments(for: job, profile: profile)
 
         XCTAssertEqual(Array(arguments.prefix(2)), ["-P", "2222"])
         XCTAssertTrue(arguments.contains("/tmp/site/index.html"))
-        XCTAssertTrue(arguments.contains("deploy@example.com:'/var/www/index.html'"))
+        XCTAssertTrue(arguments.contains("deploy@example.com:\"$HOME\"/'index.html'"))
     }
 
     func testSCPDownloadCommandUsesRemoteSourceAndLocalDestination() throws {

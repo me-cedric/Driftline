@@ -14,7 +14,11 @@ struct ContentView: View {
     @State private var inspectorResizeStartWidth: CGFloat?
     @State private var transferHeight: CGFloat = 150
     @State private var transferResizeStartHeight: CGFloat?
+    @State private var localPaneFraction: CGFloat = 0.5
+    @State private var paneResizeStartWidth: CGFloat?
     private let inspectorChromeTopExtension: CGFloat = 24
+    private static let paneDividerWidth: CGFloat = 9
+    private static let paneMinWidth: CGFloat = 360
 
     var body: some View {
         ZStack(alignment: .trailing) {
@@ -259,73 +263,92 @@ struct ContentView: View {
     }
 
     private var fileBrowserSplit: some View {
-        HSplitView {
-            FileBrowserPane(
-                title: loc("browser.local"),
-                path: self.model.session.localPath,
-                items: self.model.localItems,
-                source: .local,
-                selectionIDs: self.$model.selectedLocalFileIDs,
-                onSelectionChange: { self.model.selectItems($0, in: .local) },
-                onOpen: { self.model.navigateLocal(to: $0) },
-                onNavigate: { self.model.navigateLocal(toPath: $0) },
-                onParent: { self.model.navigateLocalParent() },
-                onRefresh: { Task { await self.model.refreshLocal() } },
-                onCreateFolder: { self.model.beginCreateFolder(source: .local) },
-                onRename: { self.model.beginRenameSelectedItem(source: .local) },
-                onDelete: { self.model.requestDeleteSelectedItem(source: .local) },
-                onTransfer: { items in
-                    if self.model.session.state == .connected {
-                        self.model.uploadItems(items)
-                    } else {
-                        if let item = items.first {
-                            self.model.navigateLocal(to: item)
+        GeometryReader { proxy in
+            let available = max(0, proxy.size.width - Self.paneDividerWidth)
+            let localWidth = self.localPaneWidth(available: available)
+            HStack(spacing: 0) {
+                FileBrowserPane(
+                    title: loc("browser.local"),
+                    path: self.model.session.localPath,
+                    items: self.model.localItems,
+                    source: .local,
+                    selectionIDs: self.$model.selectedLocalFileIDs,
+                    onSelectionChange: { self.model.selectItems($0, in: .local) },
+                    onOpen: { self.model.navigateLocal(to: $0) },
+                    onNavigate: { self.model.navigateLocal(toPath: $0) },
+                    onParent: { self.model.navigateLocalParent() },
+                    onRefresh: { Task { await self.model.refreshLocal() } },
+                    onCreateFolder: { self.model.beginCreateFolder(source: .local) },
+                    onRename: { self.model.beginRenameSelectedItem(source: .local) },
+                    onDelete: { self.model.requestDeleteSelectedItem(source: .local) },
+                    onTransfer: { items in
+                        if self.model.session.state == .connected {
+                            self.model.uploadItems(items)
+                        } else {
+                            if let item = items.first {
+                                self.model.navigateLocal(to: item)
+                            }
                         }
-                    }
-                },
-                onDropItems: { self.model.transferDroppedItems($0, to: .local) },
-                onCopy: { self.model.copyItems($0) },
-                onPaste: { self.model.pasteCopiedItems(into: .local) },
-                onShowInfo: {
-                    self.model.activePane = .local
-                    self.model.preferences.showInspector = true
-                },
-                loadChildren: { item, completion in self.model.loadChildren(of: item, completion: completion) }
-            )
-            .frame(minWidth: 360, maxWidth: .infinity)
-            .layoutPriority(1)
-            .padding(.trailing, 4)
-            FileBrowserPane(
-                title: loc("browser.remote"),
-                path: self.model.session.remotePath,
-                items: self.model.remoteItems,
-                source: .remote,
-                isConnected: self.model.session.state == .connected,
-                selectionIDs: self.$model.selectedRemoteFileIDs,
-                onSelectionChange: { self.model.selectItems($0, in: .remote) },
-                onOpen: { self.model.navigateRemote(to: $0) },
-                onNavigate: { self.model.navigateRemote(toPath: $0) },
-                onParent: { self.model.navigateRemoteParent() },
-                onRefresh: { Task { await self.model.refreshRemote() } },
-                onCreateFolder: { self.model.beginCreateFolder(source: .remote) },
-                onRename: { self.model.beginRenameSelectedItem(source: .remote) },
-                onDelete: { self.model.requestDeleteSelectedItem(source: .remote) },
-                onTransfer: { self.model.downloadItems($0) },
-                onDropItems: { self.model.transferDroppedItems($0, to: .remote) },
-                onCopy: { self.model.copyItems($0) },
-                onPaste: { self.model.pasteCopiedItems(into: .remote) },
-                onShowInfo: {
-                    self.model.activePane = .remote
-                    self.model.preferences.showInspector = true
-                },
-                onNewConnection: { self.model.beginQuickConnect() },
-                loadChildren: { item, completion in self.model.loadChildren(of: item, completion: completion) }
-            )
-            .frame(minWidth: 360, maxWidth: .infinity)
-            .layoutPriority(1)
-            .padding(.leading, 4)
+                    },
+                    onDropItems: { self.model.transferDroppedItems($0, to: .local) },
+                    onCopy: { self.model.copyItems($0) },
+                    onPaste: { self.model.pasteCopiedItems(into: .local) },
+                    onShowInfo: {
+                        self.model.activePane = .local
+                        self.model.preferences.showInspector = true
+                    },
+                    loadChildren: { item, completion in self.model.loadChildren(of: item, completion: completion) }
+                )
+                .frame(width: localWidth)
+                PaneVerticalDivider()
+                    .frame(width: Self.paneDividerWidth)
+                    .gesture(
+                        DragGesture(coordinateSpace: .global)
+                            .onChanged { value in
+                                let start = self.paneResizeStartWidth ?? localWidth
+                                self.paneResizeStartWidth = start
+                                guard available > 0 else { return }
+                                self.localPaneFraction = min(1, max(0, (start + value.translation.width) / available))
+                            }
+                            .onEnded { _ in self.paneResizeStartWidth = nil }
+                    )
+                FileBrowserPane(
+                    title: loc("browser.remote"),
+                    path: self.model.session.remotePath,
+                    items: self.model.remoteItems,
+                    source: .remote,
+                    isConnected: self.model.session.state == .connected,
+                    selectionIDs: self.$model.selectedRemoteFileIDs,
+                    onSelectionChange: { self.model.selectItems($0, in: .remote) },
+                    onOpen: { self.model.navigateRemote(to: $0) },
+                    onNavigate: { self.model.navigateRemote(toPath: $0) },
+                    onParent: { self.model.navigateRemoteParent() },
+                    onRefresh: { Task { await self.model.refreshRemote() } },
+                    onCreateFolder: { self.model.beginCreateFolder(source: .remote) },
+                    onRename: { self.model.beginRenameSelectedItem(source: .remote) },
+                    onDelete: { self.model.requestDeleteSelectedItem(source: .remote) },
+                    onTransfer: { self.model.downloadItems($0) },
+                    onDropItems: { self.model.transferDroppedItems($0, to: .remote) },
+                    onCopy: { self.model.copyItems($0) },
+                    onPaste: { self.model.pasteCopiedItems(into: .remote) },
+                    onShowInfo: {
+                        self.model.activePane = .remote
+                        self.model.preferences.showInspector = true
+                    },
+                    onNewConnection: { self.model.beginQuickConnect() },
+                    loadChildren: { item, completion in self.model.loadChildren(of: item, completion: completion) }
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func localPaneWidth(available: CGFloat) -> CGFloat {
+        guard available > 0 else { return 0 }
+        guard available > Self.paneMinWidth * 2 else { return available / 2 }
+        let ideal = available * self.localPaneFraction
+        return min(max(ideal, Self.paneMinWidth), available - Self.paneMinWidth)
     }
 
     private var transferQueue: some View {
@@ -409,6 +432,7 @@ struct SidebarView: View {
                                 statusColor: self.statusColor(for: profile)
                             ) {
                                 self.model.selectedSidebarItem = self.sidebarID(for: profile)
+                                self.model.connectToSelectedServer()
                             }
                             .contextMenu {
                                 Button(loc("sidebar.contextConnect")) {

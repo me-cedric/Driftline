@@ -20,9 +20,8 @@ struct ServerProfileEditorView: View {
                             Text(protocolKind.rawValue.uppercased()).tag(protocolKind)
                         }
                     }
-                    Stepper(value: self.$draft.port, in: 1 ... 65535) {
-                        LabeledContent(LocalizationManager.shared.localized("profile.port"), value: "\(self.draft.port)")
-                    }
+                    TextField(LocalizationManager.shared.localized("profile.port"), value: self.$draft.port, format: .number)
+                        .frame(width: 96)
                     TextField(LocalizationManager.shared.localized("profile.group"), text: self.$draft.groupName)
                     Toggle(LocalizationManager.shared.localized("profile.favorite"), isOn: self.$draft.isFavorite)
                 }

@@ -22,6 +22,12 @@ public enum SFTPRequestBuilder {
         return SFTPPacket(type: .opendir, requestID: id, payload: payload)
     }
 
+    public static func realpath(id: UInt32, path: String) -> SFTPPacket {
+        var payload = Data()
+        payload.appendString(path)
+        return SFTPPacket(type: .realpath, requestID: id, payload: payload)
+    }
+
     public static func readdir(id: UInt32, handle: Data) -> SFTPPacket {
         var payload = Data()
         payload.appendBinaryString(handle)

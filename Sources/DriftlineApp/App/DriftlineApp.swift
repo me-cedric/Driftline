@@ -307,6 +307,7 @@ final class AppModel: @unchecked Sendable {
         do {
             self.localItems = try await self.localFileSystem.listDirectory(at: self.session.localPath, preferences: self.preferences.fileList)
             self.saveActiveTabSnapshot()
+            await self.recordActiveRecentConnectionIfNeeded()
         } catch {
             self.recordError(error, category: "local.list")
             self.localItems = []
@@ -494,8 +495,8 @@ final class AppModel: @unchecked Sendable {
     }
 
     func navigateRemoteParent() {
-        guard self.session.remotePath != "/" else { return }
-        let parent = URL(fileURLWithPath: session.remotePath).deletingLastPathComponent().path
+        let parent = self.remoteParentPath(of: self.session.remotePath)
+        guard parent != self.session.remotePath else { return }
         self.session.remotePath = parent.isEmpty ? "/" : parent
         Task { await self.refreshRemote() }
     }
@@ -509,31 +510,29 @@ final class AppModel: @unchecked Sendable {
         Task { await self.connectSelectedServer() }
     }
 
-    func connectSelectedServer() async {
+    func connectSelectedServer(localPath: String? = nil, remotePath: String? = nil) async {
         guard let profile = selectedProfile else {
             self.userAlert = UserAlert(title: self.loc("alert.noServerTitle"), message: self.loc("alert.noServerMsg"))
             self.beginQuickConnect()
             return
         }
-        await self.connect(profile)
+        await self.connect(profile, localPath: localPath, remotePath: remotePath)
     }
 
-    private func connect(_ profile: ServerProfile) async {
+    private func connect(_ profile: ServerProfile, localPath: String? = nil, remotePath: String? = nil) async {
+        let paths = self.connectionPaths(for: profile, localPath: localPath, remotePath: remotePath)
         self.isConnecting = true
         self.useNativeBackendIfNeeded(for: profile)
-        self.session = ConnectionSession(serverID: profile.id, state: .connecting, protocolKind: profile.protocolKind, localPath: profile.localDefaultPath, remotePath: profile.remoteDefaultPath)
+        self.session = ConnectionSession(serverID: profile.id, state: .connecting, protocolKind: profile.protocolKind, localPath: paths.localPath, remotePath: paths.remotePath)
         do {
             let client = self.remoteClientForCurrentPreference()
-            self.session = try await client.connect(to: profile)
+            var connectedSession = try await client.connect(to: profile)
+            connectedSession.localPath = paths.localPath
+            connectedSession.remotePath = paths.remotePath
+            self.session = connectedSession
             self.remoteItems = try await client.listDirectory(at: self.session.remotePath, profile: profile, session: self.session, preferences: self.preferences.fileList)
-            try await self.recentRepository.record(RecentServer(
-                profileID: profile.id,
-                displayName: profile.displayName,
-                host: profile.host,
-                protocolKind: profile.protocolKind,
-                localPath: self.session.localPath,
-                remotePath: self.session.remotePath
-            ), limit: 10)
+            await self.refreshLocal()
+            try await self.recordRecentConnection(for: profile)
             self.recents = try await self.recentRepository.list(limit: 10)
             self.saveActiveTabSnapshot()
             self.isConnecting = false
@@ -547,6 +546,38 @@ final class AppModel: @unchecked Sendable {
             self.session.lastErrorMessage = error.localizedDescription
             self.footerMessage = error.localizedDescription
             self.isConnecting = false
+        }
+    }
+
+    private func connectionPaths(for profile: ServerProfile, localPath: String?, remotePath: String?) -> (localPath: String, remotePath: String) {
+        let recent = self.recents.first { $0.profileID == profile.id }
+        let currentSessionMatchesProfile = self.session.serverID == profile.id
+        let resolvedLocalPath = localPath ?? (currentSessionMatchesProfile ? self.session.localPath : recent?.localPath) ?? profile.localDefaultPath
+        let resolvedRemotePath = remotePath ?? (currentSessionMatchesProfile ? self.session.remotePath : recent?.remotePath) ?? profile.remoteDefaultPath
+        return (
+            localPath: resolvedLocalPath.isEmpty ? FileManager.default.homeDirectoryForCurrentUser.path : resolvedLocalPath,
+            remotePath: resolvedRemotePath.isEmpty ? "/" : resolvedRemotePath
+        )
+    }
+
+    private func recordRecentConnection(for profile: ServerProfile) async throws {
+        try await self.recentRepository.record(RecentServer(
+            profileID: profile.id,
+            displayName: profile.displayName,
+            host: profile.host,
+            protocolKind: profile.protocolKind,
+            localPath: self.session.localPath,
+            remotePath: self.session.remotePath
+        ), limit: 10)
+    }
+
+    private func recordActiveRecentConnectionIfNeeded() async {
+        guard self.session.state == .connected, let profile = self.activeProfile else { return }
+        do {
+            try await self.recordRecentConnection(for: profile)
+            self.recents = try await self.recentRepository.list(limit: 10)
+        } catch {
+            self.recordError(error, category: "recent.record")
         }
     }
 
@@ -586,6 +617,7 @@ final class AppModel: @unchecked Sendable {
         do {
             self.remoteItems = try await self.remoteClientForCurrentPreference().listDirectory(at: self.session.remotePath, profile: profile, session: self.session, preferences: self.preferences.fileList)
             self.saveActiveTabSnapshot()
+            await self.recordActiveRecentConnectionIfNeeded()
         } catch {
             self.notifyInBackground(
                 title: self.loc("notification.serverDisconnectedTitle"),
@@ -680,7 +712,7 @@ final class AppModel: @unchecked Sendable {
         self.session.remotePath = bookmark.remotePath
         Task {
             await self.refreshLocal()
-            await self.connectSelectedServer()
+            await self.connectSelectedServer(localPath: bookmark.localPath, remotePath: bookmark.remotePath)
         }
     }
 
@@ -698,7 +730,7 @@ final class AppModel: @unchecked Sendable {
         self.session.remotePath = recent.remotePath
         Task {
             await self.refreshLocal()
-            await self.connectSelectedServer()
+            await self.connectSelectedServer(localPath: recent.localPath, remotePath: recent.remotePath)
         }
     }
 
@@ -740,7 +772,7 @@ final class AppModel: @unchecked Sendable {
                     self.profileEditorError = nil
                     if self.connectAfterSavingDraft {
                         self.connectAfterSavingDraft = false
-                        await self.connect(profile)
+                        await self.connect(profile, localPath: profile.localDefaultPath, remotePath: profile.remoteDefaultPath)
                     }
                 } catch {
                     self.recordError(error, category: "profile.save")
@@ -1291,6 +1323,13 @@ final class AppModel: @unchecked Sendable {
 
     private func remoteParentPath(of path: String) -> String {
         let trimmed = path.hasSuffix("/") && path.count > 1 ? String(path.dropLast()) : path
+        if trimmed == "~" {
+            return "~"
+        }
+        if trimmed.hasPrefix("~/") {
+            guard let slash = trimmed.lastIndex(of: "/") else { return "~" }
+            return slash == trimmed.index(trimmed.startIndex, offsetBy: 1) ? "~" : String(trimmed[..<slash])
+        }
         guard let slash = trimmed.lastIndex(of: "/") else { return "/" }
         if slash == trimmed.startIndex { return "/" }
         return String(trimmed[..<slash])
@@ -1708,7 +1747,7 @@ struct ServerProfileDraft: Identifiable, Equatable {
         self.password = ""
         self.passphrase = ""
         self.storePassphrase = false
-        self.remoteDefaultPath = "/"
+        self.remoteDefaultPath = "~"
         self.localDefaultPath = FileManager.default.homeDirectoryForCurrentUser.path
         self.notes = ""
         self.tags = ""
@@ -1787,7 +1826,7 @@ struct ServerProfileDraft: Identifiable, Equatable {
             protocolKind: self.protocolKind,
             username: trimmedUsername,
             authenticationMethod: authenticationMethod,
-            remoteDefaultPath: self.remoteDefaultPath.isEmpty ? "/" : self.remoteDefaultPath,
+            remoteDefaultPath: self.remoteDefaultPath.isEmpty ? "~" : self.remoteDefaultPath,
             localDefaultPath: self.localDefaultPath.isEmpty ? FileManager.default.homeDirectoryForCurrentUser.path : self.localDefaultPath,
             notes: self.notes,
             tags: self.tags.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty },

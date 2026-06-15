@@ -23,10 +23,14 @@ struct FileBrowserOutlineView: NSViewRepresentable {
     }
 
     func makeNSView(context: Context) -> NSScrollView {
-        let scrollView = NSScrollView()
+        let scrollView = OverlayScrollView()
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = true
         scrollView.autohidesScrollers = true
+        // OverlayScrollView pins the scroller style to overlay so the table shows thin,
+        // self-hiding scrollers (appear on scroll / near the edge, then fade) instead of
+        // the heavy legacy bars AppKit uses when the system pref is "Always".
+        scrollView.scrollerStyle = .overlay
         scrollView.borderType = .noBorder
         scrollView.drawsBackground = false
 
@@ -521,6 +525,8 @@ private protocol FileBrowserOutlineActionHandler: AnyObject {
 
 private final class FileBrowserNativeOutlineView: NSOutlineView {
     weak var actionHandler: FileBrowserOutlineActionHandler?
+    private var scrollRevealTrackingArea: NSTrackingArea?
+    private var hoveredRow = -1
 
     override func menu(for event: NSEvent) -> NSMenu? {
         let point = self.convert(event.locationInWindow, from: nil)
@@ -529,6 +535,36 @@ private final class FileBrowserNativeOutlineView: NSOutlineView {
             self.selectRowIndexes(IndexSet(integer: clickedRow), byExtendingSelection: false)
         }
         return self.actionHandler?.contextMenu()
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let scrollRevealTrackingArea {
+            self.removeTrackingArea(scrollRevealTrackingArea)
+        }
+        let trackingArea = NSTrackingArea(
+            rect: self.bounds,
+            options: [.mouseMoved, .mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect],
+            owner: self
+        )
+        self.addTrackingArea(trackingArea)
+        self.scrollRevealTrackingArea = trackingArea
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        super.mouseMoved(with: event)
+        self.updateHoveredRow(at: self.convert(event.locationInWindow, from: nil))
+        (self.enclosingScrollView as? OverlayScrollView)?.revealScrollerIfNeeded(from: event)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        super.mouseExited(with: event)
+        self.clearHoveredRow()
+    }
+
+    override func scrollWheel(with event: NSEvent) {
+        self.clearHoveredRow()
+        super.scrollWheel(with: event)
     }
 
     override func keyDown(with event: NSEvent) {
@@ -563,12 +599,176 @@ private final class FileBrowserNativeOutlineView: NSOutlineView {
         }
         super.keyDown(with: event)
     }
+
+    private func updateHoveredRow(at point: NSPoint) {
+        let row = self.row(at: point)
+        let nextHoveredRow = row >= 0 ? row : -1
+        guard nextHoveredRow != self.hoveredRow else { return }
+        self.setRow(self.hoveredRow, hovering: false)
+        self.hoveredRow = nextHoveredRow
+        self.setRow(nextHoveredRow, hovering: true)
+    }
+
+    private func clearHoveredRow() {
+        guard self.hoveredRow != -1 else { return }
+        self.setRow(self.hoveredRow, hovering: false)
+        self.hoveredRow = -1
+    }
+
+    private func setRow(_ row: Int, hovering: Bool) {
+        guard row >= 0,
+              let rowView = self.rowView(atRow: row, makeIfNecessary: false) as? FileBrowserRowView
+        else { return }
+        rowView.setHovering(hovering)
+    }
 }
 
 extension FileBrowserOutlineView.Coordinator: FileBrowserOutlineActionHandler {}
 
+private final class OverlayScrollView: NSScrollView {
+    private let edgeRevealDistance: CGFloat = 28
+    private let flashThrottle: TimeInterval = 0.35
+    private var edgeTrackingArea: NSTrackingArea?
+    private var hideScrollersWorkItem: DispatchWorkItem?
+    private var lastFlashTime: TimeInterval = 0
+
+    override var scrollerStyle: NSScroller.Style {
+        get { .overlay }
+        set {
+            _ = newValue
+            super.scrollerStyle = .overlay
+        }
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let edgeTrackingArea {
+            self.removeTrackingArea(edgeTrackingArea)
+        }
+        let trackingArea = NSTrackingArea(
+            rect: self.bounds,
+            options: [.mouseMoved, .mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect],
+            owner: self
+        )
+        self.addTrackingArea(trackingArea)
+        self.edgeTrackingArea = trackingArea
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        super.mouseMoved(with: event)
+        self.revealScrollerIfNeeded(from: event)
+    }
+
+    func revealScrollerIfNeeded(from event: NSEvent) {
+        let point = self.convert(event.locationInWindow, from: nil)
+        self.reflectScrolledClipView(self.contentView)
+        let nearVerticalScroller = self.canRevealVerticalScroller && self.isNearVerticalScroller(point)
+        let nearHorizontalScroller = self.canRevealHorizontalScroller && self.isNearHorizontalScroller(point)
+        guard nearVerticalScroller || nearHorizontalScroller else { return }
+
+        let now = ProcessInfo.processInfo.systemUptime
+        guard now - self.lastFlashTime >= self.flashThrottle else { return }
+        self.lastFlashTime = now
+        self.flashScrollers()
+        self.revealScrollers(vertical: nearVerticalScroller, horizontal: nearHorizontalScroller)
+    }
+
+    private var canRevealVerticalScroller: Bool {
+        if let verticalScroller, verticalScroller.knobProportion > 0, verticalScroller.knobProportion < 1 {
+            return true
+        }
+        return self.documentExtent.height > self.contentView.bounds.height + 1
+    }
+
+    private var canRevealHorizontalScroller: Bool {
+        if let horizontalScroller, horizontalScroller.knobProportion > 0, horizontalScroller.knobProportion < 1 {
+            return true
+        }
+        return self.horizontalContentWidth > self.contentView.bounds.width + 1
+    }
+
+    private var documentExtent: NSSize {
+        guard let documentView else { return .zero }
+        return NSSize(
+            width: max(documentView.bounds.width, documentView.frame.width),
+            height: max(documentView.bounds.height, documentView.frame.height)
+        )
+    }
+
+    private var horizontalContentWidth: CGFloat {
+        guard let documentView else { return 0 }
+        let documentWidth = max(documentView.bounds.width, documentView.frame.width)
+        guard let tableView = documentView as? NSTableView else {
+            return documentWidth
+        }
+        let columnWidth = tableView.tableColumns.reduce(0) { partialWidth, column in
+            partialWidth + column.width
+        }
+        let spacingWidth = max(0, CGFloat(tableView.numberOfColumns - 1)) * tableView.intercellSpacing.width
+        return max(documentWidth, columnWidth + spacingWidth)
+    }
+
+    private func isNearHorizontalScroller(_ point: NSPoint) -> Bool {
+        let scrollerFrame = self.horizontalScroller?.frame ?? NSRect(x: self.bounds.minX, y: self.bounds.minY, width: self.bounds.width, height: 0)
+        let revealFrame = scrollerFrame.insetBy(dx: 0, dy: -self.edgeRevealDistance)
+        if revealFrame.contains(point) {
+            return true
+        }
+        let distanceToLowerEdge = abs(point.y - self.bounds.minY)
+        return distanceToLowerEdge <= self.edgeRevealDistance
+    }
+
+    private func isNearVerticalScroller(_ point: NSPoint) -> Bool {
+        let scrollerFrame = self.verticalScroller?.frame ?? NSRect(x: self.bounds.maxX, y: self.bounds.minY, width: 0, height: self.bounds.height)
+        let revealFrame = scrollerFrame.insetBy(dx: -self.edgeRevealDistance, dy: 0)
+        if revealFrame.contains(point) {
+            return true
+        }
+        let distanceToRightEdge = abs(self.bounds.maxX - point.x)
+        return distanceToRightEdge <= self.edgeRevealDistance
+    }
+
+    private func revealScrollers(vertical: Bool, horizontal: Bool) {
+        self.hideScrollersWorkItem?.cancel()
+        if vertical {
+            self.revealScroller(self.verticalScroller)
+        }
+        if horizontal {
+            self.revealScroller(self.horizontalScroller)
+        }
+
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            if vertical {
+                self.fadeScroller(self.verticalScroller)
+            }
+            if horizontal {
+                self.fadeScroller(self.horizontalScroller)
+            }
+        }
+        self.hideScrollersWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9, execute: workItem)
+    }
+
+    private func revealScroller(_ scroller: NSScroller?) {
+        guard let scroller else { return }
+        scroller.isHidden = false
+        scroller.alphaValue = 1
+        scroller.needsDisplay = true
+    }
+
+    private func fadeScroller(_ scroller: NSScroller?) {
+        guard let scroller, self.scrollerStyle == .overlay else { return }
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.22
+            scroller.animator().alphaValue = 0
+        } completionHandler: {
+            scroller.isHidden = true
+        }
+    }
+}
+
 private final class FileBrowserRowView: NSTableRowView {
-    private var trackingAreaRef: NSTrackingArea?
     private var isHovering = false {
         didSet {
             if oldValue != self.isHovering {
@@ -583,28 +783,8 @@ private final class FileBrowserRowView: NSTableRowView {
         }
     }
 
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        if let trackingAreaRef {
-            self.removeTrackingArea(trackingAreaRef)
-        }
-        let trackingArea = NSTrackingArea(
-            rect: self.bounds,
-            options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect],
-            owner: self
-        )
-        self.addTrackingArea(trackingArea)
-        self.trackingAreaRef = trackingArea
-    }
-
-    override func mouseEntered(with event: NSEvent) {
-        super.mouseEntered(with: event)
-        self.isHovering = true
-    }
-
-    override func mouseExited(with event: NSEvent) {
-        super.mouseExited(with: event)
-        self.isHovering = false
+    func setHovering(_ hovering: Bool) {
+        self.isHovering = hovering
     }
 
     override func drawBackground(in dirtyRect: NSRect) {

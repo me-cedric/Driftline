@@ -19,6 +19,18 @@ final class DomainTests: XCTestCase {
         XCTAssertEqual(copy.protocolKind, .sftp)
     }
 
+    func testServerProfileDefaultsRemotePathToUserHome() {
+        let profile = ServerProfile(
+            displayName: "Production",
+            host: "example.com",
+            protocolKind: .sftp,
+            username: "cedric",
+            authenticationMethod: .agent
+        )
+
+        XCTAssertEqual(profile.remoteDefaultPath, "~")
+    }
+
     func testDefaultPortsMatchProtocolExpectations() {
         XCTAssertEqual(TransferProtocolKind.sftp.defaultPort, 22)
         XCTAssertEqual(TransferProtocolKind.ftp.defaultPort, 21)

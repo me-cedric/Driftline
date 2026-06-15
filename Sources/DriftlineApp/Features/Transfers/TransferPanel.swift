@@ -43,15 +43,18 @@ struct TransferPanel: View {
     }
 
     var body: some View {
-        GlassPanel(cornerRadius: DriftlineRadius.panel, material: .ultraThinMaterial) {
-            VStack(spacing: 0) {
-                self.header
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                Divider()
-                    .opacity(0.16)
-                self.content
-            }
+        VStack(spacing: 0) {
+            self.header
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+            Divider()
+                .opacity(0.12)
+            self.content
+        }
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: DriftlineRadius.card, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: DriftlineRadius.card, style: .continuous)
+                .stroke(Color.primary.opacity(DriftlineOpacity.separator), lineWidth: 1)
         }
     }
 
@@ -94,9 +97,7 @@ struct TransferPanel: View {
         }
         .pickerStyle(.segmented)
         .controlSize(.small)
-        .frame(width: 300)
-        .padding(3)
-        .background(.thinMaterial, in: Capsule())
+        .frame(width: 280)
     }
 
     private var actions: some View {
@@ -120,19 +121,20 @@ struct TransferPanel: View {
     @ViewBuilder
     private var content: some View {
         if self.jobs.isEmpty {
-            VStack(spacing: 5) {
+            VStack(spacing: 4) {
                 Text(LocalizationManager.shared.localized("transfer.noTransfers"))
-                    .font(.callout.weight(.semibold))
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(.secondary)
                 Text(LocalizationManager.shared.localized("transfer.emptyMessage"))
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.tertiary)
                 Text(String(format: LocalizationManager.shared.localized("stats.lastConnectionFormat"), self.lastConnection))
-                    .font(.caption)
+                    .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .padding(.top, 16)
+            .padding(.top, 14)
         } else {
             Table(self.sortedJobs, sortOrder: self.$sortOrder) {
                 TableColumn(LocalizationManager.shared.localized("transfer.column.status"), value: \.statusSortValue) { job in

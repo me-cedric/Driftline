@@ -212,6 +212,10 @@ struct WorkspaceActionButton: View {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(self.background)
             }
+            .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(Color.accentColor.opacity(self.isActive ? 0.22 : 0), lineWidth: 1)
+            }
             .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
         .buttonStyle(.plain)
@@ -223,13 +227,13 @@ struct WorkspaceActionButton: View {
     }
 
     private var foreground: Color {
-        if self.isDisabled { return .secondary.opacity(0.45) }
+        if self.isDisabled { return .primary.opacity(0.35) }
         if self.isActive { return .accentColor }
-        return .primary.opacity(0.85)
+        return .primary.opacity(0.9)
     }
 
     private var background: Color {
-        if self.isActive { return Color.accentColor.opacity(0.14) }
+        if self.isActive { return Color.accentColor.opacity(0.10) }
         if self.isHovering { return Color.primary.opacity(0.07) }
         return .clear
     }
@@ -275,6 +279,15 @@ struct CurrentSessionContextView: View {
             .buttonStyle(GlassButtonStyle())
             .help(loc("connection.disconnectHint"))
             .accessibilityLabel(loc("connection.disconnect"))
+        } else if self.model.activeProfile != nil, self.model.session.state != .connecting, self.model.session.state != .reconnecting {
+            Button {
+                self.model.connectToSelectedServer()
+            } label: {
+                Label(loc("connection.connect"), systemImage: "arrow.triangle.2.circlepath")
+            }
+            .buttonStyle(GlassButtonStyle())
+            .help(loc("connection.connectHint"))
+            .accessibilityLabel(loc("connection.connect"))
         }
     }
 

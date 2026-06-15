@@ -58,8 +58,19 @@ public enum SSHCommandBuilder {
     }
 
     public static func remoteFindCommand(path: String) -> String {
-        let quotedPath = self.shellSingleQuoted(path)
+        let quotedPath = self.remoteShellPathExpression(path)
         return "LC_ALL=C find \(quotedPath) -maxdepth 1 -mindepth 1 -printf '%y\\t%s\\t%T@\\t%M\\t%u\\t%g\\t%p\\n'"
+    }
+
+    public static func remoteShellPathExpression(_ path: String) -> String {
+        if path == "~" {
+            return "\"$HOME\""
+        }
+        if path.hasPrefix("~/") {
+            let suffix = String(path.dropFirst(2))
+            return suffix.isEmpty ? "\"$HOME\"" : "\"$HOME\"/\(self.shellSingleQuoted(suffix))"
+        }
+        return self.shellSingleQuoted(path)
     }
 
     public static func shellSingleQuoted(_ value: String) -> String {

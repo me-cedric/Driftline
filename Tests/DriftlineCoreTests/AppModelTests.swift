@@ -39,6 +39,95 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    func testConnectSelectedServerConnectsSelectedProfile() async throws {
+        let profile = ServerProfile(
+            displayName: "Production",
+            host: "prod.example.com",
+            protocolKind: .sftp,
+            username: "deploy",
+            authenticationMethod: .agent
+        )
+        let remoteFileSystem = MockRemoteFileSystemClient()
+        let model = self.makeModel(remoteFileSystem: remoteFileSystem)
+        try await Task.sleep(nanoseconds: 10_000_000)
+
+        model.profiles = [profile]
+        model.selectedSidebarItem = profile.id.rawValue.uuidString
+        await model.connectSelectedServer()
+
+        let connectCallCount = await remoteFileSystem.connectCallCount
+        let connectedProfileIDs = await remoteFileSystem.connectedProfileIDs
+        XCTAssertEqual(connectCallCount, 1, "Selected profile should be connected")
+        XCTAssertEqual(connectedProfileIDs, [profile.id])
+        XCTAssertEqual(model.session.serverID, profile.id)
+        XCTAssertEqual(model.session.state, .connected)
+    }
+
+    func testReconnectSelectedServerPreservesCurrentSessionPaths() async throws {
+        let profile = ServerProfile(
+            displayName: "Production",
+            host: "prod.example.com",
+            protocolKind: .sftp,
+            username: "deploy",
+            authenticationMethod: .agent,
+            remoteDefaultPath: "/srv/default",
+            localDefaultPath: "/tmp/default"
+        )
+        let remoteFileSystem = MockRemoteFileSystemClient()
+        let model = self.makeModel(remoteFileSystem: remoteFileSystem)
+        try await Task.sleep(nanoseconds: 10_000_000)
+
+        model.profiles = [profile]
+        model.selectedSidebarItem = profile.id.rawValue.uuidString
+        model.session = ConnectionSession(
+            serverID: profile.id,
+            state: .failed(message: "Connection lost"),
+            protocolKind: profile.protocolKind,
+            localPath: "/tmp/current",
+            remotePath: "/srv/current"
+        )
+
+        await model.connectSelectedServer()
+
+        let listedPaths = await remoteFileSystem.listedPaths
+        XCTAssertEqual(model.session.localPath, "/tmp/current")
+        XCTAssertEqual(model.session.remotePath, "/srv/current")
+        XCTAssertEqual(listedPaths, ["/srv/current"])
+    }
+
+    func testConnectSelectedServerUsesRecentPathsWithoutCurrentSession() async throws {
+        let profile = ServerProfile(
+            displayName: "Production",
+            host: "prod.example.com",
+            protocolKind: .sftp,
+            username: "deploy",
+            authenticationMethod: .agent,
+            remoteDefaultPath: "/srv/default",
+            localDefaultPath: "/tmp/default"
+        )
+        let recent = RecentServer(
+            profileID: profile.id,
+            displayName: profile.displayName,
+            host: profile.host,
+            protocolKind: profile.protocolKind,
+            localPath: "/tmp/recent",
+            remotePath: "/srv/recent"
+        )
+        let remoteFileSystem = MockRemoteFileSystemClient()
+        let model = self.makeModel(remoteFileSystem: remoteFileSystem)
+        try await Task.sleep(nanoseconds: 10_000_000)
+
+        model.profiles = [profile]
+        model.recents = [recent]
+        model.selectedSidebarItem = profile.id.rawValue.uuidString
+        await model.connectSelectedServer()
+
+        let listedPaths = await remoteFileSystem.listedPaths
+        XCTAssertEqual(model.session.localPath, "/tmp/recent")
+        XCTAssertEqual(model.session.remotePath, "/srv/recent")
+        XCTAssertEqual(listedPaths, ["/srv/recent"])
+    }
+
     // MARK: - Close Tab Tests
 
     func testCloseConnectedTabShowsConfirmation() async throws {
@@ -140,22 +229,38 @@ private final class MockLocalFileSystemClient: LocalFileSystemClient, @unchecked
 }
 
 private actor MockRemoteFileSystemClient: RemoteFileSystemClient {
+    private var connectCalls: [ServerProfileID] = []
     private var disconnectCalls = 0
+    private var listCalls: [String] = []
+
+    var connectCallCount: Int {
+        self.connectCalls.count
+    }
+
+    var connectedProfileIDs: [ServerProfileID] {
+        self.connectCalls
+    }
 
     var disconnectCallCount: Int {
         self.disconnectCalls
     }
 
+    var listedPaths: [String] {
+        self.listCalls
+    }
+
     func connect(to profile: ServerProfile) async throws -> ConnectionSession {
-        ConnectionSession(serverID: profile.id, state: .connected, protocolKind: profile.protocolKind)
+        self.connectCalls.append(profile.id)
+        return ConnectionSession(serverID: profile.id, state: .connected, protocolKind: profile.protocolKind)
     }
 
     func disconnect(session _: ConnectionSession) async throws {
         self.disconnectCalls += 1
     }
 
-    func listDirectory(at _: String, profile _: ServerProfile, session _: ConnectionSession, preferences _: FileListPreferences) async throws -> [FileItem] {
-        []
+    func listDirectory(at path: String, profile _: ServerProfile, session _: ConnectionSession, preferences _: FileListPreferences) async throws -> [FileItem] {
+        self.listCalls.append(path)
+        return []
     }
 
     func createFolder(named _: String, in _: String, profile _: ServerProfile, session _: ConnectionSession) async throws {}

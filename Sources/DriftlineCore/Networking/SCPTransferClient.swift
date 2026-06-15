@@ -13,9 +13,9 @@ public enum TransferCommandBuilder {
         switch job.direction {
         case .upload:
             arguments.append(NSString(string: job.sourcePath).expandingTildeInPath)
-            arguments.append("\(profile.username)@\(profile.host):\(SSHCommandBuilder.shellSingleQuoted(job.destinationPath))")
+            arguments.append("\(profile.username)@\(profile.host):\(SSHCommandBuilder.remoteShellPathExpression(job.destinationPath))")
         case .download:
-            arguments.append("\(profile.username)@\(profile.host):\(SSHCommandBuilder.shellSingleQuoted(job.sourcePath))")
+            arguments.append("\(profile.username)@\(profile.host):\(SSHCommandBuilder.remoteShellPathExpression(job.sourcePath))")
             arguments.append(NSString(string: job.destinationPath).expandingTildeInPath)
         }
         return arguments

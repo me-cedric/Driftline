@@ -1,3 +1,4 @@
+import AppKit
 import DriftlineCore
 import SwiftUI
 
@@ -48,16 +49,48 @@ struct DriftlineCommands: Commands {
         }
 
         CommandGroup(replacing: .pasteboard) {
-            Button(LocalizationManager.shared.localized("menu.copy")) { self.model.copySelectedItems() }
+            Button(LocalizationManager.shared.localized("menu.cut")) {
+                Self.sendTextCommandIfEditing(#selector(NSText.cut(_:)))
+            }
+            .keyboardShortcut("x")
+            Button(LocalizationManager.shared.localized("menu.copy")) { self.copy() }
                 .keyboardShortcut("c")
-                .disabled(self.model.selectedFile == nil)
-            Button(LocalizationManager.shared.localized("menu.paste")) { self.model.pasteCopiedItemsIntoActivePane() }
+            Button(LocalizationManager.shared.localized("menu.paste")) { self.paste() }
                 .keyboardShortcut("v")
-                .disabled(self.model.copiedFiles.isEmpty)
+            Button(LocalizationManager.shared.localized("menu.selectAll")) {
+                Self.sendTextCommandIfEditing(#selector(NSText.selectAll(_:)))
+            }
+            .keyboardShortcut("a")
         }
 
         CommandGroup(replacing: .appInfo) {
             Button(LocalizationManager.shared.localized("menu.aboutDriftline")) { self.model.showAbout = true }
         }
+    }
+
+    private func copy() {
+        if Self.sendTextCommandIfEditing(#selector(NSText.copy(_:))) {
+            return
+        }
+        self.model.copySelectedItems()
+    }
+
+    private func paste() {
+        if Self.sendTextCommandIfEditing(#selector(NSText.paste(_:))) {
+            return
+        }
+        self.model.pasteCopiedItemsIntoActivePane()
+    }
+
+    @discardableResult
+    private static func sendTextCommandIfEditing(_ selector: Selector) -> Bool {
+        guard self.isTextEditingActive else { return false }
+        NSApp.sendAction(selector, to: nil, from: nil)
+        return true
+    }
+
+    private static var isTextEditingActive: Bool {
+        guard let responder = NSApp.keyWindow?.firstResponder else { return false }
+        return responder is NSTextView || responder is NSTextField
     }
 }

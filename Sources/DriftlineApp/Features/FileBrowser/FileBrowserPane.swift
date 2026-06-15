@@ -279,7 +279,7 @@ private struct PaneToolbarButton: View {
                 .stroke(Color.primary.opacity(DriftlineOpacity.stroke), lineWidth: 1)
         }
         .disabled(self.isDisabled)
-        .opacity(self.isDisabled ? 0.32 : 1)
+        .opacity(self.isDisabled ? 0.42 : 1)
         .help(self.title)
         .accessibilityLabel(self.title)
     }

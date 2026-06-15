@@ -60,7 +60,7 @@ public struct ServerProfile: Identifiable, Hashable, Codable, Sendable {
         protocolKind: TransferProtocolKind,
         username: String,
         authenticationMethod: AuthenticationMethod,
-        remoteDefaultPath: String = "/",
+        remoteDefaultPath: String = "~",
         localDefaultPath: String = FileManager.default.homeDirectoryForCurrentUser.path,
         notes: String = "",
         tags: [String] = [],

@@ -24,6 +24,16 @@ final class SFTPPacketTests: XCTestCase {
         XCTAssertEqual(try reader.readString(), "/config")
     }
 
+    func testRealpathPacketEncodingAndDecoding() throws {
+        let packet = SFTPRequestBuilder.realpath(id: 42, path: ".")
+        let decoded = try SFTPPacket.decodeOne(from: packet.encoded()).packet
+
+        XCTAssertEqual(decoded.type, .realpath)
+        XCTAssertEqual(decoded.requestID, 42)
+        var reader = SFTPDataReader(data: decoded.payload)
+        XCTAssertEqual(try reader.readString(), ".")
+    }
+
     func testDecodeOneReturnsRemainingBytes() throws {
         let first = SFTPRequestBuilder.close(id: 1, handle: Data([1, 2]))
         let second = SFTPRequestBuilder.close(id: 2, handle: Data([3, 4]))

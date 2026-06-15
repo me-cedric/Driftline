@@ -40,6 +40,11 @@ final class SFTPClientTests: XCTestCase {
         }
     }
 
+    func testSSHCommandBuilderExpandsUserHomeRemotePaths() {
+        XCTAssertEqual(SSHCommandBuilder.remoteFindCommand(path: "~"), "LC_ALL=C find \"$HOME\" -maxdepth 1 -mindepth 1 -printf '%y\\t%s\\t%T@\\t%M\\t%u\\t%g\\t%p\\n'")
+        XCTAssertEqual(SSHCommandBuilder.remoteFindCommand(path: "~/Sites"), "LC_ALL=C find \"$HOME\"/'Sites' -maxdepth 1 -mindepth 1 -printf '%y\\t%s\\t%T@\\t%M\\t%u\\t%g\\t%p\\n'")
+    }
+
     func testSystemSFTPClientUsesStructuredSSHArgumentsAndParsesOutput() async throws {
         let executor = RecordingProcessExecutor(result: ProcessResult(
             exitCode: 0,

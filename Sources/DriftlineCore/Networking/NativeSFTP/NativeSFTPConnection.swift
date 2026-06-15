@@ -109,7 +109,8 @@ public actor NativeSFTPConnection {
     }
 
     public func listDirectory(at path: String, preferences: FileListPreferences) async throws -> [FileItem] {
-        let handle = try await expectHandle(SFTPRequestBuilder.opendir(id: self.nextID(), path: path))
+        let resolvedPath = try await self.resolveRemotePath(path)
+        let handle = try await expectHandle(SFTPRequestBuilder.opendir(id: self.nextID(), path: resolvedPath))
         var entries: [SFTPNameEntry] = []
         while true {
             let packet = try await send(SFTPRequestBuilder.readdir(id: self.nextID(), handle: handle))
@@ -120,7 +121,7 @@ public actor NativeSFTPConnection {
                 let status = try SFTPStatus.parse(payload: packet.payload)
                 if status.code == .eof {
                     try? await self.expectStatusOK(SFTPRequestBuilder.close(id: self.nextID(), handle: handle))
-                    return FileItemSorter.sort(entries.map { $0.fileItem(parentPath: path) }.filter { preferences.showHiddenFiles || !$0.isHidden }, preferences: preferences)
+                    return FileItemSorter.sort(entries.map { $0.fileItem(parentPath: resolvedPath) }.filter { preferences.showHiddenFiles || !$0.isHidden }, preferences: preferences)
                 }
                 if let error = status.remoteError(fallbackPath: path) {
                     throw error
@@ -132,14 +133,17 @@ public actor NativeSFTPConnection {
     }
 
     public func createFolder(named name: String, in path: String) async throws {
-        try await self.expectStatusOK(SFTPRequestBuilder.mkdir(id: self.nextID(), path: self.remoteChildPath(parent: path, name: name)))
+        let resolvedPath = try await self.resolveRemotePath(path)
+        try await self.expectStatusOK(SFTPRequestBuilder.mkdir(id: self.nextID(), path: self.remoteChildPath(parent: resolvedPath, name: name)))
     }
 
     public func renameItem(at path: String, to newName: String) async throws {
-        try await self.expectStatusOK(SFTPRequestBuilder.rename(id: self.nextID(), oldPath: path, newPath: self.remoteChildPath(parent: URL(fileURLWithPath: path).deletingLastPathComponent().path, name: newName)))
+        let resolvedPath = try await self.resolveRemotePath(path)
+        try await self.expectStatusOK(SFTPRequestBuilder.rename(id: self.nextID(), oldPath: resolvedPath, newPath: self.remoteChildPath(parent: self.remoteParentPath(of: resolvedPath), name: newName)))
     }
 
     public func deleteItem(at path: String) async throws {
+        let path = try await self.resolveRemotePath(path)
         let kind = try await stat(path: path).fileKind
         switch kind {
         case .folder:
@@ -155,6 +159,7 @@ public actor NativeSFTPConnection {
     }
 
     public func itemExists(at path: String) async throws -> Bool {
+        let path = try await self.resolveRemotePath(path)
         do {
             _ = try await self.stat(path: path)
             return true
@@ -171,6 +176,7 @@ public actor NativeSFTPConnection {
         cancellation: @Sendable () async -> Bool
     ) async throws {
         try await self.checkTransferCancellation(cancellation)
+        let remotePath = try await self.resolveRemotePath(remotePath)
         let localURL = URL(fileURLWithPath: localPath)
         let fileHandle = try FileHandle(forReadingFrom: localURL)
         defer { try? fileHandle.close() }
@@ -209,6 +215,7 @@ public actor NativeSFTPConnection {
         cancellation: @Sendable () async -> Bool
     ) async throws {
         try await self.checkTransferCancellation(cancellation)
+        let remotePath = try await self.resolveRemotePath(remotePath)
         let attrs = try await stat(path: remotePath)
         let total = attrs.size.map(Int64.init) ?? 0
         let handle = try await expectHandle(SFTPRequestBuilder.open(id: self.nextID(), path: remotePath, pflags: SFTPOpenPFlags.read))
@@ -274,6 +281,35 @@ public actor NativeSFTPConnection {
         }
     }
 
+    public func resolveRemotePath(_ path: String) async throws -> String {
+        if path == "~" {
+            return try await self.realPath(".")
+        }
+        if path.hasPrefix("~/") {
+            let homePath = try await self.realPath(".")
+            let suffix = String(path.dropFirst(2))
+            return self.remotePathAppending(homePath, suffix)
+        }
+        return path
+    }
+
+    private func realPath(_ path: String) async throws -> String {
+        let packet = try await send(SFTPRequestBuilder.realpath(id: self.nextID(), path: path))
+        switch packet.type {
+        case .name:
+            let entries = try SFTPNameParser.parseNamePacketPayload(packet.payload)
+            guard let resolved = entries.first?.filename else {
+                throw RemoteClientError.commandFailed("Remote path resolution returned no path.")
+            }
+            return resolved
+        case .status:
+            let status = try SFTPStatus.parse(payload: packet.payload)
+            throw status.remoteError(fallbackPath: path) ?? RemoteClientError.commandFailed("Remote path resolution failed.")
+        default:
+            throw RemoteClientError.commandFailed("Unexpected SFTP response while resolving \(path).")
+        }
+    }
+
     func expectHandle(_ packet: SFTPPacket) async throws -> Data {
         let response = try await send(packet)
         switch response.type {
@@ -329,6 +365,19 @@ public actor NativeSFTPConnection {
 
     private func remoteChildPath(parent: String, name: String) -> String {
         parent == "/" ? "/\(name)" : "/\(parent.trimmingCharacters(in: CharacterSet(charactersIn: "/")))/\(name)"
+    }
+
+    private func remoteParentPath(of path: String) -> String {
+        let trimmed = path.hasSuffix("/") && path.count > 1 ? String(path.dropLast()) : path
+        guard let slash = trimmed.lastIndex(of: "/") else { return "/" }
+        if slash == trimmed.startIndex { return "/" }
+        return String(trimmed[..<slash])
+    }
+
+    private func remotePathAppending(_ base: String, _ suffix: String) -> String {
+        guard !suffix.isEmpty else { return base }
+        let trimmedBase = base.hasSuffix("/") ? String(base.dropLast()) : base
+        return trimmedBase.isEmpty ? "/\(suffix)" : "\(trimmedBase)/\(suffix)"
     }
 
     private func progress(done: Int64, total: Int64) -> Double {

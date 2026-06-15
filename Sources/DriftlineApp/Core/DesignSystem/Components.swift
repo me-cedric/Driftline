@@ -65,16 +65,43 @@ struct PaneSplitHandle: View {
         ZStack {
             Color.clear
             Capsule(style: .continuous)
-                .fill(Color.primary.opacity(self.isHovering ? 0.3 : 0.14))
-                .frame(width: 40, height: 4)
+                .fill(Color.primary.opacity(self.isHovering ? 0.28 : 0.12))
+                .frame(width: 36, height: 4)
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 14)
+        .frame(height: 18)
         .contentShape(Rectangle())
         .onHover { hovering in
             self.isHovering = hovering
             if hovering {
                 NSCursor.resizeUpDown.push()
+            } else {
+                NSCursor.pop()
+            }
+        }
+    }
+}
+
+/// A subtle, glass-compatible vertical divider for resizing side-by-side panes.
+/// Renders a low-opacity hairline that brightens on hover/drag and adopts a
+/// horizontal-resize cursor, replacing the harsh native split divider while
+/// preserving a comfortable drag hit target.
+struct PaneVerticalDivider: View {
+    @State private var isHovering = false
+
+    var body: some View {
+        ZStack {
+            Color.clear
+            RoundedRectangle(cornerRadius: 1, style: .continuous)
+                .fill(Color.primary.opacity(self.isHovering ? 0.16 : DriftlineOpacity.stroke))
+                .frame(width: self.isHovering ? 2 : 1)
+        }
+        .frame(maxHeight: .infinity)
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            self.isHovering = hovering
+            if hovering {
+                NSCursor.resizeLeftRight.push()
             } else {
                 NSCursor.pop()
             }

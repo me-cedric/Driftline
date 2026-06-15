@@ -9,6 +9,7 @@ extension NativeSFTPConnection {
         cancellation: @Sendable () async -> Bool
     ) async throws {
         try await self.checkTransferCancellation(cancellation)
+        let remotePath = try await self.resolveRemotePath(remotePath)
         let localURL = URL(fileURLWithPath: localPath).resolvingSymlinksInPath()
         let entries = try localEntries(under: localURL)
         let totalBytes = entries.reduce(into: Int64(0)) { acc, entry in
@@ -64,6 +65,7 @@ extension NativeSFTPConnection {
         cancellation: @Sendable () async -> Bool
     ) async throws {
         try await self.checkTransferCancellation(cancellation)
+        let remotePath = try await self.resolveRemotePath(remotePath)
         let tree = try await buildRemoteTree(at: remotePath)
         let totalBytes = tree.reduce(into: Int64(0)) { acc, entry in
             if entry.kind == .file { acc += entry.size ?? 0 }

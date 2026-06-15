@@ -1,7 +1,8 @@
 import DriftlineCore
+import DriftlineMCP
 import Foundation
 
-let version = "0.5.1"
+let version = "0.6.0"
 let arguments = Array(CommandLine.arguments.dropFirst())
 
 func printHelp() {
@@ -13,6 +14,12 @@ func printHelp() {
       driftline --open [path]
       driftline --bookmark <name>
       driftline --new-tab [path]
+      driftline mcp --status
+      driftline mcp --enable | --disable
+      driftline mcp --allow-destructive | --deny-destructive
+      driftline mcp --http-enable | --http-disable [--port <port>]
+      driftline mcp --add-root <path> | --remove-root <path>
+      driftline mcp --print-config
       driftline --version
       driftline --help
 
@@ -22,7 +29,9 @@ func printHelp() {
     """)
 }
 
-if arguments.contains("--help") || arguments.contains("-h") {
+if arguments.first == "mcp" {
+    await handleMCPCommand(Array(arguments.dropFirst()))
+} else if arguments.contains("--help") || arguments.contains("-h") {
     printHelp()
 } else if arguments.contains("--version") {
     print(version)
@@ -50,6 +59,171 @@ if arguments.contains("--help") || arguments.contains("-h") {
         fputs("driftline: \(error.localizedDescription)\n", stderr)
         exit(1)
     }
+}
+
+func handleMCPCommand(_ args: [String]) async {
+    let command = MCPCommand(arguments: args)
+    switch command {
+    case .help:
+        print("""
+        Usage:
+          driftline mcp --status
+          driftline mcp --enable | --disable
+          driftline mcp --allow-destructive | --deny-destructive
+          driftline mcp --http-enable | --http-disable [--port <port>]
+          driftline mcp --add-root <path> | --remove-root <path>
+          driftline mcp --print-config
+        """)
+    case .printConfig:
+        printClientConfig()
+    case .unknown:
+        fputs("driftline: unknown mcp command\n", stderr)
+        exit(2)
+    case .status:
+        do {
+            let config = try await JSONMCPSettingsRepository().load()
+            printStatus(config)
+        } catch {
+            fputs("driftline: \(Redactor().redact(error.localizedDescription))\n", stderr)
+            exit(1)
+        }
+    default:
+        await applyMCPMutation(command)
+    }
+}
+
+func applyMCPMutation(_ command: MCPCommand) async {
+    let repository = JSONMCPSettingsRepository()
+    do {
+        var config = try await repository.load()
+        let message = mutateMCPConfiguration(&config, command: command)
+        try await repository.save(config)
+        print(message)
+    } catch {
+        fputs("driftline: \(Redactor().redact(error.localizedDescription))\n", stderr)
+        exit(1)
+    }
+}
+
+func mutateMCPConfiguration(_ config: inout MCPServerConfiguration, command: MCPCommand) -> String {
+    switch command {
+    case .enable, .disable:
+        return mutateMCPEnabled(&config, command: command)
+    case .allowDestructive, .denyDestructive:
+        return mutateMCPDestructive(&config, command: command)
+    case let .enableHTTP(port):
+        config.httpEnabled = true
+        config.bindLoopbackOnly = true
+        if let port {
+            config.httpPort = port
+        }
+        return "MCP HTTP enabled on 127.0.0.1:\(config.httpPort)"
+    case .disableHTTP:
+        config.httpEnabled = false
+        return "MCP HTTP disabled"
+    case let .addRoot(root):
+        let path = URL(fileURLWithPath: root).standardizedFileURL.path
+        if !config.allowedLocalRoots.contains(path) {
+            config.allowedLocalRoots.append(path)
+        }
+        return "Added MCP root \(path)"
+    case let .removeRoot(root):
+        let path = URL(fileURLWithPath: root).standardizedFileURL.path
+        config.allowedLocalRoots.removeAll { URL(fileURLWithPath: $0).standardizedFileURL.path == path }
+        return "Removed MCP root \(path)"
+    case .help, .printConfig, .status, .unknown:
+        return ""
+    }
+}
+
+func mutateMCPEnabled(_ config: inout MCPServerConfiguration, command: MCPCommand) -> String {
+    config.enabled = command == .enable
+    return config.enabled ? "MCP enabled" : "MCP disabled"
+}
+
+func mutateMCPDestructive(_ config: inout MCPServerConfiguration, command: MCPCommand) -> String {
+    config.allowDestructiveOperations = command == .allowDestructive
+    return config.allowDestructiveOperations ? "MCP destructive operations enabled" : "MCP destructive operations disabled"
+}
+
+enum MCPCommand {
+    case help
+    case status
+    case enable
+    case disable
+    case allowDestructive
+    case denyDestructive
+    case enableHTTP(Int?)
+    case disableHTTP
+    case addRoot(String)
+    case removeRoot(String)
+    case printConfig
+    case unknown
+
+    init(arguments: [String]) {
+        if arguments.isEmpty || arguments.contains("--help") {
+            self = .help
+        } else if let root = value(after: "--add-root", in: arguments) {
+            self = .addRoot(root)
+        } else if let root = value(after: "--remove-root", in: arguments) {
+            self = .removeRoot(root)
+        } else if arguments.contains("--http-enable") {
+            self = .enableHTTP(portArgument(in: arguments))
+        } else {
+            self = Self.simpleCommand(arguments: arguments)
+        }
+    }
+
+    private static func simpleCommand(arguments: [String]) -> MCPCommand {
+        if arguments.contains("--status") { return .status }
+        if arguments.contains("--enable") { return .enable }
+        if arguments.contains("--disable") { return .disable }
+        if arguments.contains("--allow-destructive") { return .allowDestructive }
+        if arguments.contains("--deny-destructive") { return .denyDestructive }
+        if arguments.contains("--http-disable") { return .disableHTTP }
+        if arguments.contains("--print-config") { return .printConfig }
+        return .unknown
+    }
+}
+
+extension MCPCommand: Equatable {}
+
+func printStatus(_ config: MCPServerConfiguration) {
+    let roots = config.allowedLocalRoots.isEmpty ? ["~/Downloads"] : config.allowedLocalRoots
+    print("""
+    MCP: \(config.enabled ? "enabled" : "disabled")
+    Destructive operations: \(config.allowDestructiveOperations ? "enabled" : "disabled")
+    HTTP: \(config.httpEnabled ? "enabled" : "disabled")
+    HTTP endpoint: http://127.0.0.1:\(config.httpPort)/mcp
+    Allowed local roots:
+    \(roots.map { "  - \($0)" }.joined(separator: "\n"))
+    """)
+}
+
+func printClientConfig() {
+    print("""
+    {
+      "mcpServers": {
+        "driftline": {
+          "command": "driftline-mcp",
+          "args": []
+        }
+      }
+    }
+    """)
+}
+
+func value(after flag: String, in arguments: [String]) -> String? {
+    guard let index = arguments.firstIndex(of: flag), arguments.indices.contains(index + 1) else { return nil }
+    let value = arguments[index + 1]
+    return value.hasPrefix("--") ? nil : value
+}
+
+func portArgument(in arguments: [String]) -> Int? {
+    guard let value = value(after: "--port", in: arguments), let port = Int(value), (1 ... 65535).contains(port) else {
+        return nil
+    }
+    return port
 }
 
 func pathArgument(in arguments: [String]) -> String? {

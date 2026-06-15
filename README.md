@@ -33,6 +33,7 @@ Driftline is active pre-1.0 software. SFTP workflows are functional and tested, 
 | --- | --- |
 | System SSH/SFTP | Default backend. Uses system SSH tooling, strict host checks, and `rsync`/SCP transfers. |
 | Native Swift SFTP | Opt-in backend. Supports password auth, Ed25519 keys, passphrase-protected Ed25519 keys, ECDSA PEM keys, browsing, file/folder transfers, cancellation, and large-file tests. |
+| MCP server | Opt-in local AI integration over stdio or loopback HTTP. Off by default. |
 | SCP | Fallback transfer backend. |
 | FTP/FTPS/WebDAV/S3/SMB | Roadmap only. Not implemented or claimed secure yet. |
 | Signing/notarization | Scripts and CI hooks exist, but public releases are unsigned until Apple credentials are configured. |
@@ -69,6 +70,7 @@ Driftline is active pre-1.0 software. SFTP workflows are functional and tested, 
 - Sidebar for saved servers, favorites, bookmarks, and recent connections.
 - Inspector, transfer panel, settings, About, update checks, and background notifications.
 - `driftline` CLI for opening local paths, bookmarks, and new tabs.
+- Optional MCP server for local AI tools, gated by Settings or CLI.
 
 ## Architecture
 
@@ -77,6 +79,8 @@ Driftline/
 ├── Sources/
 │   ├── DriftlineApp/      # SwiftUI macOS app, commands, UI features
 │   ├── DriftlineCore/     # UI-free domain, security, networking, persistence
+│   ├── DriftlineMCP/      # UI-free MCP protocol, tools, sandbox, transports
+│   ├── driftline-mcp/     # Standalone stdio MCP executable
 │   └── driftline/         # CLI entry point
 ├── Tests/
 │   └── DriftlineCoreTests/
@@ -138,6 +142,16 @@ driftline --version
 ```
 
 The CLI never accepts passwords, passphrases, tokens, or private key material.
+
+MCP settings:
+
+```bash
+driftline mcp --status
+driftline mcp --enable
+driftline mcp --print-config
+```
+
+See [docs/architecture/mcp-server.md](docs/architecture/mcp-server.md).
 
 ## Testing
 

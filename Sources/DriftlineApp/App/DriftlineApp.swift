@@ -1,5 +1,6 @@
 import AppKit
 import DriftlineCore
+import DriftlineMCP
 import SwiftUI
 
 @main
@@ -24,6 +25,10 @@ struct DriftlineApp: App {
                     AppThemeController.apply(self.model.preferences.appThemeVariant)
                     self.model.savePreferences()
                 }
+                .onChange(of: self.model.mcpConfiguration) { _, _ in
+                    self.model.saveMCPConfiguration()
+                    self.model.reconcileMCPHTTPServer()
+                }
         }
     }
 }
@@ -46,6 +51,7 @@ final class AppModel: @unchecked Sendable {
     var tabs: [WorkspaceTab] = [WorkspaceTab()]
     var selectedTabID: WorkspaceTab.ID?
     var preferences = ViewPreferences()
+    var mcpConfiguration = MCPServerConfiguration()
     var localItems: [FileItem] = []
     var remoteItems: [FileItem] = []
     var selectedLocalFile: FileItem?
@@ -111,6 +117,7 @@ final class AppModel: @unchecked Sendable {
     private let localFileSystem: LocalFileSystemClient
     private let profileRepository: ServerProfileRepository
     private let preferencesRepository: ViewPreferencesRepository
+    private let mcpSettingsRepository: MCPSettingsRepository
     private let transferHistoryRepository: TransferHistoryRepository
     private let bookmarkRepository: ServerBookmarkRepository
     private let recentRepository: RecentServerRepository
@@ -125,10 +132,12 @@ final class AppModel: @unchecked Sendable {
     private let diagnosticsRecorder: DiagnosticsRecorder
     private let notificationController: AppNotificationControlling
     private var didPerformStartupUpdateCheck = false
+    private var mcpHTTPServer: HTTPMCPServer?
 
     init(
         profileRepository: ServerProfileRepository = JSONServerProfileRepository(),
         preferencesRepository: ViewPreferencesRepository = JSONViewPreferencesRepository(),
+        mcpSettingsRepository: MCPSettingsRepository = JSONMCPSettingsRepository(),
         transferHistoryRepository: TransferHistoryRepository = JSONTransferHistoryRepository(),
         bookmarkRepository: ServerBookmarkRepository = JSONServerBookmarkRepository(),
         recentRepository: RecentServerRepository = JSONRecentServerRepository(),
@@ -147,6 +156,7 @@ final class AppModel: @unchecked Sendable {
         self.localFileSystem = localFileSystem
         self.profileRepository = profileRepository
         self.preferencesRepository = preferencesRepository
+        self.mcpSettingsRepository = mcpSettingsRepository
         self.transferHistoryRepository = transferHistoryRepository
         self.bookmarkRepository = bookmarkRepository
         self.recentRepository = recentRepository
@@ -168,6 +178,7 @@ final class AppModel: @unchecked Sendable {
         await self.notificationController.requestPermissionIfNeeded()
         do {
             self.preferences = try await self.preferencesRepository.load()
+            self.mcpConfiguration = try await self.mcpSettingsRepository.load()
             self.detectAndApplyLanguage()
             AppIconController.apply(self.preferences.appIconVariant)
             AppThemeController.apply(self.preferences.appThemeVariant)
@@ -178,6 +189,7 @@ final class AppModel: @unchecked Sendable {
             self.consumeLaunchRequest()
             await self.refreshLocal()
             await self.performStartupUpdateCheckIfNeeded()
+            self.reconcileMCPHTTPServer()
         } catch {
             self.recordError(error, category: "startup")
             self.session.lastErrorMessage = error.localizedDescription
@@ -663,6 +675,99 @@ final class AppModel: @unchecked Sendable {
         Task {
             try? await self.preferencesRepository.save(current)
         }
+    }
+
+    func saveMCPConfiguration() {
+        var current = self.mcpConfiguration
+        current.bindLoopbackOnly = true
+        self.mcpConfiguration = current
+        Task {
+            try? await self.mcpSettingsRepository.save(current)
+        }
+    }
+
+    func reconcileMCPHTTPServer() {
+        let config = self.mcpConfiguration
+        Task {
+            await self.mcpHTTPServer?.stop()
+            await MainActor.run {
+                self.mcpHTTPServer = nil
+            }
+
+            guard config.enabled, config.httpEnabled, config.bindLoopbackOnly else { return }
+            do {
+                let token = try await self.ensureMCPHTTPToken(for: config)
+                let context = await MainActor.run {
+                    MCPToolContext(
+                        localFileSystem: self.localFileSystem,
+                        remoteFileSystem: self.remoteClientForCurrentPreference(),
+                        transferClient: self.transferClientForCurrentPreference(),
+                        profileRepository: self.profileRepository,
+                        hostTrustStore: self.hostTrustStore,
+                        sessionRegistry: MCPSessionRegistry(),
+                        sandbox: LocalPathSandbox(roots: config.allowedLocalRoots),
+                        configuration: config,
+                        processKind: .embedded
+                    )
+                }
+                let server = HTTPMCPServer(
+                    server: MCPServer(context: context),
+                    port: config.httpPort,
+                    bearerToken: token
+                )
+                try await server.start()
+                await MainActor.run {
+                    self.mcpHTTPServer = server
+                    self.recordDiagnostic(level: .info, category: "mcp", message: "MCP HTTP server listening on 127.0.0.1:\(config.httpPort).")
+                }
+            } catch {
+                await MainActor.run {
+                    self.recordError(error, category: "mcp.http")
+                    self.userAlert = UserAlert(title: self.loc("settings.mcp.httpFailedTitle"), message: error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    func readMCPHTTPToken() async -> String? {
+        try? await self.credentialStore.readString(reference: self.mcpConfiguration.tokenReference)
+    }
+
+    func regenerateMCPHTTPToken() {
+        let config = self.mcpConfiguration
+        Task {
+            let token = Self.generateMCPToken()
+            try? await self.credentialStore.saveString(token, reference: config.tokenReference)
+            await MainActor.run {
+                self.reconcileMCPHTTPServer()
+            }
+        }
+    }
+
+    func mcpClientConfigurationSnippet() -> String {
+        """
+        {
+          "mcpServers": {
+            "driftline": {
+              "command": "driftline-mcp",
+              "args": []
+            }
+          }
+        }
+        """
+    }
+
+    private func ensureMCPHTTPToken(for config: MCPServerConfiguration) async throws -> String {
+        if let existing = try await self.credentialStore.readString(reference: config.tokenReference), !existing.isEmpty {
+            return existing
+        }
+        let token = Self.generateMCPToken()
+        try await self.credentialStore.saveString(token, reference: config.tokenReference)
+        return token
+    }
+
+    private static func generateMCPToken() -> String {
+        "\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
     }
 
     var selectedProfile: ServerProfile? {

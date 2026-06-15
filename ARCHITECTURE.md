@@ -1,10 +1,12 @@
 # Architecture
 
-Driftline is a SwiftPM-first native macOS app with three products:
+Driftline is a SwiftPM-first native macOS app with these main products and targets:
 
 - `DriftlineCore`: UI-free domain, security, persistence, networking, transfers, terminal helpers, updates, diagnostics, and localization.
+- `DriftlineMCP`: UI-free MCP protocol adapter, tool router, local sandbox, stdio transport, and loopback HTTP transport.
 - `Driftline`: SwiftUI macOS app with narrow AppKit bridges for native outline views, menus, and desktop behavior.
 - `driftline`: CLI facade for opening paths, bookmarks, and new tabs without accepting secrets.
+- `driftline-mcp`: standalone stdio MCP server for local AI clients.
 
 ## Core Boundaries
 
@@ -13,6 +15,7 @@ Driftline is a SwiftPM-first native macOS app with three products:
 - Saved profiles, bookmarks, recents, preferences, host trust, and transfer history live behind repository protocols.
 - Remote file browsing conforms to `RemoteFileSystemClient`.
 - Upload/download work conforms to `TransferClient`.
+- MCP tools call the same core protocols and never resolve credentials outside `CredentialStore`.
 - Terminal commands are built from structured arguments or carefully quoted remote path expressions.
 - SwiftUI owns app state in `Sources/DriftlineApp`; protocol clients and repositories live in core.
 
@@ -41,6 +44,7 @@ Signing and notarization are wired for manual workflow dispatch only and require
 
 - [docs/architecture/architecture-overview.md](docs/architecture/architecture-overview.md)
 - [docs/architecture/protocol-adapters.md](docs/architecture/protocol-adapters.md)
+- [docs/architecture/mcp-server.md](docs/architecture/mcp-server.md)
 - [docs/architecture/native-swift-sftp-plan.md](docs/architecture/native-swift-sftp-plan.md)
 - [docs/architecture/persistence.md](docs/architecture/persistence.md)
 - [docs/architecture/dependency-decisions.md](docs/architecture/dependency-decisions.md)

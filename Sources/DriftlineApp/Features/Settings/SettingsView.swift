@@ -2,7 +2,7 @@ import DriftlineCore
 import SwiftUI
 
 @MainActor
-private func loc(_ key: String) -> String {
+func loc(_ key: String) -> String {
     LocalizationManager.shared.localized(key)
 }
 
@@ -34,6 +34,11 @@ struct SettingsView: View {
             SettingsBehaviorPane(preferences: self.$model.preferences)
                 .tabItem {
                     Label(loc("settings.behavior"), systemImage: "switch.2")
+                }
+
+            MCPSettingsView(model: self.model)
+                .tabItem {
+                    Label(loc("settings.mcp"), systemImage: "sparkles")
                 }
 
             AppAboutContent(
@@ -183,7 +188,7 @@ private struct SettingsBehaviorPane: View {
 
 // MARK: - Shared Components
 
-private struct SettingsSection<Content: View>: View {
+struct SettingsSection<Content: View>: View {
     var title: String
     @ViewBuilder var content: Content
 

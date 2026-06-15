@@ -9,7 +9,9 @@ let package = Package(
     ],
     products: [
         .library(name: "DriftlineCore", targets: ["DriftlineCore"]),
+        .library(name: "DriftlineMCP", targets: ["DriftlineMCP"]),
         .executable(name: "Driftline", targets: ["DriftlineApp"]),
+        .executable(name: "driftline-mcp", targets: ["driftline-mcp"]),
         .executable(name: "driftline", targets: ["driftline"])
     ],
     dependencies: [
@@ -29,13 +31,35 @@ let package = Package(
                 .product(name: "NIOSSH", package: "swift-nio-ssh")
             ]
         ),
+        .target(
+            name: "DriftlineMCP",
+            dependencies: [
+                "DriftlineCore",
+                .product(name: "NIOHTTP1", package: "swift-nio"),
+                .product(name: "NIOCore", package: "swift-nio"),
+                .product(name: "NIOPosix", package: "swift-nio")
+            ]
+        ),
         .executableTarget(
             name: "DriftlineApp",
-            dependencies: ["DriftlineCore"]
+            dependencies: [
+                "DriftlineCore",
+                "DriftlineMCP"
+            ]
         ),
         .executableTarget(
             name: "driftline",
-            dependencies: ["DriftlineCore"]
+            dependencies: [
+                "DriftlineCore",
+                "DriftlineMCP"
+            ]
+        ),
+        .executableTarget(
+            name: "driftline-mcp",
+            dependencies: [
+                "DriftlineCore",
+                "DriftlineMCP"
+            ]
         ),
         .testTarget(
             name: "DriftlineCoreTests",
@@ -43,6 +67,13 @@ let package = Package(
                 "DriftlineCore",
                 "DriftlineApp",
                 .product(name: "Crypto", package: "swift-crypto")
+            ]
+        ),
+        .testTarget(
+            name: "DriftlineMCPTests",
+            dependencies: [
+                "DriftlineMCP",
+                "DriftlineCore"
             ]
         )
     ]

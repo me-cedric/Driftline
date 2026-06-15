@@ -64,4 +64,8 @@ public enum DriftlineStoragePaths {
     public static var preferencesURL: URL {
         applicationSupportDirectory.appendingPathComponent("preferences.json")
     }
+
+    public static var mcpSettingsURL: URL {
+        applicationSupportDirectory.appendingPathComponent("mcp.json")
+    }
 }

@@ -25,6 +25,7 @@ Driftline is pre-1.0. The roadmap favors secure SFTP workflows, native macOS pol
 - WebDAV, S3, SMB, FTP, and FTPS only after protocol-specific auth, certificate, trust, and transfer semantics are designed.
 - Finder extension, Shortcuts integration, Raycast extension, and menu bar transfer monitor.
 - Sparkle or another automatic update mechanism after signing/notarization is in place.
+- MCP SSE streaming, task support, richer audit UI, and broader real-client QA.
 
 ## Later Ideas
 

@@ -8,6 +8,8 @@ Driftline is a SwiftPM-first native macOS app. Treat this file as repo-local gui
 
 - Build: `swift build`
 - Test: `swift test`
+- MCP target tests: `swift test --filter DriftlineMCP`
+- MCP status: `swift run driftline mcp --status`
 - Clean flaky SwiftPM executable alias artifacts: `swift package clean`
 - Run app bundle: `./script/build_and_run.sh`
 - Verify app bundle launches: `./script/build_and_run.sh --verify`

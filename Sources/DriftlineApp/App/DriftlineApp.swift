@@ -12,6 +12,7 @@ struct DriftlineApp: App {
             ContentView(model: self.model)
                 .frame(minWidth: 1180, minHeight: 720)
         }
+        .windowStyle(.hiddenTitleBar)
         .commands {
             DriftlineCommands(model: self.model)
         }

@@ -1,3 +1,4 @@
+import AppKit
 import DriftlineCore
 import SwiftUI
 
@@ -50,7 +51,34 @@ struct GlassPanel<Content: View>: View {
                     .stroke(Color.white.opacity(DriftlineOpacity.topHighlight), lineWidth: 1)
                     .blendMode(.plusLighter)
             }
-            .shadow(color: .black.opacity(0.12), radius: 22, y: 12)
+            .shadow(color: .black.opacity(0.07), radius: 9, y: 3)
+    }
+}
+
+/// A subtle, glass-compatible drag handle for resizing stacked panels.
+/// Shows a low-opacity centered grabber that brightens on hover, and adopts a
+/// resize cursor so the affordance stays discoverable without harsh separators.
+struct PaneSplitHandle: View {
+    @State private var isHovering = false
+
+    var body: some View {
+        ZStack {
+            Color.clear
+            Capsule(style: .continuous)
+                .fill(Color.primary.opacity(self.isHovering ? 0.3 : 0.14))
+                .frame(width: 40, height: 4)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 14)
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            self.isHovering = hovering
+            if hovering {
+                NSCursor.resizeUpDown.push()
+            } else {
+                NSCursor.pop()
+            }
+        }
     }
 }
 

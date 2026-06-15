@@ -7,7 +7,6 @@ struct InspectorView: View {
     var profile: ServerProfile?
     var transferStats: TransferStats
     var lastConnection: String
-    var onConnect: () -> Void
 
     var body: some View {
         GeometryReader { proxy in
@@ -17,10 +16,6 @@ struct InspectorView: View {
                         Text(LocalizationManager.shared.localized("browser.inspector"))
                             .font(.title3.weight(.semibold))
                         Spacer()
-                        Image(systemName: "pin")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                            .frame(width: 24, height: 24)
                     }
 
                     InspectorSection(title: LocalizationManager.shared.localized("inspector.selection")) {
@@ -58,10 +53,6 @@ struct InspectorView: View {
                         Divider()
                         self.inspectorRow(LocalizationManager.shared.localized("inspector.localPath"), value: self.session.localPath)
                         self.inspectorRow(LocalizationManager.shared.localized("inspector.remotePath"), value: self.session.remotePath)
-                        if self.session.state == .disconnected {
-                            Button(LocalizationManager.shared.localized("browser.connectToServer"), action: self.onConnect)
-                                .buttonStyle(GlassButtonStyle(isPrimary: true))
-                        }
                     }
 
                     InspectorSection(title: LocalizationManager.shared.localized("inspector.server")) {

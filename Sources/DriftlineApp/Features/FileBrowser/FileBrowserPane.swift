@@ -22,7 +22,6 @@ struct FileBrowserPane: View {
     var onCopy: ([FileItem]) -> Void
     var onPaste: () -> Void
     var onShowInfo: () -> Void
-    var onConnect: (() -> Void)?
     var onNewConnection: (() -> Void)?
     var loadChildren: (FileItem, @escaping ([FileItem]) -> Void) -> Void
 
@@ -98,7 +97,16 @@ struct FileBrowserPane: View {
         .padding(.bottom, 13)
     }
 
-    private var browserBody: some View {
+    @ViewBuilder private var browserBody: some View {
+        if self.source == .remote, !self.isConnected {
+            RemoteEmptyStateView(onNewConnection: self.onNewConnection)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            self.fileTable
+        }
+    }
+
+    private var fileTable: some View {
         FileBrowserOutlineView(
             source: self.source,
             items: self.filteredItems,
@@ -117,15 +125,11 @@ struct FileBrowserPane: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay {
             if self.items.isEmpty {
-                if self.source == .remote, !self.isConnected {
-                    RemoteEmptyConnectionCard(onConnect: self.onConnect, onNewConnection: self.onNewConnection)
-                } else {
-                    EmptyStateView(
-                        title: self.source == .remote ? LocalizationManager.shared.localized("browser.emptyRemote") : LocalizationManager.shared.localized("browser.emptyLocal"),
-                        message: self.source == .remote ? LocalizationManager.shared.localized("browser.emptyRemoteMessage") : LocalizationManager.shared.localized("browser.emptyLocalMessage"),
-                        systemImage: self.source == .remote ? "network.slash" : "folder"
-                    )
-                }
+                EmptyStateView(
+                    title: self.source == .remote ? LocalizationManager.shared.localized("browser.emptyRemote") : LocalizationManager.shared.localized("browser.emptyLocal"),
+                    message: self.source == .remote ? LocalizationManager.shared.localized("browser.emptyRemoteMessage") : LocalizationManager.shared.localized("browser.emptyLocalMessage"),
+                    systemImage: self.source == .remote ? "network.slash" : "folder"
+                )
             } else if self.filteredItems.isEmpty {
                 EmptyStateView(
                     title: LocalizationManager.shared.localized("browser.noFilterResults"),
@@ -281,23 +285,21 @@ private struct PaneToolbarButton: View {
     }
 }
 
-private struct RemoteEmptyConnectionCard: View {
-    var onConnect: (() -> Void)?
+private struct RemoteEmptyStateView: View {
     var onNewConnection: (() -> Void)?
 
     var body: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: 16) {
             Image(systemName: "globe")
-                .font(.system(size: 32, weight: .semibold))
-                .foregroundStyle(Color.accentColor.opacity(0.92))
-                .frame(width: 58, height: 58)
+                .font(.system(size: 34, weight: .semibold))
+                .foregroundStyle(Color.accentColor.opacity(0.9))
+                .frame(width: 64, height: 64)
                 .background(.thinMaterial, in: Circle())
                 .overlay {
                     Circle()
                         .stroke(Color.white.opacity(0.16), lineWidth: 1)
                         .blendMode(.plusLighter)
                 }
-                .shadow(color: Color.accentColor.opacity(0.14), radius: 18)
             VStack(spacing: 6) {
                 Text(LocalizationManager.shared.localized("browser.noRemoteConnection"))
                     .font(.title3.weight(.semibold))
@@ -307,35 +309,14 @@ private struct RemoteEmptyConnectionCard: View {
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            HStack(spacing: 10) {
-                Button(LocalizationManager.shared.localized("connection.connect")) {
-                    self.onConnect?()
-                }
-                .buttonStyle(GlassButtonStyle(isPrimary: true))
-                .disabled(self.onConnect == nil)
-                Button(LocalizationManager.shared.localized("sidebar.newConnection")) {
-                    self.onNewConnection?()
-                }
-                .buttonStyle(GlassButtonStyle())
-                .disabled(self.onNewConnection == nil)
+            .frame(maxWidth: 360)
+            if let onNewConnection {
+                Button(LocalizationManager.shared.localized("sidebar.newConnection"), action: onNewConnection)
+                    .buttonStyle(GlassButtonStyle(isPrimary: true))
             }
         }
-        .padding(.horizontal, 30)
-        .padding(.vertical, 26)
-        .frame(maxWidth: 430)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: DriftlineRadius.panel, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: DriftlineRadius.panel, style: .continuous)
-                .stroke(Color.primary.opacity(0.05), lineWidth: 1)
-        }
-        .overlay(alignment: .top) {
-            RoundedRectangle(cornerRadius: DriftlineRadius.panel, style: .continuous)
-                .stroke(Color.white.opacity(0.16), lineWidth: 1)
-                .blendMode(.plusLighter)
-        }
-        .shadow(color: .black.opacity(0.11), radius: 22, y: 10)
-        .offset(y: -16)
         .padding(28)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 

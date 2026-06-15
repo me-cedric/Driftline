@@ -29,6 +29,10 @@
 <br />
 </div>
 
+<p align="center">
+  <img src="assets/screenshot.png" alt="Driftline app screenshot showing the dual-pane file browser, transfer queue, and inspector" width="960">
+</p>
+
 Driftline is a modern macOS file transfer client inspired by Finder, FileZilla's practical dual-pane workflow, and polished native Mac tools. It's designed around SFTP first, with protocol adapters for FTP, FTPS, WebDAV, S3, SMB, SCP, and other backends.
 
 Driftline is entirely free. If it helps you, feel free to [support development on Ko-fi](https://ko-fi.com/mecedric).

@@ -87,15 +87,15 @@ enum AppMetadata {
     }
 
     static var shortVersion: String {
-        self.bundleString("CFBundleShortVersionString") ?? "0.4.0"
+        self.bundleString("CFBundleShortVersionString") ?? "0.5.0"
     }
 
     static var buildNumber: String {
-        self.bundleString("CFBundleVersion") ?? "4"
+        self.bundleString("CFBundleVersion") ?? "5"
     }
 
     static var updateCurrentVersion: String {
-        self.bundleString("CFBundleShortVersionString") ?? "0.4.0"
+        self.bundleString("CFBundleShortVersionString") ?? "0.5.0"
     }
 
     private static func bundleString(_ key: String) -> String? {

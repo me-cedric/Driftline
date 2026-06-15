@@ -1,22 +1,46 @@
 # Architecture
 
-Driftline is built as a SwiftPM workspace with three products:
+Driftline is a SwiftPM-first native macOS app with three products:
 
-- `DriftlineCore`: testable domain, security, persistence, protocol, transfer, and terminal services.
-- `Driftline`: native SwiftUI macOS app.
-- `driftline`: CLI facade.
+- `DriftlineCore`: UI-free domain, security, persistence, networking, transfers, terminal helpers, updates, diagnostics, and localization.
+- `Driftline`: SwiftUI macOS app with narrow AppKit bridges for native outline views, menus, and desktop behavior.
+- `driftline`: CLI facade for opening paths, bookmarks, and new tabs without accepting secrets.
 
-The app uses SwiftUI with narrow state ownership and protocol-oriented adapters. SFTP is the first real protocol target; FTP and FTPS are intentionally scaffolded until they can be implemented safely.
+## Core Boundaries
 
-## Boundaries
+- `DriftlineCore` must stay UI-free and testable.
+- Credentials are referenced by `CredentialReference` and resolved through `CredentialStore`.
+- Saved profiles, bookmarks, recents, preferences, host trust, and transfer history live behind repository protocols.
+- Remote file browsing conforms to `RemoteFileSystemClient`.
+- Upload/download work conforms to `TransferClient`.
+- Terminal commands are built from structured arguments or carefully quoted remote path expressions.
+- SwiftUI owns app state in `Sources/DriftlineApp`; protocol clients and repositories live in core.
 
-- Domain models never know about SwiftUI.
-- Credentials are referenced by `CredentialReference`, not embedded in saved server profiles.
-- Persistence protocols are defined in core and can be backed by JSON, SQLite, SwiftData, or another store.
-- Remote protocols conform to `RemoteFileSystemClient`.
-- Transfers conform to `TransferClient`.
-- Terminal commands are generated as structured arguments, not shell strings.
+## Backends
 
-## Initial Tradeoff
+| Backend | Purpose | Status |
+| --- | --- | --- |
+| System SSH/SFTP | Default remote browsing and transfer path using system SSH tooling. | Stable default |
+| Native Swift SFTP | In-process SwiftNIO SSH/SFTP backend for password and supported key auth. | Tested, opt-in |
+| SCP | Simpler transfer fallback. | Available |
+| FTP/FTPS/WebDAV/S3/SMB | Future protocol adapters. | Not implemented |
 
-The first SFTP adapter is a safe system-adapter placeholder. The production adapter may wrap `/usr/bin/sftp` with strict batch input/output parsing or move to SwiftNIO SSH/libssh2 after evaluation. The adapter boundary is designed so this decision does not leak into UI or domain code.
+## Native Swift SFTP
+
+Native SFTP supports password auth, unencrypted and passphrase-protected Ed25519 keys, ECDSA PEM keys, host trust, list/create/rename/delete/exists, file and folder upload/download, cancellation, progress, large-file tests, and `~` remote path resolution.
+
+SSH agent signing remains on the System SSH backend. Driftline includes native agent protocol pieces, but SwiftNIO SSH 0.11.0 does not expose the user-auth signer hook needed for agent-backed native auth.
+
+## Release Architecture
+
+The release workflow is tag-driven. Pushing a `v*.*.*` tag whose commit is on `main` runs lint/tests, builds the macOS app, packages `Driftline.dmg`, uploads `Driftline.dmg.sha256`, and creates the GitHub Release.
+
+Signing and notarization are wired for manual workflow dispatch only and require Apple credentials. Do not claim public artifacts are signed or notarized unless CI or local verification proves it.
+
+## Deep Dives
+
+- [docs/architecture/architecture-overview.md](docs/architecture/architecture-overview.md)
+- [docs/architecture/protocol-adapters.md](docs/architecture/protocol-adapters.md)
+- [docs/architecture/native-swift-sftp-plan.md](docs/architecture/native-swift-sftp-plan.md)
+- [docs/architecture/persistence.md](docs/architecture/persistence.md)
+- [docs/architecture/dependency-decisions.md](docs/architecture/dependency-decisions.md)

@@ -48,8 +48,8 @@ Driftline is a SwiftPM-first native macOS app. Treat this file as repo-local gui
 - Non-sensitive app data belongs behind repository protocols.
 - SFTP/SSH work must preserve the `RemoteFileSystemClient` and `TransferClient` boundaries.
 - Native Swift SFTP work must follow `docs/architecture/native-swift-sftp-plan.md`.
-- Native Swift SFTP currently has Docker coverage for password auth, unencrypted Ed25519 private-key auth, connect, list, create, rename, delete, upload, download, and pre-write cancel.
-- Do not mark native Swift SFTP production-ready until large-file transfer tests, recursive folder transfers, passphrase-protected keys, and a manual accessibility/security QA pass are complete.
+- Native Swift SFTP currently has Docker coverage for password auth, unencrypted Ed25519 private-key auth, passphrase-protected Ed25519 keys, connect, list, create, rename, delete, upload, download, recursive folder transfers, large-file transfers, and pre-write cancel.
+- Do not mark native Swift SFTP as the default production backend until broader real-server QA, SSH agent-auth strategy, and manual accessibility/security QA are complete.
 - **Localization:** When adding, editing, or deleting any user-facing string in the app, you must add, update, or remove the corresponding translation key in `Sources/DriftlineCore/Localization/LocalizationManager.swift` for all four supported languages (English, French, German, Spanish). Use the existing key naming convention (`category.subcategory` like `settings.general`, `browser.refresh`, `connection.connect`) and keep translations sorted alphabetically within each language block.
 
 ## Security Rules

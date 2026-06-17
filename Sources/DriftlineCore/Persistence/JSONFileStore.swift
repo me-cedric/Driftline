@@ -61,6 +61,10 @@ public enum DriftlineStoragePaths {
         applicationSupportDirectory.appendingPathComponent("recent-servers.json")
     }
 
+    public static var integrationSnapshotURL: URL {
+        applicationSupportDirectory.appendingPathComponent("integration-snapshot.json")
+    }
+
     public static var preferencesURL: URL {
         applicationSupportDirectory.appendingPathComponent("preferences.json")
     }

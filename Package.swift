@@ -10,6 +10,7 @@ let package = Package(
     products: [
         .library(name: "DriftlineCore", targets: ["DriftlineCore"]),
         .library(name: "DriftlineMCP", targets: ["DriftlineMCP"]),
+        .library(name: "DriftlineWidget", targets: ["DriftlineWidget"]),
         .executable(name: "Driftline", targets: ["DriftlineApp"]),
         .executable(name: "driftline-mcp", targets: ["driftline-mcp"]),
         .executable(name: "driftline", targets: ["driftline"])
@@ -38,6 +39,12 @@ let package = Package(
                 .product(name: "NIOHTTP1", package: "swift-nio"),
                 .product(name: "NIOCore", package: "swift-nio"),
                 .product(name: "NIOPosix", package: "swift-nio")
+            ]
+        ),
+        .target(
+            name: "DriftlineWidget",
+            dependencies: [
+                "DriftlineCore"
             ]
         ),
         .executableTarget(

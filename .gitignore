@@ -8,3 +8,4 @@ dist/
 *.xcresult
 .integration/
 assets/*.iconset/
+packaging/config/DriftlineSigning.xcconfig

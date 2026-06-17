@@ -1,0 +1,76 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "name": "driftline",
+  "title": "Driftline",
+  "description": "Quick access to Driftline file-transfer actions from Raycast.",
+  "icon": "icon.png",
+  "author": "thomas",
+  "categories": [
+    "Applications",
+    "Productivity"
+  ],
+  "license": "MIT",
+  "commands": [
+    {
+      "name": "open-driftline",
+      "title": "Open Driftline",
+      "subtitle": "Driftline",
+      "description": "Open the Driftline macOS app.",
+      "mode": "no-view",
+      "icon": "icon.png"
+    },
+    {
+      "name": "quick-connect",
+      "title": "Quick Connect",
+      "subtitle": "Driftline",
+      "description": "Open a Driftline connection from Raycast.",
+      "mode": "view",
+      "icon": "icon.png"
+    },
+    {
+      "name": "recent-connections",
+      "title": "Recent Connections",
+      "subtitle": "Driftline",
+      "description": "Open recent Driftline connections from Raycast.",
+      "mode": "view",
+      "icon": "icon.png"
+    },
+    {
+      "name": "driftline-status",
+      "title": "Driftline Status",
+      "subtitle": "Driftline",
+      "description": "Show Driftline status in the Raycast menu bar.",
+      "mode": "menu-bar",
+      "icon": "icon.png"
+    }
+  ],
+  "preferences": [
+    {
+      "name": "bundleId",
+      "title": "Driftline Bundle ID",
+      "description": "Bundle identifier Raycast uses to find the installed Driftline app.",
+      "type": "textfield",
+      "required": true,
+      "default": "app.driftline.Driftline"
+    }
+  ],
+  "scripts": {
+    "build": "ray build",
+    "dev": "ray develop",
+    "lint": "ray lint",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@raycast/api": "1.104.19"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.17",
+    "@raycast/eslint-config": "2.1.1",
+    "eslint": "8.57.1",
+    "prettier": "3.8.4",
+    "typescript": "6.0.3"
+  },
+  "overrides": {
+    "esbuild": "0.28.1"
+  }
+}

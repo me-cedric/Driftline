@@ -17,6 +17,44 @@ Signing and notarization still require developer credentials and must not be cla
 
 Run `./scripts/release-check.sh` before publishing a release.
 
+## Widget Packaging
+
+WidgetKit requires a real app extension bundle embedded at `Driftline.app/Contents/PlugIns/DriftlineWidget.appex`. The release script is still SwiftPM-first and does not create a real `.appex`; the generated Xcode project is the reproducible path for app + widget builds.
+
+Prepared packaging files:
+
+- `packaging/config/DriftlineSigning.xcconfig.template`
+- `packaging/entitlements/Driftline.entitlements`
+- `packaging/entitlements/DriftlineWidget.entitlements`
+- `packaging/widget/DriftlineWidget-Info.plist`
+- `project.yml`
+- `scripts/generate-xcode-project.sh`
+- `scripts/build-signed-xcode-app.sh`
+- `scripts/validate-xcode-project.sh`
+- `scripts/validate-widget-packaging.sh`
+
+Install XcodeGen and generate the project:
+
+```bash
+brew install xcodegen
+./scripts/generate-xcode-project.sh
+```
+
+Configure local signing:
+
+```bash
+cp packaging/config/DriftlineSigning.xcconfig.template packaging/config/DriftlineSigning.xcconfig
+```
+
+Set `DEVELOPMENT_TEAM`, `CODE_SIGN_STYLE`, provisioning profile values, and `DRIFTLINE_APP_GROUP_IDENTIFIER` in the ignored local xcconfig. Then build/validate:
+
+```bash
+./scripts/build-signed-xcode-app.sh
+./scripts/validate-widget-packaging.sh
+```
+
+Signed output lands at `dist/xcode/Driftline.app`. The validator fails clearly until the project embeds and signs the widget extension. Do not claim widget packaging is shippable until it passes.
+
 ## Signing And Notarization Setup
 
 Driftline uses two environment variables for local release signing:
@@ -39,7 +77,7 @@ security find-identity -v -p codesigning
 4. Use the full identity string, for example:
 
 ```bash
-export DRIFTLINE_SIGN_IDENTITY="Developer ID Application: Example Company, Inc. (TEAMID1234)"
+export DRIFTLINE_SIGN_IDENTITY="Developer ID Application: Example Company, Inc. (<team-id>)"
 ```
 
 ### Get `DRIFTLINE_NOTARY_PROFILE`
@@ -49,7 +87,7 @@ Create a keychain profile with `notarytool`. The profile name is arbitrary; `dri
 ```bash
 xcrun notarytool store-credentials "driftline-notary" \
   --apple-id "developer@example.com" \
-  --team-id "TEAMID1234" \
+  --team-id "<team-id>" \
   --password "app-specific-password"
 ```
 
@@ -64,7 +102,7 @@ The password should be an app-specific password or App Store Connect API credent
 ### Validate A Release Locally
 
 ```bash
-DRIFTLINE_SIGN_IDENTITY="Developer ID Application: Example Company, Inc. (TEAMID1234)" \
+DRIFTLINE_SIGN_IDENTITY="Developer ID Application: Example Company, Inc. (<team-id>)" \
 DRIFTLINE_NOTARY_PROFILE="driftline-notary" \
 ./scripts/release-check.sh
 ```

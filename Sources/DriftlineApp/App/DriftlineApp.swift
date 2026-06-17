@@ -12,6 +12,9 @@ struct DriftlineApp: App {
         WindowGroup("Driftline", id: "main") {
             ContentView(model: self.model)
                 .frame(minWidth: 1180, minHeight: 720)
+                .onOpenURL { url in
+                    self.model.handleDeepLink(url)
+                }
         }
         .windowStyle(.hiddenTitleBar)
         .commands {
@@ -100,6 +103,15 @@ final class AppModel: @unchecked Sendable {
         TransferStatsCalculator.calculate(from: self.transferJobs)
     }
 
+    var integrationState: DriftlineIntegrationState {
+        DriftlineIntegrationState.sanitized(
+            profiles: self.profiles,
+            recents: self.recents,
+            transferStats: self.transferStats,
+            sessionState: self.session.state
+        )
+    }
+
     var selectedFile: FileItem? {
         switch self.activePane {
         case .local:
@@ -131,6 +143,7 @@ final class AppModel: @unchecked Sendable {
     private let credentialStore: CredentialStore
     private let diagnosticsRecorder: DiagnosticsRecorder
     private let notificationController: AppNotificationControlling
+    private let integrationStateStore: any DriftlineIntegrationStateStoring
     private var didPerformStartupUpdateCheck = false
     private var mcpHTTPServer: HTTPMCPServer?
 
@@ -151,7 +164,8 @@ final class AppModel: @unchecked Sendable {
         terminalLauncher: TerminalLaunching = SystemTerminalLauncher(),
         credentialStore: CredentialStore = KeychainCredentialStore(),
         diagnosticsRecorder: DiagnosticsRecorder = DiagnosticsRecorder(),
-        notificationController: AppNotificationControlling = AppNotificationController()
+        notificationController: AppNotificationControlling = AppNotificationController(),
+        integrationStateStore: any DriftlineIntegrationStateStoring = JSONDriftlineIntegrationStateStore()
     ) {
         self.localFileSystem = localFileSystem
         self.profileRepository = profileRepository
@@ -170,6 +184,7 @@ final class AppModel: @unchecked Sendable {
         self.credentialStore = credentialStore
         self.diagnosticsRecorder = diagnosticsRecorder
         self.notificationController = notificationController
+        self.integrationStateStore = integrationStateStore
         self.selectedTabID = self.tabs.first?.id
         Task { await self.loadInitialState() }
     }
@@ -186,6 +201,7 @@ final class AppModel: @unchecked Sendable {
             self.bookmarks = try await self.bookmarkRepository.list()
             self.recents = try await self.recentRepository.list(limit: 10)
             self.transferJobs = try await self.transferHistoryRepository.list(limit: 100)
+            self.persistIntegrationState()
             self.consumeLaunchRequest()
             await self.refreshLocal()
             await self.performStartupUpdateCheckIfNeeded()
@@ -313,6 +329,78 @@ final class AppModel: @unchecked Sendable {
             body: body,
             identifier: identifier
         )
+    }
+
+    func handleDeepLink(_ url: URL) {
+        NSApp.activate(ignoringOtherApps: true)
+        for window in NSApp.windows where window.canBecomeKey {
+            window.makeKeyAndOrderFront(nil)
+        }
+
+        do {
+            let action = try DriftlineDeepLink.parse(url)
+            switch action {
+            case .open:
+                break
+            case let .connect(request):
+                self.applyConnectDeepLink(request)
+            }
+        } catch let error as DriftlineDeepLinkError {
+            self.userAlert = UserAlert(
+                title: self.loc("deepLink.invalidTitle"),
+                message: self.localizedDeepLinkError(error)
+            )
+        } catch {
+            self.userAlert = UserAlert(
+                title: self.loc("deepLink.invalidTitle"),
+                message: self.loc("deepLink.malformed")
+            )
+        }
+    }
+
+    private func applyConnectDeepLink(_ request: DriftlineConnectRequest) {
+        var draft = ServerProfileDraft()
+        draft.displayName = request.host
+        draft.host = request.host
+        draft.port = request.port
+        draft.protocolKind = request.protocolKind
+        draft.username = request.username
+        draft.remoteDefaultPath = request.path ?? draft.remoteDefaultPath
+        self.selectedSidebarItem = SidebarItem.quickConnect.id
+        self.connectAfterSavingDraft = false
+        self.profileEditorError = nil
+        self.profileDraft = draft
+        if !request.ignoredSecretParameters.isEmpty {
+            self.userAlert = UserAlert(
+                title: self.loc("deepLink.secretsIgnoredTitle"),
+                message: self.loc("deepLink.secretsIgnoredMessage")
+            )
+        }
+    }
+
+    private func localizedDeepLinkError(_ error: DriftlineDeepLinkError) -> String {
+        switch error {
+        case .unsupportedScheme, .unsupportedAction:
+            self.loc("deepLink.malformed")
+        case let .invalidProtocol(value):
+            self.loc("deepLink.unsupportedProtocol", value ?? self.loc("common.none"))
+        case .missingHost:
+            self.loc("deepLink.missingHost")
+        case .invalidHost:
+            self.loc("deepLink.invalidHost")
+        case let .invalidPort(value):
+            self.loc("deepLink.invalidPort", value ?? self.loc("common.none"))
+        case .missingUsername:
+            self.loc("deepLink.missingUsername")
+        }
+    }
+
+    private func persistIntegrationState() {
+        let state = self.integrationState
+        let store = self.integrationStateStore
+        Task {
+            try? await store.save(state)
+        }
     }
 
     func refreshLocal() async {
@@ -536,6 +624,7 @@ final class AppModel: @unchecked Sendable {
         self.isConnecting = true
         self.useNativeBackendIfNeeded(for: profile)
         self.session = ConnectionSession(serverID: profile.id, state: .connecting, protocolKind: profile.protocolKind, localPath: paths.localPath, remotePath: paths.remotePath)
+        self.persistIntegrationState()
         do {
             let client = self.remoteClientForCurrentPreference()
             var connectedSession = try await client.connect(to: profile)
@@ -546,6 +635,7 @@ final class AppModel: @unchecked Sendable {
             await self.refreshLocal()
             try await self.recordRecentConnection(for: profile)
             self.recents = try await self.recentRepository.list(limit: 10)
+            self.persistIntegrationState()
             self.saveActiveTabSnapshot()
             self.isConnecting = false
         } catch {
@@ -558,6 +648,7 @@ final class AppModel: @unchecked Sendable {
             self.session.lastErrorMessage = error.localizedDescription
             self.footerMessage = error.localizedDescription
             self.isConnecting = false
+            self.persistIntegrationState()
         }
     }
 
@@ -588,6 +679,7 @@ final class AppModel: @unchecked Sendable {
         do {
             try await self.recordRecentConnection(for: profile)
             self.recents = try await self.recentRepository.list(limit: 10)
+            self.persistIntegrationState()
         } catch {
             self.recordError(error, category: "recent.record")
         }
@@ -640,6 +732,7 @@ final class AppModel: @unchecked Sendable {
             self.session.state = .failed(message: error.localizedDescription)
             self.session.lastErrorMessage = error.localizedDescription
             self.footerMessage = error.localizedDescription
+            self.persistIntegrationState()
         }
     }
 
@@ -648,6 +741,7 @@ final class AppModel: @unchecked Sendable {
         self.session.state = .disconnected
         self.remoteItems = []
         self.saveActiveTabSnapshot()
+        self.persistIntegrationState()
         Task {
             try? await self.remoteClientForCurrentPreference().disconnect(session: sessionToDisconnect)
         }
@@ -782,6 +876,7 @@ final class AppModel: @unchecked Sendable {
             do {
                 try await self.profileRepository.save(selectedProfile)
                 self.profiles = try await self.profileRepository.list()
+                self.persistIntegrationState()
                 self.statusMessage = ToastMessage(text: selectedProfile.isFavorite ? self.loc("toast.favoriteAdded") : self.loc("toast.favoriteRemoved"))
             } catch {
                 self.recordError(error, category: "profile.favorite")
@@ -802,6 +897,7 @@ final class AppModel: @unchecked Sendable {
             do {
                 try await self.bookmarkRepository.save(bookmark)
                 self.bookmarks = try await self.bookmarkRepository.list()
+                self.persistIntegrationState()
                 self.statusMessage = ToastMessage(text: self.loc("toast.bookmarkSaved"))
             } catch {
                 self.recordError(error, category: "bookmark.save")
@@ -872,6 +968,7 @@ final class AppModel: @unchecked Sendable {
                     try await self.profileRepository.save(profile)
                     self.profiles = try await self.profileRepository.list()
                     try await self.deleteUnusedCredentialReferences(from: previousProfile.map { [$0] } ?? [], keeping: self.profiles)
+                    self.persistIntegrationState()
                     self.selectedSidebarItem = profile.id.rawValue.uuidString
                     self.profileDraft = nil
                     self.profileEditorError = nil
@@ -932,6 +1029,7 @@ final class AppModel: @unchecked Sendable {
             do {
                 try await self.profileRepository.save(copy)
                 self.profiles = try await self.profileRepository.list()
+                self.persistIntegrationState()
                 self.selectedSidebarItem = copy.id.rawValue.uuidString
             } catch {
                 self.recordError(error, category: "profile.duplicate")
@@ -948,6 +1046,7 @@ final class AppModel: @unchecked Sendable {
                 self.profiles = try await self.profileRepository.list()
                 try await self.deleteDependentNavigationRecords(for: selectedProfile.id)
                 try await self.deleteUnusedCredentialReferences(from: [selectedProfile], keeping: self.profiles)
+                self.persistIntegrationState()
                 self.selectedSidebarItem = nil
                 if self.session.serverID == selectedProfile.id {
                     self.disconnect()
@@ -967,6 +1066,7 @@ final class AppModel: @unchecked Sendable {
         try await self.recentRepository.delete(profileID: profileID)
         self.bookmarks = try await self.bookmarkRepository.list()
         self.recents = try await self.recentRepository.list(limit: 10)
+        self.persistIntegrationState()
     }
 
     private func deleteUnusedCredentialReferences(from oldProfiles: [ServerProfile], keeping currentProfiles: [ServerProfile]) async throws {
@@ -1451,6 +1551,7 @@ final class AppModel: @unchecked Sendable {
         } else {
             self.transferJobs.insert(job, at: 0)
         }
+        self.persistIntegrationState()
     }
 
     private func saveActiveTabSnapshot() {
@@ -1495,6 +1596,7 @@ final class AppModel: @unchecked Sendable {
             if case .succeeded = job.status { return true }
             return false
         }
+        self.persistIntegrationState()
         Task {
             try? await self.transferHistoryRepository.clear { job in
                 if case .succeeded = job.status { return true }
@@ -1508,6 +1610,7 @@ final class AppModel: @unchecked Sendable {
             if case .failed = job.status { return true }
             return false
         }
+        self.persistIntegrationState()
         Task {
             try? await self.transferHistoryRepository.clear { job in
                 if case .failed = job.status { return true }
@@ -1542,6 +1645,7 @@ final class AppModel: @unchecked Sendable {
             cancelled.finishedAt = Date()
             return cancelled
         }
+        self.persistIntegrationState()
         Task {
             for id in activeIDs {
                 let backendKind = self.transferJobs.first { $0.id == id }?.backendKind
@@ -1558,12 +1662,14 @@ final class AppModel: @unchecked Sendable {
             self.transferJobs[index].status = .cancelled
             self.transferJobs[index].finishedAt = Date()
             self.transferProfiles[id] = nil
+            self.persistIntegrationState()
             self.processTransferQueue()
         case .running:
             let backendKind = self.transferJobs[index].backendKind
             self.transferJobs[index].status = .cancelled
             self.transferJobs[index].finishedAt = Date()
             self.transferProfiles[id] = nil
+            self.persistIntegrationState()
             Task {
                 try? await self.transferClient(for: backendKind).cancel(id: id)
                 await MainActor.run {
@@ -1605,6 +1711,10 @@ final class AppModel: @unchecked Sendable {
         if let index = self.tabs.firstIndex(where: { $0.id == tabID }) {
             self.disconnectTabSession(self.tabs[index].session)
             self.tabs[index].session.state = .disconnected
+            if self.selectedTabID == tabID {
+                self.session.state = .disconnected
+                self.persistIntegrationState()
+            }
         }
         self.forceCloseTab(tabID)
     }

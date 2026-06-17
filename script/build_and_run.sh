@@ -8,6 +8,7 @@ MIN_SYSTEM_VERSION="14.0"
 BUILD_CONFIGURATION="${DRIFTLINE_BUILD_CONFIGURATION:-debug}"
 APP_VERSION="${DRIFTLINE_VERSION:-0.6.0}"
 APP_BUILD="${DRIFTLINE_BUILD_NUMBER:-7}"
+APP_GROUP_IDENTIFIER="${DRIFTLINE_APP_GROUP_IDENTIFIER:-}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist"
@@ -17,6 +18,7 @@ APP_MACOS="$APP_CONTENTS/MacOS"
 APP_RESOURCES="$APP_CONTENTS/Resources"
 APP_BINARY="$APP_MACOS/$APP_NAME"
 INFO_PLIST="$APP_CONTENTS/Info.plist"
+APP_ENTITLEMENTS="$DIST_DIR/$APP_NAME.entitlements"
 
 pkill -x "$APP_NAME" >/dev/null 2>&1 || true
 
@@ -64,6 +66,17 @@ cat >"$INFO_PLIST" <<PLIST
   <string>Driftline</string>
   <key>CFBundleDevelopmentRegion</key>
   <string>en</string>
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleURLName</key>
+      <string>$BUNDLE_ID</string>
+      <key>CFBundleURLSchemes</key>
+      <array>
+        <string>driftline</string>
+      </array>
+    </dict>
+  </array>
   <key>NSHumanReadableCopyright</key>
   <string>Copyright © 2026 Driftline contributors. MIT License.</string>
   <key>NSHighResolutionCapable</key>
@@ -76,8 +89,31 @@ cat >"$INFO_PLIST" <<PLIST
 </plist>
 PLIST
 
+if [[ -n "$APP_GROUP_IDENTIFIER" ]]; then
+  /usr/libexec/PlistBuddy -c "Add :DRIFTLINE_APP_GROUP_IDENTIFIER string $APP_GROUP_IDENTIFIER" "$INFO_PLIST"
+fi
+
 if [[ -n "${DRIFTLINE_SIGN_IDENTITY:-}" ]]; then
-  codesign --force --deep --options runtime --sign "$DRIFTLINE_SIGN_IDENTITY" "$APP_BUNDLE"
+  if [[ -n "$APP_GROUP_IDENTIFIER" ]]; then
+    cat >"$APP_ENTITLEMENTS" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>com.apple.security.application-groups</key>
+  <array>
+    <string>$APP_GROUP_IDENTIFIER</string>
+  </array>
+</dict>
+</plist>
+PLIST
+    codesign --force --deep --options runtime --entitlements "$APP_ENTITLEMENTS" --sign "$DRIFTLINE_SIGN_IDENTITY" "$APP_BUNDLE"
+  else
+    codesign --force --deep --options runtime --sign "$DRIFTLINE_SIGN_IDENTITY" "$APP_BUNDLE"
+  fi
+elif [[ -n "$APP_GROUP_IDENTIFIER" ]]; then
+  echo "DRIFTLINE_APP_GROUP_IDENTIFIER requires DRIFTLINE_SIGN_IDENTITY for app-group entitlements." >&2
+  exit 2
 fi
 
 open_app() {

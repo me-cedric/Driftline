@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+- Froze 1.0 scope around secure SFTP with System SSH as the default backend.
+- Added 1.0 persistence and privacy/security review docs.
+- Added transfer ETA display when progress, byte count, and speed are available.
+- Improved compare/sync changed-file details with local/remote size and delta.
+- Added corrupt JSON persistence recovery and capped transfer history storage.
+- Updated release notes and Homebrew formula metadata for 0.6.0.
+- Cleaned future backlog items already covered by bookmarks and conflict handling.
+
+## 0.6.0 - 2026-06-19
+
+- Added local MCP server integration over stdio and loopback HTTP.
+- Added MCP settings, local root sandboxing, and destructive-operation gating.
+- Added `driftline-mcp` executable and `driftline mcp` CLI management commands.
+- Added MCP tests for tool listing, local sandboxing, profile privacy, transfer permissions, and HTTP auth.
+- Automated tag-driven release packaging from CI.
+
 ## 0.5.1 - 2026-06-15
 
 - Reworked local/remote pane splitting with a lighter custom divider and usable minimum widths.

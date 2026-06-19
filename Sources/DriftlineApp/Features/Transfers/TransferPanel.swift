@@ -231,6 +231,11 @@ private struct TransferProgressCell: View {
                     .lineLimit(1)
                     .frame(minWidth: 58, alignment: .leading)
             }
+            if let eta = self.eta {
+                Text(String(format: LocalizationManager.shared.localized("transfer.eta"), eta))
+                    .lineLimit(1)
+                    .frame(minWidth: 56, alignment: .leading)
+            }
         }
         .font(.caption2)
         .foregroundStyle(.secondary)
@@ -252,6 +257,14 @@ private struct TransferProgressCell: View {
             return bytesPerSecond
         }
         return nil
+    }
+
+    private var eta: String? {
+        guard let seconds = self.job.estimatedRemainingSeconds else { return nil }
+        let formatter = DateComponentsFormatter()
+        formatter.allowedUnits = seconds >= 3600 ? [.hour, .minute] : [.minute, .second]
+        formatter.unitsStyle = .abbreviated
+        return formatter.string(from: seconds)
     }
 }
 

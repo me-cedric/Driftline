@@ -92,6 +92,20 @@ public struct TransferJob: Identifiable, Codable, Sendable {
         self.startedAt = try c.decodeIfPresent(Date.self, forKey: .startedAt)
         self.finishedAt = try c.decodeIfPresent(Date.self, forKey: .finishedAt)
     }
+
+    public var estimatedRemainingSeconds: TimeInterval? {
+        guard case let .running(progress, bytesPerSecond) = self.status,
+              let byteCount,
+              let bytesPerSecond,
+              byteCount > 0,
+              bytesPerSecond > 0
+        else {
+            return nil
+        }
+        let clampedProgress = min(max(progress, 0), 1)
+        guard clampedProgress > 0, clampedProgress < 1 else { return nil }
+        return Double(byteCount) * (1 - clampedProgress) / Double(bytesPerSecond)
+    }
 }
 
 public struct TransferStats: Equatable, Codable, Sendable {

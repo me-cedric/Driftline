@@ -14,10 +14,10 @@ Driftline is pre-1.0. The roadmap favors secure SFTP workflows, native macOS pol
 
 - Configure Developer ID signing and notarization in CI.
 - Document and verify signed/notarized release artifacts.
-- Decide whether native Swift SFTP graduates from opt-in to default or stays secondary to System SSH.
+- Keep native Swift SFTP opt-in unless broader real-server QA, SSH-agent strategy, and manual accessibility/security QA are complete.
 - Keep System SSH as a reliable fallback for at least one release after any backend default change.
-- Complete a privacy/security review for update checks, diagnostics, and any future telemetry.
-- Stabilize persistence schemas and migration behavior.
+- Privacy/security review for update checks, diagnostics, MCP, and future telemetry is recorded in `docs/security/privacy-review.md`.
+- Persistence schema freeze is recorded in `docs/architecture/persistence.md`; any storage change now needs a migration test.
 
 ## Protocols And Integrations
 

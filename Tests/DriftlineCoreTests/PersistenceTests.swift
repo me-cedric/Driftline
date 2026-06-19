@@ -80,6 +80,20 @@ final class PersistenceTests: XCTestCase {
         XCTAssertEqual(decoded.transferConcurrency, 2)
     }
 
+    func testJSONFileStoreMovesCorruptPayloadAndReturnsDefault() async throws {
+        let url = self.temporaryFileURL("bad.json")
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("{not json".utf8).write(to: url)
+        let store = JSONFileStore<[String]>(url: url)
+
+        let loaded = try await store.load(default: ["default"])
+        let files = try FileManager.default.contentsOfDirectory(atPath: url.deletingLastPathComponent().path)
+
+        XCTAssertEqual(loaded, ["default"])
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+        XCTAssertTrue(files.contains { $0.hasPrefix("bad.json.corrupt-") })
+    }
+
     func testJSONTransferHistoryRepositoryAppendsListsAndClears() async throws {
         let url = self.temporaryFileURL("history.json")
         let repository = JSONTransferHistoryRepository(url: url)
@@ -101,6 +115,19 @@ final class PersistenceTests: XCTestCase {
 
         XCTAssertEqual(jobs.count, 1)
         XCTAssertEqual(jobs.first?.status, .succeeded)
+    }
+
+    func testJSONTransferHistoryRepositoryCapsStoredJobs() async throws {
+        let url = self.temporaryFileURL("history.json")
+        let repository = JSONTransferHistoryRepository(url: url, retainedLimit: 2)
+
+        try await repository.append(TransferJob(direction: .upload, sourcePath: "/1", destinationPath: "/1"))
+        try await repository.append(TransferJob(direction: .upload, sourcePath: "/2", destinationPath: "/2"))
+        try await repository.append(TransferJob(direction: .upload, sourcePath: "/3", destinationPath: "/3"))
+
+        let jobs = try await repository.list(limit: 10)
+
+        XCTAssertEqual(jobs.map(\.sourcePath), ["/3", "/2"])
     }
 
     func testBookmarkRepositoryRoundTripsAndDeletesBookmarks() async throws {

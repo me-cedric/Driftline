@@ -38,6 +38,8 @@ Driftline is active pre-1.0 software. SFTP workflows are functional and tested, 
 | FTP/FTPS/WebDAV/S3/SMB | Roadmap only. Not implemented or claimed secure yet. |
 | Signing/notarization | Scripts and CI hooks exist, but public releases are unsigned until Apple credentials are configured. |
 
+1.0 scope is frozen around secure SFTP. System SSH remains the default backend; Native Swift SFTP stays opt-in until broader real-server, accessibility, and security QA are complete. See [docs/release/1.0-scope.md](docs/release/1.0-scope.md).
+
 ## Features
 
 ### File Browsing
@@ -203,6 +205,7 @@ Manual release dispatch still creates a draft release for review.
 - [docs/release/](docs/release/): release checklist and distribution notes.
 - [docs/testing/](docs/testing/): manual QA, integration harness, real-server matrix.
 - [docs/ux/](docs/ux/): navigation, accessibility, design system.
+- [docs/security/privacy-review.md](docs/security/privacy-review.md): local-first privacy/security review for 1.0.
 
 ## License
 

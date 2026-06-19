@@ -19,7 +19,14 @@ public actor JSONFileStore<Value: Codable & Sendable> {
             return defaultValue()
         }
         let data = try Data(contentsOf: url)
-        return try self.decoder.decode(Value.self, from: data)
+        do {
+            return try self.decoder.decode(Value.self, from: data)
+        } catch _ as DecodingError {
+            try self.moveCorruptFile()
+            return defaultValue()
+        } catch {
+            throw error
+        }
     }
 
     public func save(_ value: Value) throws {
@@ -27,6 +34,12 @@ public actor JSONFileStore<Value: Codable & Sendable> {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let data = try encoder.encode(value)
         try data.write(to: self.url, options: [.atomic])
+    }
+
+    private func moveCorruptFile() throws {
+        let timestamp = Int(Date().timeIntervalSince1970)
+        let corruptURL = self.url.appendingPathExtension("corrupt-\(timestamp)-\(UUID().uuidString)")
+        try FileManager.default.moveItem(at: self.url, to: corruptURL)
     }
 }
 

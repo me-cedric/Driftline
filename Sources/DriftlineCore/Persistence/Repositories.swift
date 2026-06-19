@@ -85,14 +85,17 @@ public actor InMemoryTransferHistoryRepository: TransferHistoryRepository {
 
 public actor JSONTransferHistoryRepository: TransferHistoryRepository {
     private let store: JSONFileStore<[TransferJob]>
+    private let retainedLimit: Int
 
-    public init(url: URL = DriftlineStoragePaths.transferHistoryURL) {
+    public init(url: URL = DriftlineStoragePaths.transferHistoryURL, retainedLimit: Int = 500) {
         self.store = JSONFileStore(url: url)
+        self.retainedLimit = retainedLimit
     }
 
     public func append(_ job: TransferJob) async throws {
         var jobs = try await store.load(default: [])
         jobs.append(job)
+        jobs = Array(jobs.suffix(self.retainedLimit))
         try await self.store.save(jobs)
     }
 

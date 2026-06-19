@@ -22,6 +22,6 @@ final class SyncPreviewTests: XCTestCase {
         XCTAssertEqual(preview.localOnly.map(\.name), ["local-only.txt"])
         XCTAssertEqual(preview.remoteOnly.map(\.name), ["remote-only.txt"])
         XCTAssertEqual(preview.changed.map(\.name), ["changed.txt"])
-        XCTAssertEqual(preview.changed.first?.reason, "Size differs")
+        XCTAssertEqual(preview.changed.first?.reason, "Size differs: local 20 bytes, remote 25 bytes, delta -5 bytes")
     }
 }

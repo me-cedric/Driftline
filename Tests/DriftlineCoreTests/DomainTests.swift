@@ -36,4 +36,16 @@ final class DomainTests: XCTestCase {
         XCTAssertEqual(TransferProtocolKind.ftp.defaultPort, 21)
         XCTAssertEqual(TransferProtocolKind.ftps.defaultPort, 990)
     }
+
+    func testTransferETAUsesProgressSpeedAndByteCount() {
+        let job = TransferJob(
+            direction: .upload,
+            sourcePath: "/a",
+            destinationPath: "/b",
+            byteCount: 1000,
+            status: .running(progress: 0.25, bytesPerSecond: 100)
+        )
+
+        XCTAssertEqual(job.estimatedRemainingSeconds, 7.5)
+    }
 }

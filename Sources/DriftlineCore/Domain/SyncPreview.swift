@@ -20,9 +20,18 @@ public struct SyncDifference: Identifiable, Sendable, Equatable {
             return "Type differs"
         }
         if self.local.size != self.remote.size {
-            return "Size differs"
+            if let localSize = self.local.size, let remoteSize = self.remote.size {
+                let delta = localSize - remoteSize
+                let sign = delta >= 0 ? "+" : "-"
+                return "Size differs: local \(Self.formatBytes(localSize)), remote \(Self.formatBytes(remoteSize)), delta \(sign)\(Self.formatBytes(abs(delta)))"
+            }
+            return "Size differs: one side has unknown size"
         }
         return "Metadata differs"
+    }
+
+    private static func formatBytes(_ bytes: Int64) -> String {
+        ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
     }
 }
 

@@ -281,3 +281,24 @@
   - `swift test`: passed, 75 tests with Docker-gated integration tests skipped.
   - `DRIFTLINE_INTEGRATION_SFTP=1 DRIFTLINE_NATIVE_INTEGRATION_SFTP=1 ... swift test --filter SFTPIntegrationTests/testRecursiveFolderUploadDownloadViaSystemSFTPWhenHarnessEnabled`: passed.
   - Full `SFTPIntegrationTests` class still exposed the linuxserver.io Docker SSH daemon closing later System SSH handshakes after several native sequential tests. Individual native and system integration tests pass against a fresh harness; the full-class harness needs isolation/restart work before it can be treated as deterministic CI.
+
+## 2026-06-19 1.0 Freeze And Small Polish
+
+- Froze 1.0 scope around secure SFTP with System SSH as the default backend and Native Swift SFTP staying opt-in until broader QA and SSH-agent strategy are complete.
+- Added persistence schema-freeze rules and a privacy/security review for update checks, diagnostics, MCP, and future telemetry.
+- Added transfer ETA display when progress, byte count, and speed are available.
+- Improved compare/sync changed-file details with local size, remote size, and byte delta.
+- Added corrupt JSON recovery that moves bad files to `.corrupt-*` and loads defaults.
+- Capped persisted transfer history at 500 jobs.
+- Updated `CHANGELOG.md` with an honest 0.6.0 section, made `scripts/release-notes.sh` read the matching changelog section, and refreshed `Formula/driftline.rb` for the remote 0.6.0 source archive.
+- Cleaned future backlog items already covered by bookmarks and conflict handling.
+- Validation passed:
+  - `swift test`: passed, 123 tests with 8 Docker-gated integration tests skipped.
+  - `./scripts/lint.sh`: passed.
+  - `swift package clean && ./scripts/release-check.sh`: passed and created `dist/Driftline.dmg` with checksum `e9b5756f8161b3fc1d3e0fc807af25c375f4474386e0e85c3f6877f8828c419b`.
+  - `./scripts/release-notes.sh`: emitted the 0.6.0 changelog section.
+  - Homebrew source archive checksum was verified by downloading `https://github.com/me-cedric/Driftline/archive/refs/tags/v0.6.0.tar.gz`.
+- Release readiness notes:
+  - Signing was not attempted because `DRIFTLINE_SIGN_IDENTITY` is not set.
+  - Notarization was not attempted because `DRIFTLINE_NOTARY_PROFILE` is not set.
+  - `brew fetch --formula ./Formula/driftline.rb` was not usable because Homebrew rejects formula files outside a tap.

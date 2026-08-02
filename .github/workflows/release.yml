@@ -55,7 +55,7 @@ jobs:
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main
 
       - name: Cache SwiftPM dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .build
           key: ${{ runner.os }}-spm-${{ hashFiles('Package.swift', 'Package.resolved') }}

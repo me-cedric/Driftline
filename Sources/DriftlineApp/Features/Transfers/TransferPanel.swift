@@ -43,15 +43,14 @@ struct TransferPanel: View {
     }
 
     var body: some View {
-        ContentSurface(cornerRadius: DriftlineRadius.card) {
-            VStack(spacing: 0) {
-                self.header
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                Divider()
-                self.content
-            }
+        VStack(spacing: 0) {
+            self.header
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+            Divider()
+            self.content
         }
+        .background(Color(nsColor: .controlBackgroundColor))
     }
 
     private var header: some View {
@@ -143,7 +142,7 @@ struct TransferPanel: View {
                 TableColumn(LocalizationManager.shared.localized("transfer.column.progress"), value: \.progressSortValue) { job in
                     TransferProgressCell(job: job)
                 }
-                .width(min: 120, ideal: 150, max: 190)
+                .width(min: 140, ideal: 220, max: 300)
                 TableColumn(LocalizationManager.shared.localized("transfer.column.direction"), value: \.directionSortValue) { job in
                     Label(job.direction.localizedTitle, systemImage: job.direction == .upload ? "arrow.up.circle" : "arrow.down.circle")
                 }
@@ -218,26 +217,31 @@ private struct TransferProgressCell: View {
     var job: TransferJob
 
     var body: some View {
+        // Everything stays inside the column: speed and time left shrink first, and the full text is in the tooltip.
         HStack(spacing: 8) {
             ProgressView(value: self.progress)
                 .progressViewStyle(.linear)
-                .frame(minWidth: 70)
+                .frame(minWidth: 50)
             Text(self.progress.formatted(.percent.precision(.fractionLength(0))))
                 .monospacedDigit()
                 .frame(width: 36, alignment: .trailing)
-            if let speed = self.speed {
-                Text(ByteCountFormatter.string(fromByteCount: speed) + "/s")
+            if let details = self.details {
+                Text(details)
                     .lineLimit(1)
-                    .frame(minWidth: 58, alignment: .leading)
-            }
-            if let eta = self.eta {
-                Text(String(format: LocalizationManager.shared.localized("transfer.eta"), eta))
-                    .lineLimit(1)
-                    .frame(minWidth: 56, alignment: .leading)
+                    .truncationMode(.tail)
+                    .layoutPriority(-1)
             }
         }
         .font(.caption2)
         .foregroundStyle(.secondary)
+        .help(self.details ?? "")
+    }
+
+    private var details: String? {
+        let speed = self.speed.map { ByteCountFormatter.string(fromByteCount: $0) + "/s" }
+        let eta = self.eta.map { String(format: LocalizationManager.shared.localized("transfer.eta"), $0) }
+        let parts = [speed, eta].compactMap(\.self)
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     private var progress: Double {

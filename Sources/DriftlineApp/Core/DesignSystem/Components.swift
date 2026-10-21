@@ -25,29 +25,6 @@ enum DriftlineOpacity {
     static let stroke = 0.065
 }
 
-/// A solid surface for content such as file lists and the transfer queue.
-/// Liquid Glass belongs to the controls and navigation that float above content (toolbar, sidebar,
-/// toasts), so content surfaces use the system content color instead of a material.
-struct ContentSurface<Content: View>: View {
-    var cornerRadius: CGFloat
-    @ViewBuilder var content: Content
-
-    init(cornerRadius: CGFloat = DriftlineRadius.panel, @ViewBuilder content: () -> Content) {
-        self.cornerRadius = cornerRadius
-        self.content = content()
-    }
-
-    var body: some View {
-        let shape = RoundedRectangle(cornerRadius: self.cornerRadius, style: .continuous)
-        self.content
-            .background(Color(nsColor: .controlBackgroundColor), in: shape)
-            .clipShape(shape)
-            .overlay {
-                shape.strokeBorder(Color(nsColor: .separatorColor), lineWidth: 0.5)
-            }
-    }
-}
-
 extension View {
     /// The system Liquid Glass button on macOS 26 and later, the previous capsule style before.
     @ViewBuilder
@@ -85,30 +62,27 @@ extension View {
     }
 }
 
-/// A subtle, glass-compatible drag handle for resizing stacked panels.
-/// Shows a low-opacity centered grabber that brightens on hover, and adopts a
-/// resize cursor so the affordance stays discoverable without harsh separators.
+/// The separator between the file panes and the transfer queue, with a resize cursor and a 7 pt drag target.
 struct PaneSplitHandle: View {
     @State private var isHovering = false
 
     var body: some View {
-        ZStack {
-            Color.clear
-            Capsule(style: .continuous)
-                .fill(Color.primary.opacity(self.isHovering ? 0.28 : 0.12))
-                .frame(width: 36, height: 4)
-        }
-        .frame(maxWidth: .infinity)
-        .frame(height: 18)
-        .contentShape(Rectangle())
-        .onHover { hovering in
-            self.isHovering = hovering
-            if hovering {
-                NSCursor.resizeUpDown.push()
-            } else {
-                NSCursor.pop()
+        Rectangle()
+            .fill(Color(nsColor: .separatorColor))
+            .frame(height: self.isHovering ? 2 : 1)
+            .frame(maxWidth: .infinity)
+            .frame(height: 7)
+            // The drag target matches the panes, so no window background shows between them.
+            .background(Color(nsColor: .controlBackgroundColor))
+            .contentShape(Rectangle())
+            .onHover { hovering in
+                self.isHovering = hovering
+                if hovering {
+                    NSCursor.resizeUpDown.push()
+                } else {
+                    NSCursor.pop()
+                }
             }
-        }
     }
 }
 
@@ -121,9 +95,9 @@ struct PaneVerticalDivider: View {
 
     var body: some View {
         ZStack {
-            Color.clear
+            Color(nsColor: .controlBackgroundColor)
             RoundedRectangle(cornerRadius: 1, style: .continuous)
-                .fill(Color.primary.opacity(self.isHovering ? 0.16 : DriftlineOpacity.stroke))
+                .fill(self.isHovering ? Color.primary.opacity(0.16) : Color(nsColor: .separatorColor))
                 .frame(width: self.isHovering ? 2 : 1)
         }
         .frame(maxHeight: .infinity)
@@ -223,11 +197,9 @@ struct TransferStatusBadge: View {
         switch self.status {
         case .queued:
             Label(LocalizationManager.shared.localized("transfer.queued"), systemImage: "clock").foregroundStyle(.secondary)
-        case let .running(progress, _):
-            ProgressView(value: progress) {
-                Text("\(Int(progress * 100))%")
-            }
-            .frame(width: 120)
+        case .running:
+            // The Progress column shows the bar and the numbers; the status stays one short line.
+            Label(LocalizationManager.shared.localized("transfer.running"), systemImage: "arrow.triangle.2.circlepath").foregroundStyle(.blue)
         case .succeeded:
             Label(LocalizationManager.shared.localized("transfer.done"), systemImage: "checkmark.circle.fill").foregroundStyle(.green)
         case .failed:

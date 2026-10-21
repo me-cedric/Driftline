@@ -28,6 +28,8 @@ struct ContentView: View {
                 .toolbar {
                     WorkspaceToolbar(model: self.model)
                 }
+                // One search field in the toolbar, like Finder. It filters the pane that has the focus.
+                .searchable(text: self.activeFilterText, placement: .toolbar, prompt: Text(self.filterPrompt))
                 // The system inspector column: its own background, resize handle and window integration.
                 .inspector(isPresented: self.$model.preferences.showInspector) {
                     InspectorView(
@@ -218,6 +220,23 @@ struct ContentView: View {
         }
     }
 
+    private var activeFilterText: Binding<String> {
+        Binding(
+            get: { self.model.activePane == .local ? self.model.localFilterText : self.model.remoteFilterText },
+            set: { text in
+                if self.model.activePane == .local {
+                    self.model.localFilterText = text
+                } else {
+                    self.model.remoteFilterText = text
+                }
+            }
+        )
+    }
+
+    private var filterPrompt: String {
+        loc("browser.filterPane", loc(self.model.activePane == .local ? "browser.local" : "browser.remote"))
+    }
+
     private var browserAndTransfers: some View {
         GeometryReader { proxy in
             VStack(spacing: 0) {
@@ -242,9 +261,6 @@ struct ContentView: View {
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 8)
-        .padding(.bottom, 12)
     }
 
     private var fileBrowserSplit: some View {
@@ -257,6 +273,7 @@ struct ContentView: View {
                     path: self.model.session.localPath,
                     items: self.model.localItems,
                     source: .local,
+                    filterText: self.$model.localFilterText,
                     selectionIDs: self.$model.selectedLocalFileIDs,
                     onSelectionChange: { self.model.selectItems($0, in: .local) },
                     onOpen: { self.model.navigateLocal(to: $0) },
@@ -303,6 +320,7 @@ struct ContentView: View {
                     items: self.model.remoteItems,
                     source: .remote,
                     isConnected: self.model.session.state == .connected,
+                    filterText: self.$model.remoteFilterText,
                     selectionIDs: self.$model.selectedRemoteFileIDs,
                     onSelectionChange: { self.model.selectItems($0, in: .remote) },
                     onOpen: { self.model.navigateRemote(to: $0) },
@@ -353,130 +371,147 @@ struct ContentView: View {
 struct SidebarView: View {
     @Bindable var model: AppModel
 
+    /// Bookmark and recent rows act on click and keep no selection; server rows select the server and connect.
+    private static let bookmarkPrefix = "bookmark:"
+    private static let recentPrefix = "recent:"
+
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                SidebarSection(title: loc("sidebar.driftline")) {
-                    SidebarNavRow(
-                        title: loc("sidebar.newConnection"),
-                        systemImage: "plus",
-                        isSelected: false,
-                        isPrimary: true
-                    ) {
-                        self.model.beginQuickConnect()
-                    }
-                }
-                SidebarSection(title: loc("sidebar.favorites"), systemImage: "star") {
-                    let favorites = self.model.profiles.filter(\.isFavorite)
-                    if favorites.isEmpty {
-                        SidebarEmptyRow(loc("sidebar.markFavorites"))
-                    } else {
-                        ForEach(favorites) { profile in
-                            SidebarNavRow(
-                                title: profile.displayName,
-                                subtitle: self.profileSubtitle(profile),
-                                systemImage: "star.fill",
-                                isSelected: self.isSelected(profile),
-                                statusColor: self.statusColor(for: profile)
-                            ) {
-                                self.model.selectedSidebarItem = self.sidebarID(for: profile)
-                                self.model.connectToSelectedServer()
-                            }
-                            .contextMenu {
-                                Button(loc("sidebar.contextConnect")) {
-                                    self.model.selectedSidebarItem = self.sidebarID(for: profile)
-                                    self.model.connectToSelectedServer()
-                                }
-                                Button(loc("sidebar.contextEdit")) {
-                                    self.model.selectedSidebarItem = self.sidebarID(for: profile)
-                                    self.model.beginEditingSelectedProfile()
-                                }
-                                Button(loc("menu.duplicate")) {
-                                    self.model.selectedSidebarItem = self.sidebarID(for: profile)
-                                    self.model.duplicateSelectedProfile()
-                                }
-                                Divider()
-                                Button(loc("menu.delete"), role: .destructive) {
-                                    self.model.selectedSidebarItem = self.sidebarID(for: profile)
-                                    self.model.deleteSelectedProfile()
-                                }
-                            }
-                        }
-                    }
-                }
-                SidebarSection(title: loc("sidebar.savedServers"), systemImage: "server.rack") {
-                    if self.model.profiles.isEmpty {
-                        SidebarEmptyRow(loc("sidebar.noSavedServers"))
-                    } else {
-                        ForEach(self.model.profiles) { profile in
-                            SidebarNavRow(
-                                title: profile.displayName,
-                                subtitle: self.profileSubtitle(profile),
-                                systemImage: "network",
-                                isSelected: self.isSelected(profile),
-                                statusColor: self.statusColor(for: profile)
-                            ) {
-                                self.model.selectedSidebarItem = self.sidebarID(for: profile)
-                                self.model.connectToSelectedServer()
-                            }
-                            .contextMenu {
-                                Button(loc("sidebar.contextConnect")) {
-                                    self.model.selectedSidebarItem = self.sidebarID(for: profile)
-                                    self.model.connectToSelectedServer()
-                                }
-                                Button(loc("sidebar.contextEdit")) {
-                                    self.model.selectedSidebarItem = self.sidebarID(for: profile)
-                                    self.model.beginEditingSelectedProfile()
-                                }
-                                Button(loc("menu.duplicate")) {
-                                    self.model.selectedSidebarItem = self.sidebarID(for: profile)
-                                    self.model.duplicateSelectedProfile()
-                                }
-                                Divider()
-                                Button(loc("menu.delete"), role: .destructive) {
-                                    self.model.selectedSidebarItem = self.sidebarID(for: profile)
-                                    self.model.deleteSelectedProfile()
-                                }
-                            }
-                        }
-                    }
-                }
-                SidebarSection(title: loc("sidebar.bookmarks"), systemImage: "bookmark") {
-                    if self.model.bookmarks.isEmpty {
-                        SidebarEmptyRow(loc("sidebar.noBookmarks"), detail: loc("sidebar.noBookmarksDetail"))
-                    } else {
-                        ForEach(self.model.bookmarks) { bookmark in
-                            SidebarNavRow(
-                                title: bookmark.name,
-                                systemImage: "bookmark",
-                                isSelected: false
-                            ) {
-                                self.model.openBookmark(bookmark)
-                            }
-                        }
-                    }
-                }
-                SidebarSection(title: loc("sidebar.recent"), systemImage: "clock") {
-                    if self.model.recents.isEmpty {
-                        SidebarEmptyRow(loc("sidebar.noRecent"))
-                    } else {
-                        ForEach(self.model.recents) { recent in
-                            SidebarNavRow(
-                                title: recent.displayName,
-                                subtitle: self.recentSubtitle(recent),
-                                systemImage: "clock",
-                                isSelected: false
-                            ) {
-                                self.model.openRecent(recent)
-                            }
-                        }
+        // The system source list, as in Finder: title-case section headers, accent-tinted symbols,
+        // the selection pill, keyboard navigation and the sidebar glass on macOS 26 and later.
+        List(selection: self.selection) {
+            Section(loc("sidebar.favorites")) {
+                let favorites = self.model.profiles.filter(\.isFavorite)
+                if favorites.isEmpty {
+                    self.emptyRow(loc("sidebar.markFavorites"))
+                } else {
+                    ForEach(favorites) { profile in
+                        self.serverRow(profile, systemImage: "star")
                     }
                 }
             }
-            .padding(.horizontal, 11)
-            .padding(.vertical, 14)
+
+            Section(loc("sidebar.savedServers")) {
+                let servers = self.model.profiles.filter { !$0.isFavorite }
+                if self.model.profiles.isEmpty {
+                    self.emptyRow(loc("sidebar.noSavedServers"))
+                } else {
+                    // A favorite is listed once, in Favorites, as Finder lists each location once.
+                    ForEach(servers) { profile in
+                        self.serverRow(profile, systemImage: "server.rack")
+                    }
+                }
+            }
+
+            Section(loc("sidebar.bookmarks")) {
+                if self.model.bookmarks.isEmpty {
+                    self.emptyRow(loc("sidebar.noBookmarks"), detail: loc("sidebar.noBookmarksDetail"))
+                } else {
+                    ForEach(self.model.bookmarks) { bookmark in
+                        Label(bookmark.name, systemImage: "bookmark")
+                            .tag(Self.bookmarkPrefix + bookmark.id.uuidString)
+                    }
+                }
+            }
+
+            Section(loc("sidebar.recent")) {
+                if self.model.recents.isEmpty {
+                    self.emptyRow(loc("sidebar.noRecent"))
+                } else {
+                    ForEach(self.model.recents) { recent in
+                        Label {
+                            self.rowText(recent.displayName, subtitle: self.recentSubtitle(recent))
+                        } icon: {
+                            Image(systemName: "clock")
+                        }
+                        .tag(Self.recentPrefix + recent.id.uuidString)
+                    }
+                }
+            }
         }
+        .listStyle(.sidebar)
         .navigationTitle(loc("app.name"))
+    }
+
+    /// Selecting a row is the user's click: programmatic changes go through the model and never connect.
+    private var selection: Binding<String?> {
+        Binding(
+            get: { self.model.selectedSidebarItem },
+            set: { id in
+                guard let id else { return }
+                if id.hasPrefix(Self.bookmarkPrefix) {
+                    if let bookmark = self.model.bookmarks.first(where: { Self.bookmarkPrefix + $0.id.uuidString == id }) {
+                        self.model.openBookmark(bookmark)
+                    }
+                } else if id.hasPrefix(Self.recentPrefix) {
+                    if let recent = self.model.recents.first(where: { Self.recentPrefix + $0.id.uuidString == id }) {
+                        self.model.openRecent(recent)
+                    }
+                } else {
+                    self.model.selectedSidebarItem = id
+                    self.model.connectToSelectedServer()
+                }
+            }
+        )
+    }
+
+    private func serverRow(_ profile: ServerProfile, systemImage: String) -> some View {
+        Label {
+            HStack(spacing: 8) {
+                self.rowText(profile.displayName, subtitle: self.profileSubtitle(profile))
+                Spacer(minLength: 4)
+                Circle()
+                    .fill(self.statusColor(for: profile))
+                    .frame(width: 6, height: 6)
+                    .accessibilityHidden(true)
+            }
+        } icon: {
+            Image(systemName: systemImage)
+        }
+        .tag(self.sidebarID(for: profile))
+        .contextMenu {
+            Button(loc("sidebar.contextConnect")) {
+                self.model.selectedSidebarItem = self.sidebarID(for: profile)
+                self.model.connectToSelectedServer()
+            }
+            Button(loc("sidebar.contextEdit")) {
+                self.model.selectedSidebarItem = self.sidebarID(for: profile)
+                self.model.beginEditingSelectedProfile()
+            }
+            Button(loc("menu.duplicate")) {
+                self.model.selectedSidebarItem = self.sidebarID(for: profile)
+                self.model.duplicateSelectedProfile()
+            }
+            Divider()
+            Button(loc("menu.delete"), role: .destructive) {
+                self.model.selectedSidebarItem = self.sidebarID(for: profile)
+                self.model.deleteSelectedProfile()
+            }
+        }
+    }
+
+    private func rowText(_ title: String, subtitle: String) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(title)
+                .lineLimit(1)
+            Text(subtitle)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+    }
+
+    /// A hint row: not selectable, so it never takes the selection pill.
+    private func emptyRow(_ text: String, detail: String? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(text)
+            if let detail {
+                Text(detail)
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .selectionDisabled()
     }
 
     private func sidebarID(for profile: ServerProfile) -> String {
@@ -508,179 +543,6 @@ struct SidebarView: View {
             return .orange
         case .disconnected:
             return .secondary.opacity(0.58)
-        }
-    }
-}
-
-struct SidebarSection<Content: View>: View {
-    var title: String
-    var systemImage: String?
-    @ViewBuilder var content: Content
-
-    init(title: String, systemImage: String? = nil, @ViewBuilder content: () -> Content) {
-        self.title = title
-        self.systemImage = systemImage
-        self.content = content()
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack(spacing: 6) {
-                if let systemImage {
-                    Image(systemName: systemImage)
-                        .font(.caption2.weight(.semibold))
-                        .frame(width: 13)
-                }
-                Text(self.title)
-                    .lineLimit(1)
-                Spacer()
-            }
-            .font(.caption2.weight(.semibold))
-            .textCase(.uppercase)
-            .foregroundStyle(.secondary.opacity(0.78))
-            .padding(.horizontal, 11)
-            self.content
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-struct SidebarNavRow: View {
-    var title: String
-    var subtitle: String?
-    var systemImage: String
-    var isSelected: Bool
-    var isPrimary: Bool
-    var statusColor: Color?
-    var action: () -> Void
-
-    @State private var isHovering = false
-
-    init(
-        title: String,
-        subtitle: String? = nil,
-        systemImage: String,
-        isSelected: Bool,
-        isPrimary: Bool = false,
-        statusColor: Color? = nil,
-        action: @escaping () -> Void
-    ) {
-        self.title = title
-        self.subtitle = subtitle
-        self.systemImage = systemImage
-        self.isSelected = isSelected
-        self.isPrimary = isPrimary
-        self.statusColor = statusColor
-        self.action = action
-    }
-
-    var body: some View {
-        Button {
-            self.action()
-        } label: {
-            HStack(spacing: 10) {
-                Image(systemName: self.systemImage)
-                    .font(.system(size: 15, weight: .semibold))
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(self.iconColor)
-                    .frame(width: 22, alignment: .center)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(self.title)
-                        .font(.body.weight((self.isSelected || self.isPrimary) ? .semibold : .regular))
-                        .foregroundStyle(self.titleColor)
-                        .lineLimit(1)
-                    if let subtitle {
-                        Text(subtitle)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                }
-                Spacer(minLength: 8)
-                if let statusColor {
-                    Circle()
-                        .fill(statusColor)
-                        .frame(width: 6, height: 6)
-                        .overlay {
-                            Circle()
-                                .stroke(Color.primary.opacity(0.10), lineWidth: 1)
-                        }
-                }
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, self.subtitle == nil ? 7 : 7)
-            .frame(maxWidth: .infinity, minHeight: self.subtitle == nil ? 34 : 44, alignment: .leading)
-            .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-            .background {
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(self.backgroundColor)
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .stroke(Color.accentColor.opacity(self.isSelected ? 0.16 : 0), lineWidth: 1)
-            }
-        }
-        .buttonStyle(.plain)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .onHover { self.isHovering = $0 }
-    }
-
-    private var backgroundColor: Color {
-        if self.isPrimary {
-            return Color.accentColor.opacity(self.isHovering ? 0.88 : 0.96)
-        }
-        if self.isSelected {
-            return Color.accentColor.opacity(0.12)
-        }
-        if self.isHovering {
-            return Color.primary.opacity(0.055)
-        }
-        return .clear
-    }
-
-    private var iconColor: Color {
-        if self.isPrimary {
-            return .white
-        }
-        return self.isSelected ? Color.accentColor : Color.primary.opacity(0.74)
-    }
-
-    private var titleColor: Color {
-        if self.isPrimary {
-            return .white
-        }
-        return self.isSelected ? Color.accentColor : Color.primary
-    }
-}
-
-struct SidebarEmptyRow: View {
-    var text: String
-    var detail: String?
-
-    init(_ text: String, detail: String? = nil) {
-        self.text = text
-        self.detail = detail
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(self.text)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-            if let detail {
-                Text(detail)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(2)
-            }
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
-        .background {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color.primary.opacity(0.025))
         }
     }
 }

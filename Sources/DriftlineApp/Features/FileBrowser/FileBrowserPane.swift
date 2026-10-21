@@ -8,6 +8,7 @@ struct FileBrowserPane: View {
     var items: [FileItem]
     var source: FileSource
     var isConnected = true
+    @Binding var filterText: String
     @Binding var selectionIDs: Set<String>
     var onSelectionChange: ([FileItem]) -> Void
     var onOpen: (FileItem) -> Void
@@ -25,8 +26,6 @@ struct FileBrowserPane: View {
     var onNewConnection: (() -> Void)?
     var loadChildren: (FileItem, @escaping ([FileItem]) -> Void) -> Void
 
-    @State private var filterText = ""
-
     private var filteredItems: [FileItem] {
         let query = self.filterText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return self.items }
@@ -37,24 +36,38 @@ struct FileBrowserPane: View {
     }
 
     var body: some View {
-        ContentSurface(cornerRadius: DriftlineRadius.panel) {
-            VStack(spacing: 0) {
-                self.header
-                Divider()
-                self.browserBody
-                Divider()
-                self.footer
-            }
+        VStack(spacing: 0) {
+            self.header
+            Divider()
+            self.browserBody
+            Divider()
+            self.footer
         }
+        .background(Color(nsColor: .controlBackgroundColor))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onChange(of: self.path) { _, _ in
+            // A filter belongs to one folder; Finder also clears its search when you open another one.
+            self.filterText = ""
+        }
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 5) {
-                Label(self.title, systemImage: self.source == .local ? "desktopcomputer" : "server.rack")
-                    .font(.title3.weight(.semibold))
-                    .symbolRenderingMode(.hierarchical)
+                // Title and pane actions share one row, like a Finder window header.
+                HStack(spacing: 10) {
+                    Label(self.title, systemImage: self.source == .local ? "desktopcomputer" : "server.rack")
+                        .font(.title3.weight(.semibold))
+                        .symbolRenderingMode(.hierarchical)
+                    Spacer(minLength: 8)
+                    HStack(spacing: 6) {
+                        PaneToolbarButton(title: LocalizationManager.shared.localized("browser.upOneFolder"), systemImage: "chevron.up", isDisabled: self.source == .remote && !self.isConnected, action: self.onParent)
+                        PaneToolbarButton(title: LocalizationManager.shared.localized("browser.newFolder"), systemImage: "folder.badge.plus", isDisabled: self.source == .remote && !self.isConnected, action: self.onCreateFolder)
+                        PaneToolbarButton(title: String(format: LocalizationManager.shared.localized("browser.refreshPane"), self.title), systemImage: "arrow.clockwise", isDisabled: self.source == .remote && !self.isConnected, action: self.onRefresh)
+                        PaneToolbarButton(title: LocalizationManager.shared.localized("connection.more"), systemImage: "ellipsis", action: self.onShowInfo)
+                    }
+                    .driftlineGlassGroup()
+                }
 
                 // The breadcrumb bar below shows the path; this line only explains a disconnected pane.
                 if self.source == .remote, !self.isConnected {
@@ -67,23 +80,6 @@ struct FileBrowserPane: View {
             }
 
             PathBreadcrumbBar(sourceTitle: self.title, path: self.path, onNavigate: self.onNavigate)
-
-            HStack(spacing: 10) {
-                // The system search field: rounded, with a clear button and the standard focus ring.
-                SearchField(prompt: LocalizationManager.shared.localized("browser.filterFiles"), text: self.$filterText)
-                    .frame(minWidth: 160, maxWidth: 260)
-                    .disabled(self.source == .remote && !self.isConnected)
-
-                Spacer(minLength: 8)
-
-                HStack(spacing: 6) {
-                    PaneToolbarButton(title: LocalizationManager.shared.localized("browser.upOneFolder"), systemImage: "chevron.up", isDisabled: self.source == .remote && !self.isConnected, action: self.onParent)
-                    PaneToolbarButton(title: LocalizationManager.shared.localized("browser.newFolder"), systemImage: "folder.badge.plus", isDisabled: self.source == .remote && !self.isConnected, action: self.onCreateFolder)
-                    PaneToolbarButton(title: String(format: LocalizationManager.shared.localized("browser.refreshPane"), self.title), systemImage: "arrow.clockwise", isDisabled: self.source == .remote && !self.isConnected, action: self.onRefresh)
-                    PaneToolbarButton(title: LocalizationManager.shared.localized("connection.more"), systemImage: "ellipsis", action: self.onShowInfo)
-                }
-                .driftlineGlassGroup()
-            }
         }
         .padding(.horizontal, 16)
         .padding(.top, 16)
@@ -310,43 +306,5 @@ extension ByteCountFormatter {
         let formatter = ByteCountFormatter()
         formatter.countStyle = .file
         return formatter.string(fromByteCount: byteCount)
-    }
-}
-
-/// An AppKit search field (NSSearchField): magnifying glass, clear button and the system look on every macOS version.
-private struct SearchField: NSViewRepresentable {
-    var prompt: String
-    @Binding var text: String
-
-    func makeNSView(context: Context) -> NSSearchField {
-        let field = NSSearchField()
-        field.placeholderString = self.prompt
-        field.delegate = context.coordinator
-        field.sendsSearchStringImmediately = true
-        return field
-    }
-
-    func updateNSView(_ field: NSSearchField, context _: Context) {
-        if field.stringValue != self.text {
-            field.stringValue = self.text
-        }
-        field.placeholderString = self.prompt
-    }
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(text: self.$text)
-    }
-
-    final class Coordinator: NSObject, NSSearchFieldDelegate {
-        @Binding var text: String
-
-        init(text: Binding<String>) {
-            self._text = text
-        }
-
-        func controlTextDidChange(_ notification: Notification) {
-            guard let field = notification.object as? NSSearchField else { return }
-            self.text = field.stringValue
-        }
     }
 }

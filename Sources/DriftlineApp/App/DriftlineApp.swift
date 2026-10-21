@@ -65,6 +65,9 @@ final class AppModel: @unchecked Sendable {
     var selectedRemoteFiles: [FileItem] = []
     var copiedFiles: [FileItem] = []
     var activePane: FileSource = .local
+    /// Filter text of each pane. The toolbar search field edits the active pane's filter, like Finder's search.
+    var localFilterText = ""
+    var remoteFilterText = ""
     var profileDraft: ServerProfileDraft?
     var profileEditorError: String?
     var isConnecting = false

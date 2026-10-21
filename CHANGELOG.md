@@ -13,6 +13,9 @@
 - The server editor reads pasted URLs such as `sftp://user@host:2222/path`, sets the port and authentication when the protocol changes, and rejects host values that could be read as command options.
 - Connection errors now show the cause instead of a generic message.
 - Fixed a hang when a remote command printed more than 64 KB.
+- FTPS profiles can choose explicit or implicit TLS on any port. Older profiles keep the port rule (implicit on 990).
+- Cancelling one rsync transfer no longer stops the other rsync transfers.
+- Renamed the app SwiftPM product to `DriftlineApp`, so the default `swift build` works on case-insensitive disks.
 
 - Froze 1.0 scope around secure SFTP with System SSH as the default backend.
 - Added 1.0 persistence and privacy/security review docs.

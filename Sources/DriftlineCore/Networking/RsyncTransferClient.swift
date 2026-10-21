@@ -62,13 +62,13 @@ public enum RsyncCommandBuilder {
 
 public actor SystemRsyncTransferClient: TransferClient {
     private let streamingExecutor: StreamingProcessExecuting
-    private let cancellableExecutor: CancellableStreamingProcessExecuting?
     private let credentialStore: CredentialStore?
     private var storedJobs: [TransferJob] = []
+    /// The process of each running job. Cancelling the task ends the stream, and the stream ends its process.
+    private var runningTasks: [TransferJobID: Task<ProcessResult, Error>] = [:]
 
     public init(streamingExecutor: StreamingProcessExecuting = FoundationStreamingProcessExecutor(), credentialStore: CredentialStore? = nil) {
         self.streamingExecutor = streamingExecutor
-        self.cancellableExecutor = streamingExecutor as? CancellableStreamingProcessExecuting
         self.credentialStore = credentialStore
     }
 
@@ -82,11 +82,11 @@ public actor SystemRsyncTransferClient: TransferClient {
         let arguments = try RsyncCommandBuilder.arguments(for: job, profile: profile)
         let askPass = try await SSHAskPassSession.make(for: profile, credentialStore: self.credentialStore)
         defer { askPass?.close() }
-        var result = try await self.runStreaming("/usr/bin/rsync", arguments: arguments, environment: askPass?.environment ?? [:], job: &current, onUpdate: onUpdate)
+        var result = try await self.runStreaming("/usr/bin/rsync", arguments: arguments, environment: askPass?.environment ?? [:], job: current, onUpdate: onUpdate)
         if self.isCancelled(job.id) { return }
         if RsyncCommandBuilder.remoteRsyncIsMissing(result) {
             // SFTP-only servers have no remote shell or rsync. The SFTP subsystem still works.
-            result = try await self.runSFTPTransfer(job, profile: profile, current: &current, onUpdate: onUpdate)
+            result = try await self.runSFTPTransfer(current, profile: profile, onUpdate: onUpdate)
             if self.isCancelled(job.id) { return }
         }
 
@@ -101,7 +101,7 @@ public actor SystemRsyncTransferClient: TransferClient {
         await onUpdate?(current)
     }
 
-    private func runSFTPTransfer(_ job: TransferJob, profile: ServerProfile, current: inout TransferJob, onUpdate: (@Sendable (TransferJob) async -> Void)?) async throws -> ProcessResult {
+    private func runSFTPTransfer(_ job: TransferJob, profile: ServerProfile, onUpdate: (@Sendable (TransferJob) async -> Void)?) async throws -> ProcessResult {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("driftline-sftp-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -111,30 +111,37 @@ public actor SystemRsyncTransferClient: TransferClient {
         let arguments = try SSHCommandBuilder.sftpBatchArguments(for: profile, batchFile: batchURL.path)
         let askPass = try await SSHAskPassSession.make(for: profile, credentialStore: self.credentialStore)
         defer { askPass?.close() }
-        return try await self.runStreaming("/usr/bin/sftp", arguments: arguments, environment: askPass?.environment ?? [:], job: &current, onUpdate: onUpdate)
+        return try await self.runStreaming("/usr/bin/sftp", arguments: arguments, environment: askPass?.environment ?? [:], job: job, onUpdate: onUpdate)
     }
 
     private func runStreaming(
         _ executable: String,
         arguments: [String],
         environment: [String: String],
-        job current: inout TransferJob,
+        job: TransferJob,
         onUpdate: (@Sendable (TransferJob) async -> Void)?
     ) async throws -> ProcessResult {
-        var finalResult = ProcessResult(exitCode: 1, standardOutput: "", standardError: "Transfer ended without a result.")
-        for try await event in self.streamingExecutor.stream(executable: executable, arguments: arguments, environment: environment, timeout: 60 * 60) {
-            switch event {
-            case let .standardOutput(chunk), let .standardError(chunk):
-                if let parsed = RsyncProgressParser.progress(from: chunk), !self.isCancelled(current.id) {
-                    current.status = .running(progress: parsed.progress, bytesPerSecond: parsed.bytesPerSecond)
-                    self.upsert(current)
-                    await onUpdate?(current)
+        let events = self.streamingExecutor.stream(executable: executable, arguments: arguments, environment: environment, timeout: 60 * 60)
+        let task = Task { () throws -> ProcessResult in
+            var current = job
+            var finalResult = ProcessResult(exitCode: 1, standardOutput: "", standardError: "Transfer ended without a result.")
+            for try await event in events {
+                switch event {
+                case let .standardOutput(chunk), let .standardError(chunk):
+                    if let parsed = RsyncProgressParser.progress(from: chunk), !self.isCancelled(job.id) {
+                        current.status = .running(progress: parsed.progress, bytesPerSecond: parsed.bytesPerSecond)
+                        self.upsert(current)
+                        await onUpdate?(current)
+                    }
+                case let .finished(result):
+                    finalResult = result
                 }
-            case let .finished(result):
-                finalResult = result
             }
+            return finalResult
         }
-        return finalResult
+        self.runningTasks[job.id] = task
+        defer { self.runningTasks[job.id] = nil }
+        return try await task.value
     }
 
     private func isCancelled(_ id: TransferJobID) -> Bool {
@@ -142,7 +149,7 @@ public actor SystemRsyncTransferClient: TransferClient {
     }
 
     public func cancel(id: TransferJobID) async throws {
-        await self.cancellableExecutor?.cancelAll()
+        self.runningTasks[id]?.cancel()
         guard let index = storedJobs.firstIndex(where: { $0.id == id }) else { return }
         self.storedJobs[index].status = .cancelled
         self.storedJobs[index].finishedAt = Date()

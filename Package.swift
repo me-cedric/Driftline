@@ -11,7 +11,8 @@ let package = Package(
         .library(name: "DriftlineCore", targets: ["DriftlineCore"]),
         .library(name: "DriftlineMCP", targets: ["DriftlineMCP"]),
         .library(name: "DriftlineWidget", targets: ["DriftlineWidget"]),
-        .executable(name: "Driftline", targets: ["DriftlineApp"]),
+        // Not "Driftline": on a case-insensitive disk SwiftBuild mixes it up with the "driftline" CLI product.
+        .executable(name: "DriftlineApp", targets: ["DriftlineApp"]),
         .executable(name: "driftline-mcp", targets: ["driftline-mcp"]),
         .executable(name: "driftline", targets: ["driftline"])
     ],

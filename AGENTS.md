@@ -56,7 +56,7 @@ Driftline is a SwiftPM-first native macOS app. Treat this file as repo-local gui
 - Do not run `ssh-keyscan` on every connect. Scan only when ssh reports an unknown or changed host key (OpenSSH `PerSourcePenalties`).
 - FTP and FTPS use the Swift client in `Sources/DriftlineCore/Networking/FTP`. Do not move FTPS to `/usr/bin/curl`: its SecureTransport build cannot reuse the TLS session on data connections, which vsftpd, ProFTPD and FileZilla Server require.
 - Run the FTP integration tests with `./scripts/integration-ftp-server.sh start` and `DRIFTLINE_INTEGRATION_FTP=1`.
-- On a case-insensitive disk, the default SwiftBuild backend can fail to link because of the `Driftline` and `driftline` products. Use `swift build --build-system native` locally if that happens.
+- Do not name a product `Driftline`: on a case-insensitive disk, SwiftBuild mixes it up with the `driftline` CLI product. The app product is `DriftlineApp`; `script/build_and_run.sh` names the bundle binary `Driftline`.
 - Do not mark native Swift SFTP as the default production backend until broader real-server QA, SSH agent-auth strategy, and manual accessibility/security QA are complete.
 - **Localization:** When adding, editing, or deleting any user-facing string in the app, you must add, update, or remove the corresponding translation key in `Sources/DriftlineCore/Localization/LocalizationManager.swift` for all four supported languages (English, French, German, Spanish). Use the existing key naming convention (`category.subcategory` like `settings.general`, `browser.refresh`, `connection.connect`) and keep translations sorted alphabetically within each language block.
 

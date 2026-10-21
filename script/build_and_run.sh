@@ -3,6 +3,8 @@ set -euo pipefail
 
 MODE="${1:-run}"
 APP_NAME="Driftline"
+# SwiftPM product of the app; the bundle still names the binary $APP_NAME.
+APP_PRODUCT="DriftlineApp"
 BUNDLE_ID="app.driftline.Driftline"
 MIN_SYSTEM_VERSION="14.0"
 BUILD_CONFIGURATION="${DRIFTLINE_BUILD_CONFIGURATION:-debug}"
@@ -23,11 +25,11 @@ APP_ENTITLEMENTS="$DIST_DIR/$APP_NAME.entitlements"
 pkill -x "$APP_NAME" >/dev/null 2>&1 || true
 
 if [[ "$BUILD_CONFIGURATION" == "release" ]]; then
-  swift build -c release --product "$APP_NAME"
-  BUILD_BINARY="$(swift build -c release --show-bin-path)/$APP_NAME"
+  swift build -c release --product "$APP_PRODUCT"
+  BUILD_BINARY="$(swift build -c release --show-bin-path)/$APP_PRODUCT"
 else
-  swift build --product "$APP_NAME"
-  BUILD_BINARY="$(swift build --show-bin-path)/$APP_NAME"
+  swift build --product "$APP_PRODUCT"
+  BUILD_BINARY="$(swift build --show-bin-path)/$APP_PRODUCT"
 fi
 
 rm -rf "$APP_BUNDLE"

@@ -179,7 +179,7 @@ DRIFTLINE_TEST_PASSWORD='driftline-test-password' \
 swift test
 ```
 
-Run the Docker FTP/FTPS integration harness (vsftpd with a self-signed certificate; implicit FTPS uses host port 990):
+Run the Docker FTP/FTPS integration harness (vsftpd with a self-signed certificate):
 
 ```bash
 DRIFTLINE_TEST_PASSWORD='driftline-test-password' ./scripts/integration-ftp-server.sh start

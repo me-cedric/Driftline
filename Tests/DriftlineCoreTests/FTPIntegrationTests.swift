@@ -4,25 +4,25 @@ import XCTest
 /// Runs against `scripts/integration-ftp-server.sh start` (vsftpd with a self-signed certificate).
 final class FTPIntegrationTests: XCTestCase {
     func testPlainFTPWhenHarnessEnabled() async throws {
-        try await self.exercise(protocolKind: .ftp, portVariable: "DRIFTLINE_TEST_FTP_PORT", defaultPort: 2121, expectsCertificatePrompt: false)
+        try await self.exercise(protocolKind: .ftp, portVariable: "DRIFTLINE_TEST_FTP_PORT", defaultPort: 2121, implicitTLS: nil, expectsCertificatePrompt: false)
     }
 
     func testExplicitFTPSWhenHarnessEnabled() async throws {
-        try await self.exercise(protocolKind: .ftps, portVariable: "DRIFTLINE_TEST_FTP_PORT", defaultPort: 2121, expectsCertificatePrompt: true)
+        try await self.exercise(protocolKind: .ftps, portVariable: "DRIFTLINE_TEST_FTP_PORT", defaultPort: 2121, implicitTLS: false, expectsCertificatePrompt: true)
     }
 
-    func testImplicitFTPSWhenHarnessEnabled() async throws {
-        // Driftline uses implicit TLS on port 990, so the harness publishes the implicit server there.
-        try await self.exercise(protocolKind: .ftps, portVariable: "DRIFTLINE_TEST_FTPS_IMPLICIT_PORT", defaultPort: 990, expectsCertificatePrompt: true)
+    func testImplicitFTPSOnCustomPortWhenHarnessEnabled() async throws {
+        try await self.exercise(protocolKind: .ftps, portVariable: "DRIFTLINE_TEST_FTPS_IMPLICIT_PORT", defaultPort: 2990, implicitTLS: true, expectsCertificatePrompt: true)
     }
 
-    private func exercise(protocolKind: TransferProtocolKind, portVariable: String, defaultPort: Int, expectsCertificatePrompt: Bool) async throws {
+    private func exercise(protocolKind: TransferProtocolKind, portVariable: String, defaultPort: Int, implicitTLS: Bool?, expectsCertificatePrompt: Bool) async throws {
         let env = ProcessInfo.processInfo.environment
         guard env["DRIFTLINE_INTEGRATION_FTP"] == "1", let password = env["DRIFTLINE_TEST_PASSWORD"] else {
             throw XCTSkip("Set DRIFTLINE_INTEGRATION_FTP=1 and DRIFTLINE_TEST_PASSWORD after running scripts/integration-ftp-server.sh start")
         }
         let port = Int(env[portVariable] ?? "\(defaultPort)") ?? defaultPort
-        let (profile, credentials) = try await self.profile(protocolKind: protocolKind, port: port, password: password)
+        var (profile, credentials) = try await self.profile(protocolKind: protocolKind, port: port, password: password)
+        profile.implicitTLS = implicitTLS
         let trustStore = InMemoryHostTrustStore()
         let pins = FTPTLSPinCache()
         let client = FTPClient(credentialStore: credentials, hostTrustStore: trustStore, pinCache: pins)

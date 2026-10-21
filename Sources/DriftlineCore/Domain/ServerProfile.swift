@@ -51,6 +51,8 @@ public struct ServerProfile: Identifiable, Hashable, Codable, Sendable {
     public var groupName: String?
     public var createdAt: Date
     public var updatedAt: Date
+    /// FTPS only: true for implicit TLS, false for explicit TLS (AUTH TLS). Nil picks implicit on port 990 only.
+    public var implicitTLS: Bool?
 
     public init(
         id: ServerProfileID = ServerProfileID(),
@@ -67,7 +69,8 @@ public struct ServerProfile: Identifiable, Hashable, Codable, Sendable {
         isFavorite: Bool = false,
         groupName: String? = nil,
         createdAt: Date = Date(),
-        updatedAt: Date = Date()
+        updatedAt: Date = Date(),
+        implicitTLS: Bool? = nil
     ) {
         self.id = id
         self.displayName = displayName
@@ -84,6 +87,7 @@ public struct ServerProfile: Identifiable, Hashable, Codable, Sendable {
         self.groupName = groupName
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.implicitTLS = implicitTLS
     }
 
     public func duplicated(now: Date = Date()) -> ServerProfile {

@@ -1,6 +1,6 @@
 import Foundation
 
-/// TLS mode of an FTP profile. FTPS on port 990 is implicit TLS; FTPS on any other port is explicit TLS (AUTH TLS).
+/// TLS mode of an FTP profile. Without an explicit choice, FTPS on port 990 is implicit TLS and any other port is explicit TLS (AUTH TLS).
 public enum FTPSecurityMode: Equatable, Sendable {
     case none
     case explicitTLS
@@ -11,7 +11,7 @@ public enum FTPSecurityMode: Equatable, Sendable {
         case .ftp, .sftp:
             self = .none
         case .ftps:
-            self = profile.port == 990 ? .implicitTLS : .explicitTLS
+            self = (profile.implicitTLS ?? (profile.port == 990)) ? .implicitTLS : .explicitTLS
         }
     }
 }

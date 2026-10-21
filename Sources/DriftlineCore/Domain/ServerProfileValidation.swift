@@ -79,13 +79,16 @@ public struct ServerAddress: Equatable, Sendable {
     public var host: String
     public var port: Int?
     public var path: String?
+    /// Set for `ftps://` (implicit TLS) and `ftpes://` (explicit TLS).
+    public var implicitTLS: Bool?
 
-    public init(protocolKind: TransferProtocolKind? = nil, username: String? = nil, host: String, port: Int? = nil, path: String? = nil) {
+    public init(protocolKind: TransferProtocolKind? = nil, username: String? = nil, host: String, port: Int? = nil, path: String? = nil, implicitTLS: Bool? = nil) {
         self.protocolKind = protocolKind
         self.username = username
         self.host = host
         self.port = port
         self.path = path
+        self.implicitTLS = implicitTLS
     }
 
     private static func scheme(_ name: String) -> (TransferProtocolKind?, Int?) {
@@ -103,6 +106,9 @@ public struct ServerAddress: Equatable, Sendable {
         var address = ServerAddress(host: String(rest))
         if let separator = rest.range(of: "://") {
             (address.protocolKind, address.port) = self.scheme(String(rest[..<separator.lowerBound]))
+            if address.protocolKind == .ftps {
+                address.implicitTLS = address.port == 990
+            }
             rest = rest[separator.upperBound...]
             if let slash = rest.firstIndex(of: "/") {
                 let path = String(rest[slash...])

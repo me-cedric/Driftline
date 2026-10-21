@@ -7,8 +7,7 @@ MODE="${1:-start}"
 NAME="driftline-ftp-test"
 IMAGE="driftline-ftp-test:local"
 FTP_PORT="${DRIFTLINE_TEST_FTP_PORT:-2121}"
-# Driftline picks implicit TLS for port 990 only, so the implicit server is published on 990.
-FTPS_IMPLICIT_PORT="${DRIFTLINE_TEST_FTPS_IMPLICIT_PORT:-990}"
+FTPS_IMPLICIT_PORT="${DRIFTLINE_TEST_FTPS_IMPLICIT_PORT:-2990}"
 PASSWORD="${DRIFTLINE_TEST_PASSWORD:-}"
 
 case "$MODE" in

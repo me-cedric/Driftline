@@ -48,13 +48,30 @@ final class RsyncTransferClientTests: XCTestCase {
         XCTAssertEqual(updates.last?.status, .succeeded)
     }
 
-    func testRsyncTransferClientCancelRequestsExecutorCancellation() async throws {
-        let executor = CancellableScriptedStreamingExecutor(events: [])
+    func testCancelStopsOnlyTheSelectedTransfer() async throws {
+        let executor = HangingStreamingExecutor()
         let client = SystemRsyncTransferClient(streamingExecutor: executor)
+        let profile = ServerProfile(displayName: "Server", host: "example.com", protocolKind: .sftp, username: "deploy", authenticationMethod: .agent)
+        let first = TransferJob(direction: .upload, sourcePath: "/tmp/a.txt", destinationPath: "/tmp/a.txt")
+        let second = TransferJob(direction: .upload, sourcePath: "/tmp/b.txt", destinationPath: "/tmp/b.txt")
+        let firstRun = Task { try await client.enqueue(first, profile: profile) }
+        let secondRun = Task { try await client.enqueue(second, profile: profile) }
+        while executor.startedCount < 2 {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
 
-        try await client.cancel(id: TransferJobID())
+        try await client.cancel(id: first.id)
+        try await firstRun.value
 
-        XCTAssertTrue(executor.didCancel)
+        XCTAssertEqual(executor.terminatedCount, 1)
+        let firstStatus = await client.jobs().first { $0.id == first.id }?.status
+        let secondStatus = await client.jobs().first { $0.id == second.id }?.status
+        XCTAssertEqual(firstStatus, .cancelled)
+        XCTAssertEqual(secondStatus, .running(progress: 0, bytesPerSecond: nil))
+
+        try await client.cancel(id: second.id)
+        try await secondRun.value
+        XCTAssertEqual(executor.terminatedCount, 2)
     }
 }
 
@@ -71,31 +88,26 @@ private struct ScriptedStreamingExecutor: StreamingProcessExecuting {
     }
 }
 
-private final class CancellableScriptedStreamingExecutor: CancellableStreamingProcessExecuting, @unchecked Sendable {
-    private let events: [ProcessOutputEvent]
-    private let queue = DispatchQueue(label: "app.driftline.tests.cancellable-streaming-executor")
-    private var cancelled = false
+/// A process that runs until its stream is cancelled.
+private final class HangingStreamingExecutor: StreamingProcessExecuting, @unchecked Sendable {
+    private let lock = NSLock()
+    private var started = 0
+    private var terminated = 0
 
-    var didCancel: Bool {
-        self.queue.sync { self.cancelled }
+    var startedCount: Int {
+        self.lock.withLock { self.started }
     }
 
-    init(events: [ProcessOutputEvent]) {
-        self.events = events
+    var terminatedCount: Int {
+        self.lock.withLock { self.terminated }
     }
 
     func stream(executable _: String, arguments _: [String], environment _: [String: String], standardInput _: Data?, timeout _: TimeInterval) -> AsyncThrowingStream<ProcessOutputEvent, Error> {
         AsyncThrowingStream { continuation in
-            for event in self.events {
-                continuation.yield(event)
+            self.lock.withLock { self.started += 1 }
+            continuation.onTermination = { _ in
+                self.lock.withLock { self.terminated += 1 }
             }
-            continuation.finish()
-        }
-    }
-
-    func cancelAll() async {
-        self.queue.sync {
-            self.cancelled = true
         }
     }
 }

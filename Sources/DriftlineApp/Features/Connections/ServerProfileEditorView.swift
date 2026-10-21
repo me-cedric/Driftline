@@ -35,6 +35,13 @@ struct ServerProfileEditorView: View {
                             .font(.caption)
                             .foregroundStyle(.orange)
                     } else if self.draft.protocolKind == .ftps {
+                        Picker(LocalizationManager.shared.localized("profile.ftpsMode"), selection: Binding(
+                            get: { self.draft.ftpsImplicitTLS },
+                            set: { self.draft.changeFTPSMode(implicitTLS: $0) }
+                        )) {
+                            Text(LocalizationManager.shared.localized("profile.ftpsMode.explicit")).tag(false)
+                            Text(LocalizationManager.shared.localized("profile.ftpsMode.implicit")).tag(true)
+                        }
                         Text(LocalizationManager.shared.localized("profile.ftpsModeNote"))
                             .font(.caption)
                             .foregroundStyle(.secondary)

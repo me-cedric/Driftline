@@ -1,3 +1,4 @@
+@testable import DriftlineApp
 @testable import DriftlineCore
 import XCTest
 
@@ -47,8 +48,43 @@ final class FTPClientTests: XCTestCase {
         XCTAssertEqual(FTPSecurityMode(profile: profile), .implicitTLS)
         profile.port = 21
         XCTAssertEqual(FTPSecurityMode(profile: profile), .explicitTLS)
+        profile.implicitTLS = true
+        XCTAssertEqual(FTPSecurityMode(profile: profile), .implicitTLS)
+        profile.port = 990
+        profile.implicitTLS = false
+        XCTAssertEqual(FTPSecurityMode(profile: profile), .explicitTLS)
         profile.protocolKind = .ftp
         XCTAssertEqual(FTPSecurityMode(profile: profile), .none)
+    }
+
+    func testEditorKeepsPortAndTLSModeInStep() {
+        var draft = ServerProfileDraft()
+        draft.changeProtocol(to: .ftps)
+        XCTAssertEqual(draft.port, 990)
+        XCTAssertTrue(draft.ftpsImplicitTLS)
+
+        draft.changeFTPSMode(implicitTLS: false)
+        XCTAssertEqual(draft.port, 21)
+        draft.port = 2121
+        draft.changeFTPSMode(implicitTLS: true)
+        XCTAssertEqual(draft.port, 2121)
+        XCTAssertEqual(draft.makeProfile().implicitTLS, true)
+
+        draft.host = "ftpes://files.example.com"
+        draft.applyAddressFromHost()
+        XCTAssertEqual(draft.port, 21)
+        XCTAssertFalse(draft.ftpsImplicitTLS)
+    }
+
+    func testProfileWithoutTLSChoiceStillDecodes() throws {
+        let profile = ServerProfile(displayName: "Old", host: "h", protocolKind: .ftps, username: "u", authenticationMethod: .none)
+        var json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(profile)) as? [String: Any] ?? [:]
+        json["implicitTLS"] = nil
+
+        let decoded = try JSONDecoder().decode(ServerProfile.self, from: JSONSerialization.data(withJSONObject: json))
+
+        XCTAssertNil(decoded.implicitTLS)
+        XCTAssertEqual(FTPSecurityMode(profile: decoded), .implicitTLS)
     }
 
     func testPassiveRepliesGivePort() {
@@ -66,7 +102,7 @@ final class FTPClientTests: XCTestCase {
 
     func testServerAddressParsesPastedURLs() {
         XCTAssertEqual(ServerAddress.parse(" sftp://deploy@public.example.com "), ServerAddress(protocolKind: .sftp, username: "deploy", host: "public.example.com"))
-        XCTAssertEqual(ServerAddress.parse("ftpes://u%40corp@files.example.com/in/box"), ServerAddress(protocolKind: .ftps, username: "u@corp", host: "files.example.com", port: 21, path: "/in/box"))
+        XCTAssertEqual(ServerAddress.parse("ftpes://u%40corp@files.example.com/in/box"), ServerAddress(protocolKind: .ftps, username: "u@corp", host: "files.example.com", port: 21, path: "/in/box", implicitTLS: false))
         XCTAssertEqual(ServerAddress.parse("[2001:db8::1]:2222"), ServerAddress(host: "2001:db8::1", port: 2222))
         XCTAssertEqual(ServerAddress.parse("2001:db8::1"), ServerAddress(host: "2001:db8::1"))
         XCTAssertEqual(ServerAddress.parse("example.com:2121"), ServerAddress(host: "example.com", port: 2121))

@@ -1956,6 +1956,8 @@ struct ServerProfileDraft: Identifiable, Equatable {
     var isFavorite: Bool
     var groupName: String
     var createdAt: Date
+    /// FTPS only. Explicit TLS (AUTH TLS) when false.
+    var ftpsImplicitTLS: Bool
 
     init() {
         self.id = ServerProfileID()
@@ -1976,6 +1978,7 @@ struct ServerProfileDraft: Identifiable, Equatable {
         self.isFavorite = false
         self.groupName = ""
         self.createdAt = Date()
+        self.ftpsImplicitTLS = true
     }
 
     init(profile: ServerProfile) {
@@ -1992,6 +1995,7 @@ struct ServerProfileDraft: Identifiable, Equatable {
         self.isFavorite = profile.isFavorite
         self.groupName = profile.groupName ?? ""
         self.createdAt = profile.createdAt
+        self.ftpsImplicitTLS = profile.implicitTLS ?? (profile.port == 990)
 
         switch profile.authenticationMethod {
         case .agent:
@@ -2032,9 +2036,22 @@ struct ServerProfileDraft: Identifiable, Equatable {
         if self.port == previous.defaultPort {
             self.port = protocolKind.defaultPort
         }
+        if protocolKind == .ftps {
+            self.ftpsImplicitTLS = self.port == 990
+        }
         if !Self.authKinds(for: protocolKind).contains(self.authKind) {
             self.authKind = .password
         }
+    }
+
+    /// Keeps the port on the usual value of the TLS mode, unless the user typed another port.
+    mutating func changeFTPSMode(implicitTLS: Bool) {
+        if implicitTLS, self.port == 21 {
+            self.port = 990
+        } else if !implicitTLS, self.port == 990 {
+            self.port = 21
+        }
+        self.ftpsImplicitTLS = implicitTLS
     }
 
     /// Splits a pasted URL or `user@host:port` in the host field into the matching fields.
@@ -2046,6 +2063,9 @@ struct ServerProfileDraft: Identifiable, Equatable {
         self.host = address.host
         if let port = address.port {
             self.port = port
+        }
+        if let implicitTLS = address.implicitTLS {
+            self.ftpsImplicitTLS = implicitTLS
         }
         if let username = address.username, !username.isEmpty {
             self.username = username
@@ -2090,7 +2110,8 @@ struct ServerProfileDraft: Identifiable, Equatable {
             isFavorite: self.isFavorite,
             groupName: self.groupName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : self.groupName.trimmingCharacters(in: .whitespacesAndNewlines),
             createdAt: self.createdAt,
-            updatedAt: Date()
+            updatedAt: Date(),
+            implicitTLS: self.protocolKind == .ftps ? self.ftpsImplicitTLS : nil
         )
     }
 }

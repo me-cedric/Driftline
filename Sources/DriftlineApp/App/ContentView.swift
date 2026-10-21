@@ -96,8 +96,25 @@ struct ContentView: View {
                 },
                 onSave: {
                     self.model.saveProfileDraft()
+                },
+                detect: { host, port, username in
+                    await self.model.detectServer(host: host, port: port, username: username)
                 }
             )
+        }
+        .alert(
+            loc("detect.fixTitle"),
+            isPresented: Binding(
+                get: { self.model.pendingConnectionFix != nil },
+                set: { if !$0 { self.model.pendingConnectionFix = nil } }
+            )
+        ) {
+            Button(loc("delete.cancel"), role: .cancel) { self.model.pendingConnectionFix = nil }
+            Button(loc("detect.fixApply")) { self.model.applyConnectionFix() }
+        } message: {
+            if let fix = self.model.pendingConnectionFix {
+                Text(ServerProfileEditorView.summary(of: fix.detection))
+            }
         }
         .sheet(item: self.$model.pendingHostTrust) { trust in
             HostTrustPromptView(

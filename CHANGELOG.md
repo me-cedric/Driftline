@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- The server editor detects the protocol, port, FTPS mode, login method and `~/.ssh/config` alias of a host while you type, and fills in the fields you did not change.
+- After a failed connection, Driftline checks the server and proposes the settings it answers to. Wrong passwords and host key problems get no proposal.
+- With Native Swift SSH selected, servers that native cannot handle use System SSH automatically, per server.
 - Fixed password login on the System SSH backend: the password reaches OpenSSH through `SSH_ASKPASS` and a private FIFO, never through arguments, environment or files. Keyboard-interactive login works too.
 - System SSH file operations now use the SFTP subsystem (`sftp -b`), so servers without a shell (chroot, `internal-sftp`, managed transfer servers) work.
 - System SSH accepts legacy server algorithms after the OpenSSH defaults (`ssh-rsa`, DH group 14, AES-CBC) and offers only the selected private key (`IdentitiesOnly`).

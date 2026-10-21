@@ -32,8 +32,25 @@ public struct FoundationProcessExecutor: SystemProcessExecuting {
         standardInput: Data? = nil,
         timeout: TimeInterval = 30
     ) async throws -> ProcessResult {
-        try await withCheckedThrowingContinuation { continuation in
-            let process = Process()
+        let process = Process()
+        let handle = ProcessHandle(process)
+        // A cancelled caller (for example a server probe while the user types) stops its process at once.
+        return try await withTaskCancellationHandler {
+            try await self.launch(process, executable: executable, arguments: arguments, environment: environment, input: (standardInput, timeout))
+        } onCancel: {
+            handle.terminate()
+        }
+    }
+
+    private func launch(
+        _ process: Process,
+        executable: String,
+        arguments: [String],
+        environment: [String: String],
+        input: (standardInput: Data?, timeout: TimeInterval)
+    ) async throws -> ProcessResult {
+        let (standardInput, timeout) = input
+        return try await withCheckedThrowingContinuation { continuation in
             let stdout = Pipe()
             let stderr = Pipe()
             let stdin = Pipe()
@@ -105,6 +122,20 @@ public struct FoundationProcessExecutor: SystemProcessExecuting {
                     resume(.success(ProcessResult(exitCode: 124, standardOutput: "", standardError: "Command timed out.")))
                 }
             }
+        }
+    }
+}
+
+private final class ProcessHandle: @unchecked Sendable {
+    private let process: Process
+
+    init(_ process: Process) {
+        self.process = process
+    }
+
+    func terminate() {
+        if self.process.isRunning {
+            self.process.terminate()
         }
     }
 }

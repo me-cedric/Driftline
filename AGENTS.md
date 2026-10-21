@@ -55,6 +55,8 @@ Driftline is a SwiftPM-first native macOS app. Treat this file as repo-local gui
 - Pass a secret to OpenSSH only through `SSHAskPassSession` (SSH_ASKPASS with a private FIFO). Put ssh `-o` options before `sftp -b`, because `-b` adds `BatchMode=yes` and ssh keeps the first value.
 - Do not run `ssh-keyscan` on every connect. Scan only when ssh reports an unknown or changed host key (OpenSSH `PerSourcePenalties`).
 - FTP and FTPS use the Swift client in `Sources/DriftlineCore/Networking/FTP`. Do not move FTPS to `/usr/bin/curl`: its SecureTransport build cannot reuse the TLS session on data connections, which vsftpd, ProFTPD and FileZilla Server require.
+- Server detection (`SystemServerProbe`) sends no credential: greetings, AUTH TLS, and the SSH "none" login only. Its ssh run uses `StrictHostKeyChecking=no` with `/dev/null` known hosts because nothing secret is sent; never reuse those options for a real connection.
+- Never fall back from Native to System SSH, or propose new settings, after a wrong password or a host key or certificate problem.
 - Run the FTP integration tests with `./scripts/integration-ftp-server.sh start` and `DRIFTLINE_INTEGRATION_FTP=1`.
 - Do not name a product `Driftline`: on a case-insensitive disk, SwiftBuild mixes it up with the `driftline` CLI product. The app product is `DriftlineApp`; `script/build_and_run.sh` names the bundle binary `Driftline`.
 - Do not mark native Swift SFTP as the default production backend until broader real-server QA, SSH agent-auth strategy, and manual accessibility/security QA are complete.

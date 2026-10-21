@@ -122,15 +122,16 @@ final class FTPSocketTransport: FTPTransport {
 /// that does not resume the TLS session of the control connection, and Network.framework cannot start TLS on an open
 /// connection (AUTH TLS) or share a session between two ports. SecureTransport does both through `SSLSetPeerID`.
 protocol FTPTLSFactory {
-    static func makeTransport(socket: FTPSocketTransport, host: String, sessionID: String, trustedFingerprint: String?) throws -> FTPTransport
+    static func makeTransport(socket: FTPSocketTransport, host: String, sessionID: String, trustedFingerprint: String?, acceptAnyCertificate: Bool) throws -> FTPTransport
 }
 
 enum FTPTLS {
     // shortcut: SecureTransport is deprecated and stops at TLS 1.2; move to Network.framework when it can resume one session across ports.
     private static let factory: FTPTLSFactory.Type = SecureTransportFTPTransport.self
 
-    static func wrap(_ socket: FTPSocketTransport, host: String, sessionID: String, trustedFingerprint: String?) throws -> FTPTransport {
-        try self.factory.makeTransport(socket: socket, host: host, sessionID: sessionID, trustedFingerprint: trustedFingerprint)
+    /// `acceptAnyCertificate` is for the server probe only, which sends no secret over the connection.
+    static func wrap(_ socket: FTPSocketTransport, host: String, sessionID: String, trustedFingerprint: String?, acceptAnyCertificate: Bool = false) throws -> FTPTransport {
+        try self.factory.makeTransport(socket: socket, host: host, sessionID: sessionID, trustedFingerprint: trustedFingerprint, acceptAnyCertificate: acceptAnyCertificate)
     }
 
     /// SHA-256 of the certificate, written like FileZilla and browsers show it.
@@ -146,7 +147,7 @@ final class SecureTransportFTPTransport: FTPTransport {
     private let connection: UnsafeMutablePointer<Int32>
 
     @available(macOS, deprecated: 10.15)
-    private init(socket: FTPSocketTransport, host: String, sessionID: String, trustedFingerprint: String?) throws {
+    private init(socket: FTPSocketTransport, host: String, sessionID: String, trustedFingerprint: String?, acceptAnyCertificate: Bool) throws {
         guard let context = SSLCreateContext(nil, .clientSide, .streamType) else {
             throw RemoteClientError.connectionFailed("Could not start TLS.")
         }
@@ -163,7 +164,9 @@ final class SecureTransportFTPTransport: FTPTransport {
 
         var status = SSLHandshake(context)
         if status == errSSLPeerAuthCompleted {
-            try Self.verify(context: context, host: host, trustedFingerprint: trustedFingerprint)
+            if !acceptAnyCertificate {
+                try Self.verify(context: context, host: host, trustedFingerprint: trustedFingerprint)
+            }
             status = SSLHandshake(context)
         }
         guard status == noErr else {
@@ -264,8 +267,8 @@ final class SecureTransportFTPTransport: FTPTransport {
 /// The protocol requirements are not deprecated, so callers compile without warnings; the deprecated calls stay in this type.
 extension SecureTransportFTPTransport: FTPTLSFactory {
     @available(macOS, deprecated: 10.15)
-    static func makeTransport(socket: FTPSocketTransport, host: String, sessionID: String, trustedFingerprint: String?) throws -> FTPTransport {
-        try SecureTransportFTPTransport(socket: socket, host: host, sessionID: sessionID, trustedFingerprint: trustedFingerprint)
+    static func makeTransport(socket: FTPSocketTransport, host: String, sessionID: String, trustedFingerprint: String?, acceptAnyCertificate: Bool) throws -> FTPTransport {
+        try SecureTransportFTPTransport(socket: socket, host: host, sessionID: sessionID, trustedFingerprint: trustedFingerprint, acceptAnyCertificate: acceptAnyCertificate)
     }
 
     @available(macOS, deprecated: 10.15)

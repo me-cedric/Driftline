@@ -93,6 +93,8 @@ final class AppModel: @unchecked Sendable {
 
     var statusMessage: ToastMessage?
     var userAlert: UserAlert?
+    /// Settings a failed connection should probably use, found by probing the server.
+    var pendingConnectionFix: ConnectionFix?
     var footerMessage: String?
     var hasInitialLoadFailed = false
     var transferJobs: [TransferJob] = []
@@ -144,6 +146,7 @@ final class AppModel: @unchecked Sendable {
     private let diagnosticsRecorder: DiagnosticsRecorder
     private let notificationController: AppNotificationControlling
     private let integrationStateStore: any DriftlineIntegrationStateStoring
+    private let serverProbe: ServerProbing
     private var didPerformStartupUpdateCheck = false
     private var mcpHTTPServer: HTTPMCPServer?
 
@@ -165,8 +168,10 @@ final class AppModel: @unchecked Sendable {
         credentialStore: CredentialStore = KeychainCredentialStore(),
         diagnosticsRecorder: DiagnosticsRecorder = DiagnosticsRecorder(),
         notificationController: AppNotificationControlling = AppNotificationController(),
-        integrationStateStore: any DriftlineIntegrationStateStoring = JSONDriftlineIntegrationStateStore()
+        integrationStateStore: any DriftlineIntegrationStateStoring = JSONDriftlineIntegrationStateStore(),
+        serverProbe: ServerProbing = SystemServerProbe()
     ) {
+        self.serverProbe = serverProbe
         self.localFileSystem = localFileSystem
         self.profileRepository = profileRepository
         self.preferencesRepository = preferencesRepository
@@ -183,14 +188,26 @@ final class AppModel: @unchecked Sendable {
             hostFingerprintProvider: SystemHostFingerprintProvider(),
             credentialStore: credentialStore
         )
-        self.remoteFileSystem = ProtocolRoutingRemoteFileSystemClient(sftp: remoteFileSystem ?? systemSFTPClient, ftp: ftpClient)
+        let systemSFTP = remoteFileSystem ?? systemSFTPClient
+        let systemTransfers = transferClient ?? SystemRsyncTransferClient(credentialStore: credentialStore)
+        // The Native Swift SSH setting falls back to System SSH, per server, when native cannot reach it.
+        let nativeSupport = NativeSSHSupportRegistry()
+        self.remoteFileSystem = ProtocolRoutingRemoteFileSystemClient(sftp: systemSFTP, ftp: ftpClient)
         self.nativeRemoteFileSystem = ProtocolRoutingRemoteFileSystemClient(
-            sftp: nativeRemoteFileSystem ?? NativeSFTPClient(credentialStore: credentialStore, hostTrustStore: hostTrustStore),
+            sftp: BackendFallbackRemoteFileSystemClient(
+                native: nativeRemoteFileSystem ?? NativeSFTPClient(credentialStore: credentialStore, hostTrustStore: hostTrustStore),
+                system: systemSFTP,
+                registry: nativeSupport
+            ),
             ftp: ftpClient
         )
-        self.transferClient = ProtocolRoutingTransferClient(sftp: transferClient ?? SystemRsyncTransferClient(credentialStore: credentialStore), ftp: ftpTransferClient)
+        self.transferClient = ProtocolRoutingTransferClient(sftp: systemTransfers, ftp: ftpTransferClient)
         self.nativeTransferClient = ProtocolRoutingTransferClient(
-            sftp: nativeTransferClient ?? NativeSFTPTransferClient(credentialStore: credentialStore, hostTrustStore: hostTrustStore),
+            sftp: BackendFallbackTransferClient(
+                native: nativeTransferClient ?? NativeSFTPTransferClient(credentialStore: credentialStore, hostTrustStore: hostTrustStore),
+                system: systemTransfers,
+                registry: nativeSupport
+            ),
             ftp: ftpTransferClient
         )
         self.hostTrustStore = hostTrustStore
@@ -642,6 +659,9 @@ final class AppModel: @unchecked Sendable {
         do {
             let client = self.remoteClientForCurrentPreference()
             var connectedSession = try await client.connect(to: profile)
+            if connectedSession.fallbackBackend == .systemSSH {
+                self.footerMessage = self.loc("toast.systemSSHFallback")
+            }
             connectedSession.localPath = paths.localPath
             connectedSession.remotePath = paths.remotePath
             self.session = connectedSession
@@ -663,7 +683,43 @@ final class AppModel: @unchecked Sendable {
             self.footerMessage = error.localizedDescription
             self.isConnecting = false
             self.persistIntegrationState()
+            await self.proposeFix(for: profile, after: error)
         }
+    }
+
+    func detectServer(host: String, port: Int?, username: String) async -> ServerDetection? {
+        await self.serverProbe.detect(host: host, port: port, username: username)
+    }
+
+    /// After a refused or failed connection, probes the server and proposes the settings it answers to.
+    /// Host key and certificate errors never get a proposal: the user must decide on those.
+    private func proposeFix(for profile: ServerProfile, after error: Error) async {
+        switch error as? RemoteClientError {
+        case .connectionFailed, .authenticationFailed, .unsupportedProtocol, .commandFailed:
+            break
+        default:
+            return
+        }
+        guard let detection = await self.serverProbe.detect(host: profile.host, port: nil, username: profile.username) else { return }
+        let agentHasKeys = await SystemSSHIdentityInventory().agentIdentityCount() > 0
+        guard let fix = ConnectionFix(
+            profile: profile,
+            detection: detection,
+            authenticationFailed: error as? RemoteClientError == .authenticationFailed,
+            agentHasKeys: agentHasKeys
+        ) else { return }
+        self.pendingConnectionFix = fix
+    }
+
+    /// Opens the editor with the proposed settings; the user checks them, adds a password if needed, and connects.
+    func applyConnectionFix() {
+        guard let fix = pendingConnectionFix else { return }
+        self.pendingConnectionFix = nil
+        var draft = ServerProfileDraft(profile: fix.profile)
+        draft.apply(fix.detection, force: true, includeAuthentication: fix.changesAuthentication)
+        self.profileEditorError = nil
+        self.connectAfterSavingDraft = true
+        self.profileDraft = draft
     }
 
     private func connectionPaths(for profile: ServerProfile, localPath: String?, remotePath: String?) -> (localPath: String, remotePath: String) {
@@ -1958,6 +2014,13 @@ struct ServerProfileDraft: Identifiable, Equatable {
     var createdAt: Date
     /// FTPS only. Explicit TLS (AUTH TLS) when false.
     var ftpsImplicitTLS: Bool
+    /// A new profile takes the detected settings for every field the user did not change.
+    var isNew: Bool
+    var protocolEdited = false
+    var portEdited = false
+    var usernameEdited = false
+    var authEdited = false
+    var detection: ServerDetection?
 
     init() {
         self.id = ServerProfileID()
@@ -1979,6 +2042,7 @@ struct ServerProfileDraft: Identifiable, Equatable {
         self.groupName = ""
         self.createdAt = Date()
         self.ftpsImplicitTLS = true
+        self.isNew = true
     }
 
     init(profile: ServerProfile) {
@@ -1996,6 +2060,7 @@ struct ServerProfileDraft: Identifiable, Equatable {
         self.groupName = profile.groupName ?? ""
         self.createdAt = profile.createdAt
         self.ftpsImplicitTLS = profile.implicitTLS ?? (profile.port == 990)
+        self.isNew = false
 
         switch profile.authenticationMethod {
         case .agent:
@@ -2041,6 +2106,52 @@ struct ServerProfileDraft: Identifiable, Equatable {
         }
         if !Self.authKinds(for: protocolKind).contains(self.authKind) {
             self.authKind = .password
+        }
+    }
+
+    static func authKind(for authentication: ServerDetection.Authentication) -> AuthKind {
+        switch authentication {
+        case .agent: .agent
+        case .password: .password
+        case .privateKey: .privateKey
+        case .none: .none
+        }
+    }
+
+    static func authKind(for method: AuthenticationMethod) -> AuthKind {
+        switch method {
+        case .agent: .agent
+        case .password: .password
+        case .privateKey: .privateKey
+        case .none: .none
+        }
+    }
+
+    /// Fills the fields from what the server answered. Without `force`, fields the user changed stay as they are.
+    mutating func apply(_ detection: ServerDetection, force: Bool, includeAuthentication: Bool = true) {
+        self.detection = detection
+        if detection.host != self.host {
+            self.host = detection.host
+        }
+        if force || !self.protocolEdited {
+            self.changeProtocol(to: detection.protocolKind)
+        }
+        // Port and login belong to the detected protocol: they mean nothing for another one the user chose.
+        guard self.protocolKind == detection.protocolKind else { return }
+        if force || !self.portEdited {
+            self.port = detection.port
+        }
+        if let implicitTLS = detection.implicitTLS, force || !self.protocolEdited {
+            self.ftpsImplicitTLS = implicitTLS
+        }
+        if let username = detection.username, force || !self.usernameEdited {
+            self.username = username
+        }
+        if includeAuthentication, let authentication = detection.suggestedAuthentication, force || !self.authEdited {
+            self.authKind = Self.authKind(for: authentication)
+            if case let .privateKey(path) = authentication {
+                self.privateKeyPath = path
+            }
         }
     }
 
@@ -2135,6 +2246,49 @@ struct ToastMessage {
     var text: String
     var systemImage = "checkmark.circle.fill"
     var iconColor: Color = .green
+}
+
+/// What a failed connection should change, by the server's own answers.
+struct ConnectionFix: Equatable {
+    var profile: ServerProfile
+    var detection: ServerDetection
+    /// False when only the address is wrong: the login method of the profile stays.
+    var changesAuthentication: Bool
+
+    init?(profile: ServerProfile, detection: ServerDetection, authenticationFailed: Bool, agentHasKeys: Bool = true) {
+        // A failed connection never proposes plain FTP for an encrypted profile: a missing AUTH TLS answer can be an attack.
+        if profile.protocolKind != .ftp, detection.protocolKind == .ftp {
+            return nil
+        }
+        let mode = FTPSecurityMode(profile: profile)
+        var detectedProfile = profile
+        detectedProfile.protocolKind = detection.protocolKind
+        detectedProfile.port = detection.port
+        detectedProfile.implicitTLS = detection.implicitTLS
+        let endpointDiffers = detection.protocolKind != profile.protocolKind || detection.port != profile.port
+            || (detection.protocolKind == .ftps && FTPSecurityMode(profile: detectedProfile) != mode)
+        let authenticationDiffers = authenticationFailed && detection.suggestedAuthentication != nil
+            && !Self.methodCanWork(profile.authenticationMethod, methods: detection.authenticationMethods, agentHasKeys: agentHasKeys)
+        guard endpointDiffers || authenticationDiffers else { return nil }
+        self.profile = profile
+        self.detection = detection
+        self.changesAuthentication = authenticationDiffers
+    }
+
+    /// A wrong password is not a settings problem: only a method the server or the Mac cannot use is.
+    static func methodCanWork(_ method: AuthenticationMethod, methods: [String], agentHasKeys: Bool) -> Bool {
+        guard !methods.isEmpty else { return true }
+        switch method {
+        case .password:
+            return methods.contains("password") || methods.contains("keyboard-interactive")
+        case .privateKey:
+            return methods.contains("publickey")
+        case .agent:
+            return methods.contains("publickey") && agentHasKeys
+        case .none:
+            return methods.contains("none")
+        }
+    }
 }
 
 struct UserAlert {

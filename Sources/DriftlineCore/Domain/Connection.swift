@@ -35,6 +35,8 @@ public struct ConnectionSession: Identifiable, Codable, Sendable {
     public var remotePath: String
     public var connectedAt: Date?
     public var lastErrorMessage: String?
+    /// Set when the session runs on another SSH backend than the one in Settings (see BackendFallbackRemoteFileSystemClient).
+    public var fallbackBackend: RemoteBackendKind?
 
     public init(
         id: UUID = UUID(),

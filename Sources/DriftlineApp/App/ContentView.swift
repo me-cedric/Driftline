@@ -372,6 +372,7 @@ struct SidebarView: View {
     @Bindable var model: AppModel
 
     /// Bookmark and recent rows act on click and keep no selection; server rows select the server and connect.
+    private static let newConnectionID = "action:new-connection"
     private static let bookmarkPrefix = "bookmark:"
     private static let recentPrefix = "recent:"
 
@@ -379,6 +380,13 @@ struct SidebarView: View {
         // The system source list, as in Finder: title-case section headers, accent-tinted symbols,
         // the selection pill, keyboard navigation and the sidebar glass on macOS 26 and later.
         List(selection: self.selection) {
+            // An action row on top: it opens Quick Connect and keeps no selection.
+            Label(loc("sidebar.newConnection"), systemImage: "plus.circle.fill")
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(Color.accentColor)
+                .tag(Self.newConnectionID)
+                .help(loc("connection.newHint"))
+
             Section(loc("sidebar.favorites")) {
                 let favorites = self.model.profiles.filter(\.isFavorite)
                 if favorites.isEmpty {
@@ -438,7 +446,9 @@ struct SidebarView: View {
             get: { self.model.selectedSidebarItem },
             set: { id in
                 guard let id else { return }
-                if id.hasPrefix(Self.bookmarkPrefix) {
+                if id == Self.newConnectionID {
+                    self.model.beginQuickConnect()
+                } else if id.hasPrefix(Self.bookmarkPrefix) {
                     if let bookmark = self.model.bookmarks.first(where: { Self.bookmarkPrefix + $0.id.uuidString == id }) {
                         self.model.openBookmark(bookmark)
                     }

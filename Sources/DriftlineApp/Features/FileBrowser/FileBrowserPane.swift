@@ -293,8 +293,11 @@ private struct RemoteEmptyStateView: View {
             }
             .frame(maxWidth: 360)
             if let onNewConnection {
+                // A lone call to action: large and capsule-shaped, like the system empty states.
                 Button(LocalizationManager.shared.localized("sidebar.newConnection"), action: onNewConnection)
                     .driftlineGlassButton(prominent: true)
+                    .buttonBorderShape(.capsule)
+                    .controlSize(.large)
             }
         }
         .padding(28)

@@ -132,7 +132,7 @@ struct WorkspaceToolbar: ToolbarContent {
                 Label(loc("connection.connect"), systemImage: "arrow.triangle.2.circlepath")
             }
             .help(loc("connection.connectHint"))
-            .buttonStyle(.borderedProminent)
+            .driftlineGlassButton(prominent: true)
         } else if self.model.session.state == .connecting || self.model.session.state == .reconnecting {
             ProgressView()
                 .controlSize(.small)

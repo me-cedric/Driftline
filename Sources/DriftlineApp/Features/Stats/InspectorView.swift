@@ -91,7 +91,7 @@ struct InspectorView: View {
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(.secondary)
                 .frame(width: 34, height: 34)
-                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .background(.quaternary, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text(LocalizationManager.shared.localized("inspector.noItemSelected"))
                     .font(.callout.weight(.medium))
@@ -124,7 +124,7 @@ struct InspectorView: View {
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(file.source == .remote ? Color.accentColor.opacity(0.78) : .primary.opacity(0.86))
                 .frame(width: 34, height: 34)
-                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .background(.quaternary, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text(file.name)
                     .font(.callout.weight(.semibold))
@@ -185,7 +185,7 @@ struct InspectorView: View {
                     .padding(.horizontal, 8)
                     .padding(.vertical, 7)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: DriftlineRadius.control, style: .continuous))
+                    .background(.quaternary, in: RoundedRectangle(cornerRadius: DriftlineRadius.control, style: .continuous))
                     .foregroundStyle(.primary.opacity(0.68))
             }
         }

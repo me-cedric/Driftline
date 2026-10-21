@@ -37,14 +37,12 @@ struct FileBrowserPane: View {
     }
 
     var body: some View {
-        GlassPanel(cornerRadius: DriftlineRadius.panel, material: .ultraThinMaterial) {
+        ContentSurface(cornerRadius: DriftlineRadius.panel) {
             VStack(spacing: 0) {
                 self.header
                 Divider()
-                    .opacity(0.18)
                 self.browserBody
                 Divider()
-                    .opacity(0.14)
                 self.footer
             }
         }
@@ -58,38 +56,33 @@ struct FileBrowserPane: View {
                     .font(.title3.weight(.semibold))
                     .symbolRenderingMode(.hierarchical)
 
-                Text(self.headerSubtitle)
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+                // The breadcrumb bar below shows the path; this line only explains a disconnected pane.
+                if self.source == .remote, !self.isConnected {
+                    Text(self.headerSubtitle)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
             }
 
             PathBreadcrumbBar(sourceTitle: self.title, path: self.path, onNavigate: self.onNavigate)
 
             HStack(spacing: 10) {
-                HStack(spacing: 6) {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundStyle(.secondary)
-                    TextField(LocalizationManager.shared.localized("browser.filterFiles"), text: self.$filterText)
-                        .textFieldStyle(.plain)
-                        .disabled(self.source == .remote && !self.isConnected)
-                }
-                .frame(minWidth: 160, maxWidth: 260)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: DriftlineRadius.control, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: DriftlineRadius.control, style: .continuous)
-                        .stroke(Color.primary.opacity(0.05), lineWidth: 1)
-                }
+                // The system search field: rounded, with a clear button and the standard focus ring.
+                SearchField(prompt: LocalizationManager.shared.localized("browser.filterFiles"), text: self.$filterText)
+                    .frame(minWidth: 160, maxWidth: 260)
+                    .disabled(self.source == .remote && !self.isConnected)
 
                 Spacer(minLength: 8)
 
-                PaneToolbarButton(title: LocalizationManager.shared.localized("browser.upOneFolder"), systemImage: "chevron.up", isDisabled: self.source == .remote && !self.isConnected, action: self.onParent)
-                PaneToolbarButton(title: LocalizationManager.shared.localized("browser.newFolder"), systemImage: "folder.badge.plus", isDisabled: self.source == .remote && !self.isConnected, action: self.onCreateFolder)
-                PaneToolbarButton(title: String(format: LocalizationManager.shared.localized("browser.refreshPane"), self.title), systemImage: "arrow.clockwise", isDisabled: self.source == .remote && !self.isConnected, action: self.onRefresh)
-                PaneToolbarButton(title: LocalizationManager.shared.localized("connection.more"), systemImage: "ellipsis", action: self.onShowInfo)
+                HStack(spacing: 6) {
+                    PaneToolbarButton(title: LocalizationManager.shared.localized("browser.upOneFolder"), systemImage: "chevron.up", isDisabled: self.source == .remote && !self.isConnected, action: self.onParent)
+                    PaneToolbarButton(title: LocalizationManager.shared.localized("browser.newFolder"), systemImage: "folder.badge.plus", isDisabled: self.source == .remote && !self.isConnected, action: self.onCreateFolder)
+                    PaneToolbarButton(title: String(format: LocalizationManager.shared.localized("browser.refreshPane"), self.title), systemImage: "arrow.clockwise", isDisabled: self.source == .remote && !self.isConnected, action: self.onRefresh)
+                    PaneToolbarButton(title: LocalizationManager.shared.localized("connection.more"), systemImage: "ellipsis", action: self.onShowInfo)
+                }
+                .driftlineGlassGroup()
             }
         }
         .padding(.horizontal, 16)
@@ -268,18 +261,12 @@ private struct PaneToolbarButton: View {
     var body: some View {
         Button(action: self.action) {
             Image(systemName: self.systemImage)
-                .font(.system(size: 15, weight: .semibold))
-                .frame(width: 32, height: 26)
-                .contentShape(RoundedRectangle(cornerRadius: DriftlineRadius.control, style: .continuous))
+                .font(.system(size: 13, weight: .semibold))
+                .frame(width: 18, height: 18)
         }
-        .buttonStyle(.plain)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: DriftlineRadius.control, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: DriftlineRadius.control, style: .continuous)
-                .stroke(Color.primary.opacity(DriftlineOpacity.stroke), lineWidth: 1)
-        }
+        .driftlineGlassButton()
+        .buttonBorderShape(.circle)
         .disabled(self.isDisabled)
-        .opacity(self.isDisabled ? 0.42 : 1)
         .help(self.title)
         .accessibilityLabel(self.title)
     }
@@ -294,12 +281,7 @@ private struct RemoteEmptyStateView: View {
                 .font(.system(size: 34, weight: .semibold))
                 .foregroundStyle(Color.accentColor.opacity(0.9))
                 .frame(width: 64, height: 64)
-                .background(.thinMaterial, in: Circle())
-                .overlay {
-                    Circle()
-                        .stroke(Color.white.opacity(0.16), lineWidth: 1)
-                        .blendMode(.plusLighter)
-                }
+                .background(.quaternary, in: Circle())
             VStack(spacing: 6) {
                 Text(LocalizationManager.shared.localized("browser.noRemoteConnection"))
                     .font(.title3.weight(.semibold))
@@ -312,7 +294,7 @@ private struct RemoteEmptyStateView: View {
             .frame(maxWidth: 360)
             if let onNewConnection {
                 Button(LocalizationManager.shared.localized("sidebar.newConnection"), action: onNewConnection)
-                    .buttonStyle(GlassButtonStyle(isPrimary: true))
+                    .driftlineGlassButton(prominent: true)
             }
         }
         .padding(28)
@@ -325,5 +307,43 @@ extension ByteCountFormatter {
         let formatter = ByteCountFormatter()
         formatter.countStyle = .file
         return formatter.string(fromByteCount: byteCount)
+    }
+}
+
+/// An AppKit search field (NSSearchField): magnifying glass, clear button and the system look on every macOS version.
+private struct SearchField: NSViewRepresentable {
+    var prompt: String
+    @Binding var text: String
+
+    func makeNSView(context: Context) -> NSSearchField {
+        let field = NSSearchField()
+        field.placeholderString = self.prompt
+        field.delegate = context.coordinator
+        field.sendsSearchStringImmediately = true
+        return field
+    }
+
+    func updateNSView(_ field: NSSearchField, context _: Context) {
+        if field.stringValue != self.text {
+            field.stringValue = self.text
+        }
+        field.placeholderString = self.prompt
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(text: self.$text)
+    }
+
+    final class Coordinator: NSObject, NSSearchFieldDelegate {
+        @Binding var text: String
+
+        init(text: Binding<String>) {
+            self._text = text
+        }
+
+        func controlTextDidChange(_ notification: Notification) {
+            guard let field = notification.object as? NSSearchField else { return }
+            self.text = field.stringValue
+        }
     }
 }

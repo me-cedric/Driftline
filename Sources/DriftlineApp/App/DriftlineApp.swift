@@ -16,7 +16,7 @@ struct DriftlineApp: App {
                     self.model.handleDeepLink(url)
                 }
         }
-        .windowStyle(.hiddenTitleBar)
+        .windowToolbarStyle(.unified)
         .commands {
             DriftlineCommands(model: self.model)
         }

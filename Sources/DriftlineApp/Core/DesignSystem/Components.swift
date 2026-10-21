@@ -19,39 +19,69 @@ enum DriftlineSpacing {
 }
 
 enum DriftlineOpacity {
-    static let glassPanel = 0.56
-    static let glassToolbar = 0.58
     static let hover = 0.06
     static let selected = 0.14
     static let separator = 0.04
     static let stroke = 0.065
-    static let topHighlight = 0.12
 }
 
-struct GlassPanel<Content: View>: View {
+/// A solid surface for content such as file lists and the transfer queue.
+/// Liquid Glass belongs to the controls and navigation that float above content (toolbar, sidebar,
+/// toasts), so content surfaces use the system content color instead of a material.
+struct ContentSurface<Content: View>: View {
     var cornerRadius: CGFloat
-    var material: Material
     @ViewBuilder var content: Content
 
-    init(cornerRadius: CGFloat = DriftlineRadius.panel, material: Material = .regularMaterial, @ViewBuilder content: () -> Content) {
+    init(cornerRadius: CGFloat = DriftlineRadius.panel, @ViewBuilder content: () -> Content) {
         self.cornerRadius = cornerRadius
-        self.material = material
         self.content = content()
     }
 
     var body: some View {
+        let shape = RoundedRectangle(cornerRadius: self.cornerRadius, style: .continuous)
         self.content
-            .background(self.material, in: RoundedRectangle(cornerRadius: self.cornerRadius, style: .continuous))
+            .background(Color(nsColor: .controlBackgroundColor), in: shape)
+            .clipShape(shape)
             .overlay {
-                RoundedRectangle(cornerRadius: self.cornerRadius, style: .continuous)
-                    .stroke(Color.primary.opacity(DriftlineOpacity.stroke), lineWidth: 1)
+                shape.strokeBorder(Color(nsColor: .separatorColor), lineWidth: 0.5)
             }
-            .overlay(alignment: .top) {
-                RoundedRectangle(cornerRadius: self.cornerRadius, style: .continuous)
-                    .stroke(Color.white.opacity(DriftlineOpacity.topHighlight), lineWidth: 1)
-                    .blendMode(.plusLighter)
+    }
+}
+
+extension View {
+    /// The system Liquid Glass button on macOS 26 and later, the previous capsule style before.
+    @ViewBuilder
+    func driftlineGlassButton(prominent: Bool = false) -> some View {
+        if #available(macOS 26.0, *) {
+            if prominent {
+                self.buttonStyle(.glassProminent)
+            } else {
+                self.buttonStyle(.glass)
             }
-            .shadow(color: .black.opacity(0.07), radius: 9, y: 3)
+        } else {
+            self.buttonStyle(GlassButtonStyle(isPrimary: prominent))
+        }
+    }
+
+    /// Liquid Glass for a control that floats over content, such as a toast. A material before macOS 26.
+    @ViewBuilder
+    func driftlineFloatingGlass(in shape: some Shape) -> some View {
+        if #available(macOS 26.0, *) {
+            self.glassEffect(.regular, in: shape)
+        } else {
+            self.background(.regularMaterial, in: shape)
+                .shadow(color: .black.opacity(0.15), radius: 12, y: 6)
+        }
+    }
+
+    /// Groups nearby glass buttons so they share one glass layer and blend when close (macOS 26 and later).
+    @ViewBuilder
+    func driftlineGlassGroup(spacing: CGFloat = 6) -> some View {
+        if #available(macOS 26.0, *) {
+            GlassEffectContainer(spacing: spacing) { self }
+        } else {
+            self
+        }
     }
 }
 
@@ -109,6 +139,7 @@ struct PaneVerticalDivider: View {
     }
 }
 
+/// The pre-macOS 26 look of `driftlineGlassButton()`. Use the modifier, not this style.
 struct GlassButtonStyle: ButtonStyle {
     var isPrimary = false
 
@@ -238,17 +269,8 @@ struct InspectorSection<Content: View>: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: DriftlineRadius.card, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: DriftlineRadius.card, style: .continuous)
-                .stroke(Color.primary.opacity(0.045), lineWidth: 1)
-        }
-        .overlay(alignment: .top) {
-            RoundedRectangle(cornerRadius: DriftlineRadius.card, style: .continuous)
-                .stroke(Color.white.opacity(0.08), lineWidth: 1)
-                .blendMode(.plusLighter)
-        }
-        .shadow(color: .black.opacity(0.045), radius: 10, y: 4)
+        // The inspector column draws its own background; a fill groups the rows without stacking materials.
+        .background(.quinary, in: RoundedRectangle(cornerRadius: DriftlineRadius.card, style: .continuous))
     }
 }
 
@@ -276,8 +298,7 @@ struct ToastOverlay: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 9))
-        .shadow(color: .black.opacity(0.15), radius: 12, y: 6)
+        .driftlineFloatingGlass(in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .padding(.horizontal, 16)
         .padding(.bottom, 10)
         .scaleEffect(self.isVisible ? 1 : 0.9, anchor: .bottom)

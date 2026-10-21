@@ -8,122 +8,96 @@ private func loc(_ key: String, _ args: CVarArg...) -> String {
     return String(format: format, arguments: args)
 }
 
-/// Fork-inspired top workspace header.
-///
-/// Layer 1 pairs a grouped action rail with a centered current-session context block.
-/// Layer 2 is a full-width workspace/session tab strip. The browser panes sit below.
+/// The workspace header below the window toolbar: the session tab strip.
+/// The actions live in the system toolbar (`WorkspaceToolbar`), which draws Liquid Glass on macOS 26 and later.
 struct WorkspaceHeaderView: View {
     @Bindable var model: AppModel
 
     var body: some View {
-        VStack(spacing: 0) {
-            self.actionLayer
-            Divider()
-                .opacity(0.4)
-            WorkspaceTabStrip(model: self.model)
-        }
-        .background(.ultraThinMaterial)
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(Color.primary.opacity(DriftlineOpacity.stroke))
-                .frame(height: 1)
-        }
+        WorkspaceTabStrip(model: self.model)
+    }
+}
+
+/// The window toolbar. Each group becomes one glass capsule on macOS 26 and later; the system also handles
+/// overflow, the icon and label display modes, and keyboard focus.
+struct WorkspaceToolbar: ToolbarContent {
+    @Bindable var model: AppModel
+
+    private var isConnected: Bool {
+        self.model.session.state == .connected
     }
 
-    private var actionLayer: some View {
-        HStack(alignment: .center, spacing: 14) {
-            self.leadingRail
-            Spacer(minLength: 12)
-            CurrentSessionContextView(model: self.model)
-            Spacer(minLength: 12)
-            self.trailingRail
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 9)
-    }
-
-    private var leadingRail: some View {
-        WorkspaceActionRail {
-            WorkspaceActionButton(
-                title: loc("sidebar.quickConnect"),
-                systemImage: "bolt.horizontal",
-                hint: loc("connection.newHint")
-            ) {
+    var body: some ToolbarContent {
+        ToolbarItem(placement: .navigation) {
+            Button {
                 self.model.beginQuickConnect()
+            } label: {
+                Label(loc("sidebar.quickConnect"), systemImage: "bolt.horizontal")
             }
-
-            WorkspaceRailDivider()
-
-            WorkspaceActionButton(
-                title: loc("browser.refresh"),
-                systemImage: "arrow.clockwise",
-                hint: loc("browser.refreshHint")
-            ) {
-                Task { await self.model.refreshLocal() }
-            }
-            WorkspaceActionButton(
-                title: loc("browser.refreshRemote"),
-                systemImage: "globe",
-                hint: loc("browser.refreshRemoteHint"),
-                isDisabled: self.model.session.state != .connected
-            ) {
-                Task { await self.model.refreshRemote() }
-            }
-
-            WorkspaceRailDivider()
-
-            WorkspaceActionButton(
-                title: loc("browser.upload"),
-                systemImage: "arrow.up",
-                hint: loc("browser.uploadHint"),
-                isDisabled: self.model.selectedLocalFiles.isEmpty || self.model.session.state != .connected
-            ) {
-                self.model.uploadSelectedItem()
-            }
-            WorkspaceActionButton(
-                title: loc("browser.download"),
-                systemImage: "arrow.down",
-                hint: loc("browser.downloadHint"),
-                isDisabled: self.model.selectedRemoteFiles.isEmpty || self.model.session.state != .connected
-            ) {
-                self.model.downloadSelectedItem()
-            }
-            WorkspaceActionButton(
-                title: loc("browser.compare"),
-                systemImage: "arrow.left.arrow.right",
-                hint: loc("browser.compareHint"),
-                isDisabled: self.model.session.state != .connected
-            ) {
-                self.model.prepareSyncPreview()
-            }
+            .help(loc("connection.newHint"))
         }
-    }
 
-    private var trailingRail: some View {
-        WorkspaceActionRail {
-            WorkspaceActionButton(
-                title: loc("connection.terminal"),
-                systemImage: "terminal",
-                hint: loc("connection.terminalHint"),
-                isDisabled: self.model.activeProfile == nil
-            ) {
-                self.model.openTerminalSession()
+        ToolbarItemGroup(placement: .primaryAction) {
+            self.connectionButton
+        }
+
+        ToolbarItemGroup(placement: .primaryAction) {
+            Button {
+                self.model.uploadSelectedItem()
+            } label: {
+                Label(loc("browser.upload"), systemImage: "arrow.up")
             }
+            .help(loc("browser.uploadHint"))
+            .disabled(self.model.selectedLocalFiles.isEmpty || !self.isConnected)
 
-            WorkspaceRailDivider()
+            Button {
+                self.model.downloadSelectedItem()
+            } label: {
+                Label(loc("browser.download"), systemImage: "arrow.down")
+            }
+            .help(loc("browser.downloadHint"))
+            .disabled(self.model.selectedRemoteFiles.isEmpty || !self.isConnected)
 
-            WorkspaceActionButton(
-                title: loc("browser.newFolder"),
-                systemImage: "folder.badge.plus"
-            ) {
+            Button {
+                self.model.prepareSyncPreview()
+            } label: {
+                Label(loc("browser.compare"), systemImage: "arrow.left.arrow.right")
+            }
+            .help(loc("browser.compareHint"))
+            .disabled(!self.isConnected)
+        }
+
+        ToolbarItemGroup(placement: .primaryAction) {
+            Button {
+                Task {
+                    await self.model.refreshLocal()
+                    await self.model.refreshRemote()
+                }
+            } label: {
+                Label(loc("browser.refresh"), systemImage: "arrow.clockwise")
+            }
+            .help(loc("browser.refreshHint"))
+
+            Button {
                 self.model.beginCreateFolder(source: self.model.selectedFile?.source ?? .local)
+            } label: {
+                Label(loc("browser.newFolder"), systemImage: "folder.badge.plus")
             }
-            WorkspaceActionButton(
-                title: loc("browser.viewOptions"),
-                systemImage: "slider.horizontal.3",
-                isActive: self.model.showViewOptions
-            ) {
+
+            Button {
+                self.model.openTerminalSession()
+            } label: {
+                Label(loc("connection.terminal"), systemImage: "terminal")
+            }
+            .help(loc("connection.terminalHint"))
+            .disabled(self.model.activeProfile == nil)
+        }
+
+        ToolbarItemGroup(placement: .primaryAction) {
+            Button {
                 self.model.showViewOptions.toggle()
+            } label: {
+                Label(loc("browser.viewOptions"), systemImage: "slider.horizontal.3")
             }
             .popover(isPresented: self.$model.showViewOptions) {
                 ViewOptionsView(preferences: self.$model.preferences) {
@@ -134,190 +108,54 @@ struct WorkspaceHeaderView: View {
                     }
                 }
             }
-            WorkspaceActionButton(
-                title: loc("browser.inspector"),
-                systemImage: "sidebar.right",
-                isActive: self.model.preferences.showInspector
-            ) {
-                self.model.preferences.showInspector.toggle()
+
+            Toggle(isOn: self.$model.preferences.showInspector) {
+                Label(loc("browser.inspector"), systemImage: "sidebar.right")
             }
+            .help(loc("browser.inspector"))
         }
     }
-}
 
-/// Horizontal cluster of workspace actions with consistent spacing.
-struct WorkspaceActionRail<Content: View>: View {
-    @ViewBuilder var content: Content
-
-    var body: some View {
-        HStack(spacing: 4) {
-            self.content
-        }
-    }
-}
-
-/// Subtle vertical separator used between action groups in a rail.
-struct WorkspaceRailDivider: View {
-    var body: some View {
-        RoundedRectangle(cornerRadius: 1, style: .continuous)
-            .fill(Color.primary.opacity(0.12))
-            .frame(width: 1, height: 26)
-            .padding(.horizontal, 4)
-    }
-}
-
-/// macOS pro-app toolbar button: SF Symbol stacked over a compact label.
-struct WorkspaceActionButton: View {
-    var title: String
-    var systemImage: String
-    var hint: String?
-    var isDisabled: Bool
-    var isActive: Bool
-    var action: () -> Void
-
-    @State private var isHovering = false
-
-    init(
-        title: String,
-        systemImage: String,
-        hint: String? = nil,
-        isDisabled: Bool = false,
-        isActive: Bool = false,
-        action: @escaping () -> Void
-    ) {
-        self.title = title
-        self.systemImage = systemImage
-        self.hint = hint
-        self.isDisabled = isDisabled
-        self.isActive = isActive
-        self.action = action
-    }
-
-    var body: some View {
-        Button(action: self.action) {
-            VStack(spacing: 3) {
-                Image(systemName: self.systemImage)
-                    .font(.system(size: 15, weight: .medium))
-                    .symbolRenderingMode(.hierarchical)
-                    .frame(height: 18)
-                Text(self.title)
-                    .font(.system(size: 10, weight: .medium))
-                    .lineLimit(1)
-            }
-            .foregroundStyle(self.foreground)
-            .frame(minWidth: 52)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .background {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(self.background)
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(Color.accentColor.opacity(self.isActive ? 0.22 : 0), lineWidth: 1)
-            }
-            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .disabled(self.isDisabled)
-        .onHover { self.isHovering = $0 && !self.isDisabled }
-        .help(self.hint ?? self.title)
-        .accessibilityLabel(self.title)
-        .accessibilityHint(self.hint ?? "")
-    }
-
-    private var foreground: Color {
-        if self.isDisabled { return .primary.opacity(0.35) }
-        if self.isActive { return .accentColor }
-        return .primary.opacity(0.9)
-    }
-
-    private var background: Color {
-        if self.isActive { return Color.accentColor.opacity(0.10) }
-        if self.isHovering { return Color.primary.opacity(0.07) }
-        return .clear
-    }
-}
-
-/// Centered current-session context: server name, endpoint/protocol, status, and the
-/// primary connection control. Anchors the top header visually.
-struct CurrentSessionContextView: View {
-    @Bindable var model: AppModel
-
-    var body: some View {
-        VStack(spacing: 3) {
-            Text(self.primaryTitle)
-                .font(.system(size: 15, weight: .semibold))
-                .lineLimit(1)
-            if let secondaryLine {
-                Text(secondaryLine)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            HStack(spacing: 5) {
-                SessionStatusDot(state: self.model.session.state)
-                Text(self.statusLine)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            self.connectionControl
-                .padding(.top, 3)
-        }
-        .frame(minWidth: 210)
-        .fixedSize(horizontal: false, vertical: true)
-    }
-
-    @ViewBuilder private var connectionControl: some View {
-        if self.model.session.state == .connected {
+    @ViewBuilder private var connectionButton: some View {
+        if self.isConnected {
             Button {
                 self.model.disconnect()
             } label: {
                 Label(loc("connection.disconnect"), systemImage: "xmark.circle")
             }
-            .buttonStyle(GlassButtonStyle())
             .help(loc("connection.disconnectHint"))
-            .accessibilityLabel(loc("connection.disconnect"))
         } else if self.model.activeProfile != nil, self.model.session.state != .connecting, self.model.session.state != .reconnecting {
+            // The one tinted control: connecting is the next step on this screen.
             Button {
                 self.model.connectToSelectedServer()
             } label: {
                 Label(loc("connection.connect"), systemImage: "arrow.triangle.2.circlepath")
             }
-            .buttonStyle(GlassButtonStyle())
             .help(loc("connection.connectHint"))
-            .accessibilityLabel(loc("connection.connect"))
+            .buttonStyle(.borderedProminent)
+        } else if self.model.session.state == .connecting || self.model.session.state == .reconnecting {
+            ProgressView()
+                .controlSize(.small)
+                .help(self.model.session.state.localizedTitle)
         }
-    }
-
-    private var protocolLabel: String {
-        self.model.session.protocolKind?.rawValue.uppercased() ?? "SFTP"
-    }
-
-    private var primaryTitle: String {
-        self.model.activeProfile?.displayName ?? loc("app.name")
-    }
-
-    private var secondaryLine: String? {
-        if self.model.session.state == .connected, let profile = self.model.activeProfile {
-            return "\(self.protocolLabel) · \(profile.host):\(profile.port)"
-        }
-        if let profile = self.model.activeProfile {
-            return profile.host
-        }
-        return loc("connection.noServer")
-    }
-
-    private var statusLine: String {
-        if self.model.session.state == .connected {
-            return loc("connection.connected")
-        }
-        return "\(self.protocolLabel) · \(self.model.session.state.localizedTitle)"
     }
 }
 
-/// Small status indicator shared by the context block and the tab items.
+extension AppModel {
+    /// Window title for the current session: the server name, or the app name.
+    var workspaceTitle: String {
+        self.activeProfile?.displayName ?? loc("app.name")
+    }
+
+    /// Window subtitle: protocol, endpoint and state, for example "SFTP · public.cgi.com:22 · Connected".
+    var workspaceSubtitle: String {
+        guard let profile = self.activeProfile else { return loc("connection.noServer") }
+        let protocolLabel = (self.session.protocolKind ?? profile.protocolKind).rawValue.uppercased()
+        return "\(protocolLabel) · \(profile.host):\(profile.port) · \(self.session.state.localizedTitle)"
+    }
+}
+
+/// Small status indicator for the tab items.
 struct SessionStatusDot: View {
     var state: ConnectionState
     var size: CGFloat = 7
@@ -418,8 +256,9 @@ struct WorkspaceTabItem: View {
         .padding(.trailing, self.showsClose ? 7 : 11)
         .padding(.vertical, 6)
         .background {
+            // A fill, not a material: the strip sits on content, under the glass toolbar.
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(self.isSelected ? AnyShapeStyle(.regularMaterial) : AnyShapeStyle(self.isHovering ? Color.primary.opacity(0.06) : Color.clear))
+                .fill(self.isSelected ? AnyShapeStyle(.quaternary) : AnyShapeStyle(self.isHovering ? Color.primary.opacity(0.06) : Color.clear))
         }
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)

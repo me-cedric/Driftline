@@ -43,18 +43,14 @@ struct TransferPanel: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            self.header
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-            Divider()
-                .opacity(0.12)
-            self.content
-        }
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: DriftlineRadius.card, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: DriftlineRadius.card, style: .continuous)
-                .stroke(Color.primary.opacity(DriftlineOpacity.separator), lineWidth: 1)
+        ContentSurface(cornerRadius: DriftlineRadius.card) {
+            VStack(spacing: 0) {
+                self.header
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                Divider()
+                self.content
+            }
         }
     }
 
@@ -96,6 +92,7 @@ struct TransferPanel: View {
             }
         }
         .pickerStyle(.segmented)
+        .labelsHidden()
         .controlSize(.small)
         .frame(width: 280)
     }
@@ -115,7 +112,9 @@ struct TransferPanel: View {
                 Button(LocalizationManager.shared.localized("transfer.clearCompleted"), action: self.onClearCompleted)
             }
         }
-        .buttonStyle(GlassButtonStyle())
+        .driftlineGlassButton()
+        .controlSize(.small)
+        .driftlineGlassGroup()
     }
 
     @ViewBuilder

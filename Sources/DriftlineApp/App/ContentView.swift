@@ -10,27 +10,35 @@ private func loc(_ key: String, _ args: CVarArg...) -> String {
 
 struct ContentView: View {
     @Bindable var model: AppModel
-    @State private var inspectorWidth: CGFloat = 280
-    @State private var inspectorResizeStartWidth: CGFloat?
     @State private var transferHeight: CGFloat = 150
     @State private var transferResizeStartHeight: CGFloat?
     @State private var localPaneFraction: CGFloat = 0.5
     @State private var paneResizeStartWidth: CGFloat?
-    private let inspectorChromeTopExtension: CGFloat = 24
     private static let paneDividerWidth: CGFloat = 9
     private static let paneMinWidth: CGFloat = 360
 
     var body: some View {
-        ZStack(alignment: .trailing) {
-            NavigationSplitView {
-                SidebarView(model: self.model)
-                    .navigationSplitViewColumnWidth(min: 300, ideal: 320, max: 360)
-            } detail: {
-                self.detailContent
-            }
-            if self.model.preferences.showInspector {
-                self.inspectorOverlay
-            }
+        NavigationSplitView {
+            SidebarView(model: self.model)
+                .navigationSplitViewColumnWidth(min: 300, ideal: 320, max: 360)
+        } detail: {
+            self.detailContent
+                .navigationTitle(self.model.workspaceTitle)
+                .navigationSubtitle(self.model.workspaceSubtitle)
+                .toolbar {
+                    WorkspaceToolbar(model: self.model)
+                }
+                // The system inspector column: its own background, resize handle and window integration.
+                .inspector(isPresented: self.$model.preferences.showInspector) {
+                    InspectorView(
+                        file: self.model.selectedFile,
+                        session: self.model.session,
+                        profile: self.model.activeProfile,
+                        transferStats: self.model.transferStats,
+                        lastConnection: self.model.lastConnectionDisplay
+                    )
+                    .inspectorColumnWidth(min: 240, ideal: 280, max: 420)
+                }
         }
     }
 
@@ -78,9 +86,6 @@ struct ContentView: View {
             }
         }
         .frame(minWidth: 640, maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.trailing, self.model.preferences.showInspector ? self.inspectorWidth + 1 : 0)
-        .background(Color(nsColor: .windowBackgroundColor))
-        .ignoresSafeArea(.container, edges: .top)
         .sheet(item: self.$model.profileDraft) { draft in
             ServerProfileEditorView(
                 draft: Binding(
@@ -211,43 +216,6 @@ struct ContentView: View {
                 onRevealDiagnostics: { self.model.revealDiagnosticsLog() }
             )
         }
-    }
-
-    private var inspectorOverlay: some View {
-        HStack(spacing: 0) {
-            Rectangle()
-                .fill(Color.primary.opacity(0.10))
-                .frame(width: 1)
-                .overlay {
-                    Rectangle()
-                        .fill(.clear)
-                        .frame(width: 8)
-                        .contentShape(Rectangle())
-                        .gesture(
-                            DragGesture(coordinateSpace: .global)
-                                .onChanged { value in
-                                    let startWidth = self.inspectorResizeStartWidth ?? self.inspectorWidth
-                                    self.inspectorResizeStartWidth = startWidth
-                                    self.inspectorWidth = min(420, max(240, startWidth - value.translation.width))
-                                }
-                                .onEnded { _ in
-                                    self.inspectorResizeStartWidth = nil
-                                }
-                        )
-                }
-            InspectorView(
-                file: self.model.selectedFile,
-                session: self.model.session,
-                profile: self.model.activeProfile,
-                transferStats: self.model.transferStats,
-                lastConnection: self.model.lastConnectionDisplay
-            )
-            .frame(width: self.inspectorWidth)
-            .padding(.top, self.inspectorChromeTopExtension)
-            .background(.ultraThinMaterial)
-        }
-        .frame(maxHeight: .infinity)
-        .ignoresSafeArea(.container, edges: [.top, .bottom])
     }
 
     private var browserAndTransfers: some View {

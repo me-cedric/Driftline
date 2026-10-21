@@ -32,6 +32,15 @@ final class SFTPAttributesTests: XCTestCase {
         XCTAssertEqual(entries.first?.attributes.fileKind, .file)
     }
 
+    func testRealPathKeepsTheFullPathButListingsDropUnsafeNames() throws {
+        var payload = Data()
+        payload.appendUInt32(1)
+        self.appendName("/home/parcus", permissions: 0o040755, to: &payload)
+
+        XCTAssertEqual(try SFTPNameParser.parseNamePacketPayload(payload, listing: false).map(\.filename), ["/home/parcus"])
+        XCTAssertEqual(try SFTPNameParser.parseNamePacketPayload(payload).map(\.filename), [])
+    }
+
     private func appendName(_ name: String, permissions: UInt32, to payload: inout Data) {
         payload.appendString(name)
         payload.appendString(name)

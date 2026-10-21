@@ -63,6 +63,22 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.session.state, .connected)
     }
 
+    func testMissingDefaultFolderOpensTheLoginFolder() async throws {
+        let profile = ServerProfile(displayName: "Chroot", host: "files.example.com", protocolKind: .sftp, username: "u", authenticationMethod: .agent, remoteDefaultPath: "/srv/missing")
+        let remoteFileSystem = MockRemoteFileSystemClient(failingPaths: ["/srv/missing"])
+        let model = self.makeModel(remoteFileSystem: remoteFileSystem)
+        try await Task.sleep(nanoseconds: 10_000_000)
+
+        model.profiles = [profile]
+        model.selectedSidebarItem = profile.id.rawValue.uuidString
+        await model.connectSelectedServer()
+
+        XCTAssertEqual(model.session.state, .connected)
+        XCTAssertEqual(model.session.remotePath, "~")
+        let listedPaths = await remoteFileSystem.listedPaths
+        XCTAssertEqual(listedPaths, ["/srv/missing", "~"])
+    }
+
     func testReconnectSelectedServerPreservesCurrentSessionPaths() async throws {
         let profile = ServerProfile(
             displayName: "Production",
@@ -186,7 +202,8 @@ final class AppModelTests: XCTestCase {
             recentRepository: InMemoryRecentServerRepository(),
             localFileSystem: MockLocalFileSystemClient { _, _ in [] },
             remoteFileSystem: remoteFileSystem,
-            notificationController: MockNotificationController()
+            notificationController: MockNotificationController(),
+            serverProbe: SilentServerProbe()
         )
     }
 
@@ -228,8 +245,21 @@ private final class MockLocalFileSystemClient: LocalFileSystemClient, @unchecked
     }
 }
 
+/// Tests must not open network connections when a connect fails.
+private struct SilentServerProbe: ServerProbing {
+    func detect(host _: String, port _: Int?, username _: String) async -> ServerDetection? {
+        nil
+    }
+}
+
 private actor MockRemoteFileSystemClient: RemoteFileSystemClient {
+    private let failingPaths: Set<String>
     private var connectCalls: [ServerProfileID] = []
+
+    init(failingPaths: Set<String> = []) {
+        self.failingPaths = failingPaths
+    }
+
     private var disconnectCalls = 0
     private var listCalls: [String] = []
 
@@ -260,6 +290,9 @@ private actor MockRemoteFileSystemClient: RemoteFileSystemClient {
 
     func listDirectory(at path: String, profile _: ServerProfile, session _: ConnectionSession, preferences _: FileListPreferences) async throws -> [FileItem] {
         self.listCalls.append(path)
+        if self.failingPaths.contains(path) {
+            throw RemoteClientError.commandFailed("No such file")
+        }
         return []
     }
 

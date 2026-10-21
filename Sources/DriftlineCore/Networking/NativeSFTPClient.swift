@@ -163,6 +163,11 @@ public struct NativeSFTPClient: RemoteFileSystemClient {
             throw RemoteClientError.nativeBackendUnavailable(
                 "The server needs SSH algorithms that Native Swift SSH does not support (for example an RSA-only host key). Choose System SSH in Settings > Connections."
             )
+        } catch let error as RemoteClientError {
+            throw error
+        } catch {
+            // SwiftNIO errors read like "NIOPosix.NIOConnectionError error 1": say what failed instead.
+            throw RemoteClientError.connectionFailed("Could not reach \(profile.host) on port \(profile.port) (\(String(describing: type(of: error)))).")
         }
     }
 

@@ -85,7 +85,9 @@ public struct SFTPNameEntry: Equatable, Sendable {
 }
 
 public enum SFTPNameParser {
-    public static func parseNamePacketPayload(_ payload: Data) throws -> [SFTPNameEntry] {
+    /// `listing`: entries of a READDIR, which are joined to local folders, so unsafe names are dropped.
+    /// A REALPATH answer is a full path with "/" and must stay as it is.
+    public static func parseNamePacketPayload(_ payload: Data, listing: Bool = true) throws -> [SFTPNameEntry] {
         var reader = SFTPDataReader(data: payload)
         let count = try reader.readUInt32()
         var entries: [SFTPNameEntry] = []
@@ -94,8 +96,8 @@ public enum SFTPNameParser {
             let filename = try reader.readString()
             let longname = try reader.readString()
             let attrs = try SFTPAttributes.parse(from: &reader)
-            // A name with "/" or NUL could write outside the target folder of a download.
-            if filename != ".", filename != "..", !filename.contains("/"), !filename.contains("\0") {
+            // A listed name with "/" or NUL could write outside the target folder of a download.
+            if !listing || FileItem.isSafeRemoteName(filename) {
                 entries.append(SFTPNameEntry(filename: filename, longname: longname, attributes: attrs))
             }
         }

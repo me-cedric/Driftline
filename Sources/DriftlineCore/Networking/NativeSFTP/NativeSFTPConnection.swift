@@ -298,8 +298,8 @@ public actor NativeSFTPConnection {
         let packet = try await send(SFTPRequestBuilder.realpath(id: self.nextID(), path: path))
         switch packet.type {
         case .name:
-            let entries = try SFTPNameParser.parseNamePacketPayload(packet.payload)
-            guard let resolved = entries.first?.filename else {
+            let entries = try SFTPNameParser.parseNamePacketPayload(packet.payload, listing: false)
+            guard let resolved = entries.first?.filename, !resolved.isEmpty else {
                 throw RemoteClientError.commandFailed("Remote path resolution returned no path.")
             }
             return resolved

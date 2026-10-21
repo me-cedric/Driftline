@@ -566,6 +566,28 @@ final class SFTPIntegrationTests: XCTestCase {
         }
     }
 
+    /// Profiles default to "~", which the native backend resolves with REALPATH.
+    func testNativeSwiftListsHomeFolderWhenHarnessEnabled() async throws {
+        let env = ProcessInfo.processInfo.environment
+        guard env["DRIFTLINE_NATIVE_INTEGRATION_SFTP"] == "1", let password = env["DRIFTLINE_TEST_PASSWORD"], !password.isEmpty else {
+            throw XCTSkip("Set DRIFTLINE_NATIVE_INTEGRATION_SFTP=1 and DRIFTLINE_TEST_PASSWORD after running scripts/integration-sftp-server.sh start")
+        }
+        let host = env["DRIFTLINE_TEST_HOST"] ?? "127.0.0.1"
+        let port = Int(env["DRIFTLINE_TEST_PORT"] ?? "22222") ?? 22222
+        let reference = CredentialReference(service: "app.driftline.integration", account: "native-home")
+        let credentials = InMemoryCredentialStore()
+        try await credentials.saveString(password, reference: reference)
+        let profile = ServerProfile(displayName: "Native Home", host: host, port: port, protocolKind: .sftp, username: env["DRIFTLINE_TEST_USER"] ?? "driftline", authenticationMethod: .password(reference))
+        let client = try await NativeSFTPClient(credentialStore: credentials, hostTrustStore: self.trustedStore(host: host, port: port))
+
+        let session = try await client.connect(to: profile)
+        let items = try await client.listDirectory(at: "~", profile: profile, session: session, preferences: FileListPreferences(showHiddenFiles: true))
+        try await client.disconnect(session: session)
+
+        XCTAssertFalse(items.isEmpty)
+        XCTAssertTrue(items.allSatisfy { $0.path.hasPrefix("/") })
+    }
+
     func testNativeSwiftWrongPasswordFailsFastWhenHarnessEnabled() async throws {
         let env = ProcessInfo.processInfo.environment
         guard env["DRIFTLINE_NATIVE_INTEGRATION_SFTP"] == "1" else {

@@ -665,7 +665,7 @@ final class AppModel: @unchecked Sendable {
             connectedSession.localPath = paths.localPath
             connectedSession.remotePath = paths.remotePath
             self.session = connectedSession
-            self.remoteItems = try await client.listDirectory(at: self.session.remotePath, profile: profile, session: self.session, preferences: self.preferences.fileList)
+            self.remoteItems = try await self.listFirstAvailableFolder(client: client, profile: profile)
             await self.refreshLocal()
             try await self.recordRecentConnection(for: profile)
             self.recents = try await self.recentRepository.list(limit: 10)
@@ -685,6 +685,28 @@ final class AppModel: @unchecked Sendable {
             self.persistIntegrationState()
             await self.proposeFix(for: profile, after: error)
         }
+    }
+
+    /// Lists the default folder; when the server refuses it (missing, no permission, chroot), opens the login folder, then "/".
+    private func listFirstAvailableFolder(client: RemoteFileSystemClient, profile: ServerProfile) async throws -> [FileItem] {
+        let requested = self.session.remotePath
+        var firstError: Error?
+        for path in [requested, "~", "/"] where path != requested || firstError == nil {
+            do {
+                let items = try await client.listDirectory(at: path, profile: profile, session: self.session, preferences: self.preferences.fileList)
+                if path != requested {
+                    self.session.remotePath = path
+                    self.footerMessage = String(format: self.loc("toast.defaultFolderFallback"), requested, path == "~" ? self.loc("toast.loginFolder") : path)
+                }
+                return items
+            } catch {
+                firstError = firstError ?? error
+                // A lost connection or login fails for every folder: stop at once.
+                if case RemoteClientError.connectionFailed = error { break }
+                if case RemoteClientError.authenticationFailed = error { break }
+            }
+        }
+        throw firstError ?? RemoteClientError.commandFailed("No remote folder could be opened.")
     }
 
     func detectServer(host: String, port: Int?, username: String) async -> ServerDetection? {

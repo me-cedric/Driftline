@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Fixed Native Swift SSH failing after login with "Remote path resolution returned no path" for the home folder (`~`).
+- When the default remote folder cannot be opened, Driftline opens the login folder, then `/`, and says so.
+- Native Swift SSH connection errors now name the host and port instead of a SwiftNIO error code.
 - The server editor detects the protocol, port, FTPS mode, login method and `~/.ssh/config` alias of a host while you type, and fills in the fields you did not change.
 - After a failed connection, Driftline checks the server and proposes the settings it answers to. Wrong passwords and host key problems get no proposal.
 - With Native Swift SSH selected, servers that native cannot handle use System SSH automatically, per server.

@@ -36,7 +36,7 @@ public struct MCPInitializeParams: Sendable {
 public enum MCPServerInfo {
     public static let name = "Driftline MCP"
     public static let title = "Driftline SFTP"
-    public static let version = "0.6.0"
+    public static let version = "0.7.0"
 
     static var asJSON: JSONValue {
         .object([

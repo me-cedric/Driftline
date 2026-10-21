@@ -2,7 +2,7 @@ import DriftlineCore
 import DriftlineMCP
 import Foundation
 
-let version = "0.6.0"
+let version = "0.7.0"
 let arguments = Array(CommandLine.arguments.dropFirst())
 
 func printHelp() {

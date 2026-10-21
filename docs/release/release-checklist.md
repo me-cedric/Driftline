@@ -3,7 +3,7 @@
 ## Scope Freeze
 
 - Confirm `README.md`, `ROADMAP.md`, and `CHANGELOG.md` describe the release honestly.
-- Confirm FTP/FTPS remain marked unsupported unless implemented and tested.
+- Confirm the FTP/FTPS integration tests pass (`./scripts/integration-ftp-server.sh start`, then `DRIFTLINE_INTEGRATION_FTP=1 swift test --filter FTPIntegrationTests`).
 - Confirm native Swift SFTP remains marked experimental until real file operations pass integration tests.
 - Confirm `docs/release/1.0-scope.md` still matches shipped behavior.
 - Confirm `docs/security/privacy-review.md` still matches update checks, diagnostics, MCP, and telemetry behavior.

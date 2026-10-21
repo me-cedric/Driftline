@@ -22,7 +22,7 @@ Driftline is pre-1.0. The roadmap favors secure SFTP workflows, native macOS pol
 ## Protocols And Integrations
 
 - SSH agent-backed native Swift auth, if SwiftNIO SSH exposes the needed signer hook or Driftline adopts a safe alternative.
-- WebDAV, S3, SMB, FTP, and FTPS only after protocol-specific auth, certificate, trust, and transfer semantics are designed.
+- WebDAV, S3, and SMB only after protocol-specific auth, certificate, trust, and transfer semantics are designed. FTP and FTPS shipped in 0.7.0 with certificate trust and TLS session reuse.
 - Finder extension, Shortcuts integration, Raycast extension, and menu bar transfer monitor.
 - Sparkle or another automatic update mechanism after signing/notarization is in place.
 - MCP SSE streaming, task support, richer audit UI, and broader real-client QA.

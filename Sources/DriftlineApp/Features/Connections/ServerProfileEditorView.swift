@@ -146,8 +146,18 @@ struct ServerProfileEditorView: View {
         .frame(width: 520, height: 620)
     }
 
-    @ViewBuilder
     private var detectionRow: some View {
+        // The result line fades in when the check ends.
+        Group {
+            self.detectionContent
+        }
+        .transition(.opacity)
+        .driftlineAnimation(value: self.isDetecting)
+        .driftlineAnimation(value: self.draft.detection)
+    }
+
+    @ViewBuilder
+    private var detectionContent: some View {
         if self.isDetecting {
             HStack(spacing: 8) {
                 ProgressView().controlSize(.small)

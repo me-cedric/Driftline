@@ -222,6 +222,7 @@ private struct TransferProgressCell: View {
             ProgressView(value: self.progress)
                 .progressViewStyle(.linear)
                 .frame(minWidth: 50)
+                .driftlineAnimation(.easeOut(duration: 0.35), value: self.progress)
             Text(self.progress.formatted(.percent.precision(.fractionLength(0))))
                 .monospacedDigit()
                 .frame(width: 36, alignment: .trailing)

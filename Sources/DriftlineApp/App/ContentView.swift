@@ -10,6 +10,7 @@ private func loc(_ key: String, _ args: CVarArg...) -> String {
 
 struct ContentView: View {
     @Bindable var model: AppModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var transferHeight: CGFloat = 150
     @State private var transferResizeStartHeight: CGFloat?
     @State private var localPaneFraction: CGFloat = 0.5
@@ -257,8 +258,10 @@ struct ContentView: View {
                         )
                     self.transferQueue
                         .frame(height: self.transferHeight)
+                        .transition(.driftlineSlide(from: .bottom, reduceMotion: self.reduceMotion))
                 }
             }
+            .driftlineAnimation(value: self.model.preferences.showTransferQueue)
             .frame(width: proxy.size.width, height: proxy.size.height)
         }
     }
@@ -472,6 +475,7 @@ struct SidebarView: View {
                 Circle()
                     .fill(self.statusColor(for: profile))
                     .frame(width: 6, height: 6)
+                    .driftlineAnimation(value: self.statusColor(for: profile))
                     .accessibilityHidden(true)
             }
         } icon: {

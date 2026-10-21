@@ -86,13 +86,19 @@ struct FileBrowserPane: View {
         .padding(.bottom, 13)
     }
 
-    @ViewBuilder private var browserBody: some View {
-        if self.source == .remote, !self.isConnected {
-            RemoteEmptyStateView(onNewConnection: self.onNewConnection)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else {
-            self.fileTable
+    private var browserBody: some View {
+        // Connecting swaps the prompt for the files with a cross-fade.
+        ZStack {
+            if self.source == .remote, !self.isConnected {
+                RemoteEmptyStateView(onNewConnection: self.onNewConnection)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .transition(.opacity)
+            } else {
+                self.fileTable
+                    .transition(.opacity)
+            }
         }
+        .driftlineAnimation(value: self.isConnected)
     }
 
     private var fileTable: some View {

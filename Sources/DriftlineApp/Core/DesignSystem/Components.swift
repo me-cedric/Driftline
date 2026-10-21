@@ -25,7 +25,39 @@ enum DriftlineOpacity {
     static let stroke = 0.065
 }
 
+/// Short, quiet motion for state changes. With Reduce Motion on, changes are instant and movement becomes a fade.
+private struct DriftlineAnimationModifier<Value: Equatable>: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    var animation: Animation
+    var value: Value
+
+    func body(content: Content) -> some View {
+        content.animation(self.reduceMotion ? nil : self.animation, value: self.value)
+    }
+}
+
+extension Animation {
+    static let driftline = Animation.snappy(duration: 0.28)
+}
+
+extension AnyTransition {
+    /// Slides in from an edge and fades; only fades with Reduce Motion on.
+    static func driftlineSlide(from edge: Edge, reduceMotion: Bool) -> AnyTransition {
+        reduceMotion ? .opacity : .move(edge: edge).combined(with: .opacity)
+    }
+
+    /// Grows from 90 percent and fades; only fades with Reduce Motion on.
+    static func driftlinePop(reduceMotion: Bool) -> AnyTransition {
+        reduceMotion ? .opacity : .scale(scale: 0.9).combined(with: .opacity)
+    }
+}
+
 extension View {
+    /// Animates changes of `value` with Driftline's motion, unless Reduce Motion is on.
+    func driftlineAnimation(_ animation: Animation = .driftline, value: some Equatable) -> some View {
+        self.modifier(DriftlineAnimationModifier(animation: animation, value: value))
+    }
+
     /// The system Liquid Glass button on macOS 26 and later, the previous capsule style before.
     @ViewBuilder
     func driftlineGlassButton(prominent: Bool = false) -> some View {
@@ -252,6 +284,7 @@ struct ToastOverlay: View {
     var iconColor: Color = .green
     var onDismiss: () -> Void
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isVisible = false
 
     var body: some View {
@@ -273,10 +306,10 @@ struct ToastOverlay: View {
         .driftlineFloatingGlass(in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .padding(.horizontal, 16)
         .padding(.bottom, 10)
-        .scaleEffect(self.isVisible ? 1 : 0.9, anchor: .bottom)
+        .scaleEffect(self.isVisible || self.reduceMotion ? 1 : 0.9, anchor: .bottom)
         .opacity(self.isVisible ? 1 : 0)
         .onAppear {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+            withAnimation(self.reduceMotion ? .easeOut(duration: 0.2) : .spring(response: 0.35, dampingFraction: 0.7)) {
                 self.isVisible = true
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {

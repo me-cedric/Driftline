@@ -39,6 +39,8 @@ struct WorkspaceToolbar: ToolbarContent {
 
         ToolbarItemGroup(placement: .primaryAction) {
             self.connectionButton
+                .transition(.opacity)
+                .driftlineAnimation(value: self.model.session.state)
         }
 
         ToolbarItemGroup(placement: .primaryAction) {
@@ -160,6 +162,7 @@ struct SessionStatusDot: View {
     var state: ConnectionState
     var size: CGFloat = 7
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isPulsing = false
 
     var body: some View {
@@ -172,6 +175,7 @@ struct SessionStatusDot: View {
                     .fill(.blue)
                     .opacity(self.isPulsing ? 0.35 : 1)
                     .onAppear {
+                        guard !self.reduceMotion else { return }
                         withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) {
                             self.isPulsing = true
                         }
@@ -185,12 +189,14 @@ struct SessionStatusDot: View {
             }
         }
         .frame(width: self.size, height: self.size)
+        .driftlineAnimation(value: self.state)
     }
 }
 
 /// Layer 2: full-width workspace/session tab strip with a trailing new-tab control.
 struct WorkspaceTabStrip: View {
     @Bindable var model: AppModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: 6) {
@@ -203,12 +209,15 @@ struct WorkspaceTabStrip: View {
                     onSelect: { self.model.selectTab(tab.id) },
                     onClose: { self.model.requestCloseTab(tab.id) }
                 )
+                .transition(.driftlinePop(reduceMotion: self.reduceMotion))
             }
             Spacer(minLength: 8)
             WorkspaceNewTabButton {
                 self.model.newTab()
             }
         }
+        .driftlineAnimation(value: self.model.tabs.map(\.id))
+        .driftlineAnimation(value: self.model.selectedTabID)
         .padding(.horizontal, 12)
         .padding(.vertical, 7)
     }

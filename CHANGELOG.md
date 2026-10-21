@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Fixed password login on the System SSH backend: the password reaches OpenSSH through `SSH_ASKPASS` and a private FIFO, never through arguments, environment or files. Keyboard-interactive login works too.
+- System SSH file operations now use the SFTP subsystem (`sftp -b`), so servers without a shell (chroot, `internal-sftp`, managed transfer servers) work.
+- System SSH accepts legacy server algorithms after the OpenSSH defaults (`ssh-rsa`, DH group 14, AES-CBC) and offers only the selected private key (`IdentitiesOnly`).
+- System SSH scans a host key only on first contact or on a mismatch, so OpenSSH 9.8+ `PerSourcePenalties` no longer block the Mac.
+- rsync transfers fall back to SFTP when the server has no rsync; folder transfers no longer create a nested folder.
+- Native Swift SFTP negotiates AES-CTR with HMAC-SHA-256 (plain and encrypt-then-MAC) for servers without AES-GCM, and explains when a server needs System SSH.
+- Password profiles no longer switch the app to the experimental Native Swift SSH backend.
+- Added FTP and FTPS (explicit AUTH TLS and implicit port 990) with TLS session reuse, passive mode, and a trust prompt for self-signed certificates.
+- The server editor reads pasted URLs such as `sftp://user@host:2222/path`, sets the port and authentication when the protocol changes, and rejects host values that could be read as command options.
+- Connection errors now show the cause instead of a generic message.
+- Fixed a hang when a remote command printed more than 64 KB.
+
 - Froze 1.0 scope around secure SFTP with System SSH as the default backend.
 - Added 1.0 persistence and privacy/security review docs.
 - Added transfer ETA display when progress, byte count, and speed are available.

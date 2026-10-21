@@ -61,7 +61,7 @@ public enum DriftlineDeepLinkError: Equatable, LocalizedError, Sendable {
 
 public enum DriftlineDeepLink {
     public static let scheme = "driftline"
-    public static let supportedProtocols: Set<TransferProtocolKind> = [.sftp]
+    public static let supportedProtocols: Set<TransferProtocolKind> = Set(TransferProtocolKind.allCases)
 
     private static let forbiddenSecretParameterNames: Set = [
         "auth",

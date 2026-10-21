@@ -14,9 +14,14 @@ final class DriftlineIntegrationTests: XCTestCase {
     }
 
     func testInvalidProtocolRejected() throws {
-        XCTAssertThrowsError(try DriftlineDeepLink.parse(XCTUnwrap(URL(string: "driftline://connect?protocol=ftp&host=example.com&port=21&username=user")))) { error in
-            XCTAssertEqual(error as? DriftlineDeepLinkError, .invalidProtocol("ftp"))
+        XCTAssertThrowsError(try DriftlineDeepLink.parse(XCTUnwrap(URL(string: "driftline://connect?protocol=smb&host=example.com&port=445&username=user")))) { error in
+            XCTAssertEqual(error as? DriftlineDeepLinkError, .invalidProtocol("smb"))
         }
+    }
+
+    func testFTPAndFTPSLinksParse() throws {
+        XCTAssertEqual(try self.connectRequest("driftline://connect?protocol=ftp&host=example.com&port=21&username=user").protocolKind, .ftp)
+        XCTAssertEqual(try self.connectRequest("driftline://connect?protocol=ftps&host=example.com&port=990&username=user").protocolKind, .ftps)
     }
 
     func testInvalidPortRejected() throws {

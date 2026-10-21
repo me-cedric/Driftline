@@ -14,14 +14,31 @@ struct ServerProfileEditorView: View {
             Form {
                 Section(LocalizationManager.shared.localized("profile.section.server")) {
                     TextField(LocalizationManager.shared.localized("profile.displayName"), text: self.$draft.displayName)
-                    TextField(LocalizationManager.shared.localized("profile.host"), text: self.$draft.host)
-                    Picker(LocalizationManager.shared.localized("profile.protocol"), selection: self.$draft.protocolKind) {
+                    TextField(LocalizationManager.shared.localized("profile.host"), text: self.$draft.host, prompt: Text(verbatim: "sftp.example.com"))
+                        .onChange(of: self.draft.host) { _, host in
+                            // A pasted URL fills protocol, port, user and path at once.
+                            if host.contains("://") {
+                                self.draft.applyAddressFromHost()
+                            }
+                        }
+                    Picker(LocalizationManager.shared.localized("profile.protocol"), selection: Binding(
+                        get: { self.draft.protocolKind },
+                        set: { self.draft.changeProtocol(to: $0) }
+                    )) {
                         ForEach(TransferProtocolKind.allCases) { protocolKind in
                             Text(protocolKind.rawValue.uppercased()).tag(protocolKind)
                         }
                     }
-                    TextField(LocalizationManager.shared.localized("profile.port"), value: self.$draft.port, format: .number)
-                        .frame(width: 96)
+                    TextField(LocalizationManager.shared.localized("profile.port"), value: self.$draft.port, format: .number.grouping(.never))
+                    if self.draft.protocolKind == .ftp {
+                        Label(LocalizationManager.shared.localized("profile.ftpPlainWarning"), systemImage: "exclamationmark.triangle")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    } else if self.draft.protocolKind == .ftps {
+                        Text(LocalizationManager.shared.localized("profile.ftpsModeNote"))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                     TextField(LocalizationManager.shared.localized("profile.group"), text: self.$draft.groupName)
                     Toggle(LocalizationManager.shared.localized("profile.favorite"), isOn: self.$draft.isFavorite)
                 }
@@ -29,7 +46,7 @@ struct ServerProfileEditorView: View {
                 Section(LocalizationManager.shared.localized("profile.section.authentication")) {
                     TextField(LocalizationManager.shared.localized("profile.username"), text: self.$draft.username)
                     Picker(LocalizationManager.shared.localized("profile.method"), selection: self.$draft.authKind) {
-                        ForEach(ServerProfileDraft.AuthKind.allCases) { method in
+                        ForEach(ServerProfileDraft.authKinds(for: self.draft.protocolKind)) { method in
                             Text(method.localizedTitle).tag(method)
                         }
                     }

@@ -13,23 +13,42 @@ public struct ProcessResult: Equatable, Sendable {
 }
 
 public protocol SystemProcessExecuting: Sendable {
-    func run(executable: String, arguments: [String], timeout: TimeInterval) async throws -> ProcessResult
+    func run(executable: String, arguments: [String], environment: [String: String], standardInput: Data?, timeout: TimeInterval) async throws -> ProcessResult
+}
+
+public extension SystemProcessExecuting {
+    func run(executable: String, arguments: [String], timeout: TimeInterval) async throws -> ProcessResult {
+        try await self.run(executable: executable, arguments: arguments, environment: [:], standardInput: nil, timeout: timeout)
+    }
 }
 
 public struct FoundationProcessExecutor: SystemProcessExecuting {
     public init() {}
 
-    public func run(executable: String, arguments: [String], timeout: TimeInterval = 30) async throws -> ProcessResult {
+    public func run(
+        executable: String,
+        arguments: [String],
+        environment: [String: String] = [:],
+        standardInput: Data? = nil,
+        timeout: TimeInterval = 30
+    ) async throws -> ProcessResult {
         try await withCheckedThrowingContinuation { continuation in
             let process = Process()
             let stdout = Pipe()
             let stderr = Pipe()
+            let stdin = Pipe()
             process.executableURL = URL(fileURLWithPath: executable)
             process.arguments = arguments
+            if !environment.isEmpty {
+                process.environment = ProcessInfo.processInfo.environment.merging(environment) { _, override in override }
+            }
             process.standardOutput = stdout
             process.standardError = stderr
+            process.standardInput = standardInput == nil ? FileHandle.nullDevice : stdin
 
             let resumeState = ProcessResumeState()
+            let output = ProcessOutputBuffer()
+            let completion = DispatchGroup()
 
             @Sendable func resume(_ result: Result<ProcessResult, Error>) {
                 guard resumeState.markResumedIfNeeded() else { return }
@@ -41,17 +60,42 @@ public struct FoundationProcessExecutor: SystemProcessExecuting {
                 }
             }
 
-            process.terminationHandler = { terminated in
-                let output = String(data: stdout.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-                let error = String(data: stderr.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-                resume(.success(ProcessResult(exitCode: terminated.terminationStatus, standardOutput: output, standardError: error)))
-            }
+            completion.enter()
+            process.terminationHandler = { _ in completion.leave() }
 
             do {
                 try process.run()
             } catch {
                 resume(.failure(error))
                 return
+            }
+
+            // Drain both pipes while the process runs: a full pipe buffer (64 KB) would block the child forever.
+            completion.enter()
+            DispatchQueue.global().async {
+                output.standardOutput = stdout.fileHandleForReading.readDataToEndOfFile()
+                completion.leave()
+            }
+            completion.enter()
+            DispatchQueue.global().async {
+                output.standardError = stderr.fileHandleForReading.readDataToEndOfFile()
+                completion.leave()
+            }
+            if let standardInput {
+                DispatchQueue.global().async {
+                    let handle = stdin.fileHandleForWriting
+                    _ = fcntl(handle.fileDescriptor, F_SETNOSIGPIPE, 1)
+                    try? handle.write(contentsOf: standardInput)
+                    try? handle.close()
+                }
+            }
+
+            completion.notify(queue: .global()) {
+                resume(.success(ProcessResult(
+                    exitCode: process.terminationStatus,
+                    standardOutput: String(data: output.standardOutput, encoding: .utf8) ?? "",
+                    standardError: String(data: output.standardError, encoding: .utf8) ?? ""
+                )))
             }
 
             Task {
@@ -63,6 +107,11 @@ public struct FoundationProcessExecutor: SystemProcessExecuting {
             }
         }
     }
+}
+
+private final class ProcessOutputBuffer: @unchecked Sendable {
+    var standardOutput = Data()
+    var standardError = Data()
 }
 
 private final class ProcessResumeState: @unchecked Sendable {

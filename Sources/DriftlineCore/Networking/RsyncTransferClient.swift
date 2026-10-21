@@ -34,17 +34,26 @@ public enum RsyncProgressParser {
 }
 
 public enum RsyncCommandBuilder {
+    /// rsync needs a remote shell and a remote rsync binary. Exit 12 alone can also be a dropped connection, so the message decides.
+    public static func remoteRsyncIsMissing(_ result: ProcessResult) -> Bool {
+        let error = result.standardError.lowercased()
+        let missing = ["command not found", "rsync: not found", "sftp connections only", "this service allows sftp"]
+        return result.exitCode != 0 && (result.exitCode == 127 || missing.contains(where: error.contains))
+    }
+
     public static func arguments(for job: TransferJob, profile: ServerProfile) throws -> [String] {
         let sshArguments = try SSHCommandBuilder.baseArguments(for: profile)
         let sshCommand = (["ssh"] + sshArguments).map(TerminalCommand.shellEscaped).joined(separator: " ")
         var arguments = ["-az", "--progress", "--human-readable", "-e", sshCommand]
+        // A trailing slash copies the folder contents into the destination path, instead of a nested folder inside it.
+        let folderSuffix = job.isFolder ? "/" : ""
 
         switch job.direction {
         case .upload:
-            arguments.append(NSString(string: job.sourcePath).expandingTildeInPath)
+            arguments.append(NSString(string: job.sourcePath).expandingTildeInPath + folderSuffix)
             arguments.append("\(profile.username)@\(profile.host):\(SSHCommandBuilder.shellSingleQuoted(job.destinationPath))")
         case .download:
-            arguments.append("\(profile.username)@\(profile.host):\(SSHCommandBuilder.shellSingleQuoted(job.sourcePath))")
+            arguments.append("\(profile.username)@\(profile.host):\(SSHCommandBuilder.shellSingleQuoted(job.sourcePath + folderSuffix))")
             arguments.append(NSString(string: job.destinationPath).expandingTildeInPath)
         }
         return arguments
@@ -54,11 +63,13 @@ public enum RsyncCommandBuilder {
 public actor SystemRsyncTransferClient: TransferClient {
     private let streamingExecutor: StreamingProcessExecuting
     private let cancellableExecutor: CancellableStreamingProcessExecuting?
+    private let credentialStore: CredentialStore?
     private var storedJobs: [TransferJob] = []
 
-    public init(streamingExecutor: StreamingProcessExecuting = FoundationStreamingProcessExecutor()) {
+    public init(streamingExecutor: StreamingProcessExecuting = FoundationStreamingProcessExecutor(), credentialStore: CredentialStore? = nil) {
         self.streamingExecutor = streamingExecutor
         self.cancellableExecutor = streamingExecutor as? CancellableStreamingProcessExecuting
+        self.credentialStore = credentialStore
     }
 
     public func enqueue(_ job: TransferJob, profile: ServerProfile, onUpdate: (@Sendable (TransferJob) async -> Void)? = nil) async throws {
@@ -69,26 +80,65 @@ public actor SystemRsyncTransferClient: TransferClient {
         await onUpdate?(current)
 
         let arguments = try RsyncCommandBuilder.arguments(for: job, profile: profile)
-        for try await event in self.streamingExecutor.stream(executable: "/usr/bin/rsync", arguments: arguments, timeout: 60 * 60) {
+        let askPass = try await SSHAskPassSession.make(for: profile, credentialStore: self.credentialStore)
+        defer { askPass?.close() }
+        var result = try await self.runStreaming("/usr/bin/rsync", arguments: arguments, environment: askPass?.environment ?? [:], job: &current, onUpdate: onUpdate)
+        if self.isCancelled(job.id) { return }
+        if RsyncCommandBuilder.remoteRsyncIsMissing(result) {
+            // SFTP-only servers have no remote shell or rsync. The SFTP subsystem still works.
+            result = try await self.runSFTPTransfer(job, profile: profile, current: &current, onUpdate: onUpdate)
+            if self.isCancelled(job.id) { return }
+        }
+
+        current.finishedAt = Date()
+        if result.exitCode == 0 {
+            current.status = .succeeded
+        } else {
+            let message = Redactor().redact(result.standardError.trimmingCharacters(in: .whitespacesAndNewlines))
+            current.status = .failed(message: message.isEmpty ? "Transfer failed." : message)
+        }
+        self.upsert(current)
+        await onUpdate?(current)
+    }
+
+    private func runSFTPTransfer(_ job: TransferJob, profile: ServerProfile, current: inout TransferJob, onUpdate: (@Sendable (TransferJob) async -> Void)?) async throws -> ProcessResult {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("driftline-sftp-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let batchURL = directory.appendingPathComponent("batch")
+        let commands = try SFTPBatchCommandBuilder.transferCommand(direction: job.direction, sourcePath: job.sourcePath, destinationPath: job.destinationPath, isFolder: job.isFolder)
+        try commands.write(to: batchURL, atomically: true, encoding: .utf8)
+        let arguments = try SSHCommandBuilder.sftpBatchArguments(for: profile, batchFile: batchURL.path)
+        let askPass = try await SSHAskPassSession.make(for: profile, credentialStore: self.credentialStore)
+        defer { askPass?.close() }
+        return try await self.runStreaming("/usr/bin/sftp", arguments: arguments, environment: askPass?.environment ?? [:], job: &current, onUpdate: onUpdate)
+    }
+
+    private func runStreaming(
+        _ executable: String,
+        arguments: [String],
+        environment: [String: String],
+        job current: inout TransferJob,
+        onUpdate: (@Sendable (TransferJob) async -> Void)?
+    ) async throws -> ProcessResult {
+        var finalResult = ProcessResult(exitCode: 1, standardOutput: "", standardError: "Transfer ended without a result.")
+        for try await event in self.streamingExecutor.stream(executable: executable, arguments: arguments, environment: environment, timeout: 60 * 60) {
             switch event {
             case let .standardOutput(chunk), let .standardError(chunk):
-                if let parsed = RsyncProgressParser.progress(from: chunk) {
+                if let parsed = RsyncProgressParser.progress(from: chunk), !self.isCancelled(current.id) {
                     current.status = .running(progress: parsed.progress, bytesPerSecond: parsed.bytesPerSecond)
                     self.upsert(current)
                     await onUpdate?(current)
                 }
             case let .finished(result):
-                current.finishedAt = Date()
-                if result.exitCode == 0 {
-                    current.status = .succeeded
-                } else {
-                    let message = Redactor().redact(result.standardError.trimmingCharacters(in: .whitespacesAndNewlines))
-                    current.status = .failed(message: message.isEmpty ? "Transfer failed." : message)
-                }
-                self.upsert(current)
-                await onUpdate?(current)
+                finalResult = result
             }
         }
+        return finalResult
+    }
+
+    private func isCancelled(_ id: TransferJobID) -> Bool {
+        self.storedJobs.first { $0.id == id }?.status == .cancelled
     }
 
     public func cancel(id: TransferJobID) async throws {

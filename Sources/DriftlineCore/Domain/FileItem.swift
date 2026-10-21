@@ -75,6 +75,13 @@ public struct FileItem: Identifiable, Hashable, Codable, Sendable {
     }
 }
 
+public extension FileItem {
+    /// A remote listing entry that is safe to join to a local folder: a "/" or ".." in a server-sent name could escape it.
+    static func isSafeRemoteName(_ name: String) -> Bool {
+        !name.isEmpty && name != "." && name != ".." && !name.contains("/") && !name.contains("\0")
+    }
+}
+
 public enum FileSortKey: String, CaseIterable, Codable, Sendable {
     case name
     case size

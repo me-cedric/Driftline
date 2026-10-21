@@ -94,7 +94,8 @@ public enum SFTPNameParser {
             let filename = try reader.readString()
             let longname = try reader.readString()
             let attrs = try SFTPAttributes.parse(from: &reader)
-            if filename != ".", filename != ".." {
+            // A name with "/" or NUL could write outside the target folder of a download.
+            if filename != ".", filename != "..", !filename.contains("/"), !filename.contains("\0") {
                 entries.append(SFTPNameEntry(filename: filename, longname: longname, attributes: attrs))
             }
         }

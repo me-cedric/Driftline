@@ -16,7 +16,14 @@ final class HostFingerprintTests: XCTestCase {
     func testSystemSFTPClientBlocksUnknownHostUntilTrusted() async throws {
         let trustStore = InMemoryHostTrustStore()
         let fingerprintProvider = StaticHostFingerprintProvider(fingerprint: HostFingerprint(host: "example.com", port: 22, algorithm: "ED25519", fingerprint: "SHA256:abc123"))
-        let client = SystemSFTPClient(hostTrustStore: trustStore, hostFingerprintProvider: fingerprintProvider)
+        let client = SystemSFTPClient(
+            processExecutor: SequencedProcessExecutor(results: [
+                ProcessResult(exitCode: 255, standardOutput: "", standardError: "No ED25519 host key is known for example.com and you have requested strict checking.\r\nHost key verification failed.\r\n"),
+                ProcessResult(exitCode: 0, standardOutput: "Remote working directory: /\n", standardError: ""),
+            ]),
+            hostTrustStore: trustStore,
+            hostFingerprintProvider: fingerprintProvider
+        )
         let profile = ServerProfile(displayName: "Server", host: "example.com", protocolKind: .sftp, username: "deploy", authenticationMethod: .agent)
 
         do {
@@ -40,7 +47,13 @@ final class HostFingerprintTests: XCTestCase {
             HostTrustRecord(host: "example.com", port: 22, algorithm: "ED25519", fingerprint: "SHA256:old"),
         ])
         let fingerprintProvider = StaticHostFingerprintProvider(fingerprint: HostFingerprint(host: "example.com", port: 22, algorithm: "ED25519", fingerprint: "SHA256:new"))
-        let client = SystemSFTPClient(hostTrustStore: trustStore, hostFingerprintProvider: fingerprintProvider)
+        let client = SystemSFTPClient(
+            processExecutor: SequencedProcessExecutor(results: [
+                ProcessResult(exitCode: 255, standardOutput: "", standardError: "WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!\r\nHost key verification failed.\r\n"),
+            ]),
+            hostTrustStore: trustStore,
+            hostFingerprintProvider: fingerprintProvider
+        )
         let profile = ServerProfile(displayName: "Server", host: "example.com", protocolKind: .sftp, username: "deploy", authenticationMethod: .agent)
 
         await XCTAssertThrowsErrorAsync {
@@ -59,10 +72,22 @@ private struct StaticHostFingerprintProvider: HostFingerprintProviding {
     }
 }
 
+private actor SequencedProcessExecutor: SystemProcessExecuting {
+    private var results: [ProcessResult]
+
+    init(results: [ProcessResult]) {
+        self.results = results
+    }
+
+    func run(executable _: String, arguments _: [String], environment _: [String: String], standardInput _: Data?, timeout _: TimeInterval) async throws -> ProcessResult {
+        self.results.count > 1 ? self.results.removeFirst() : self.results[0]
+    }
+}
+
 private struct RecordingHostProcessExecutor: SystemProcessExecuting {
     var results: [ProcessResult]
 
-    func run(executable _: String, arguments _: [String], timeout _: TimeInterval) async throws -> ProcessResult {
+    func run(executable _: String, arguments _: [String], environment _: [String: String], standardInput _: Data?, timeout _: TimeInterval) async throws -> ProcessResult {
         self.results.first ?? ProcessResult(exitCode: 0, standardOutput: "", standardError: "")
     }
 }

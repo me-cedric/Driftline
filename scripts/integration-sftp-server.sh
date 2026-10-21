@@ -38,6 +38,13 @@ case "$MODE" in
         -e PUBLIC_KEY="$(cat "$KEY_PATH.pub")" \
         lscr.io/linuxserver/openssh-server:latest >/dev/null
     fi
+    # The suite opens many short and failed connections on purpose. OpenSSH 9.8+ would refuse the source address after a few.
+    for _ in $(seq 1 30); do
+      docker exec "$NAME" test -f /config/sshd/sshd_config 2>/dev/null && break
+      sleep 1
+    done
+    docker exec "$NAME" sh -c 'grep -q "^PerSourcePenalties" /config/sshd/sshd_config || echo "PerSourcePenalties no" >> /config/sshd/sshd_config'
+    docker restart "$NAME" >/dev/null
     echo "Started $NAME on port $PORT"
     echo "Export:"
     echo "  export DRIFTLINE_INTEGRATION_SFTP=1"

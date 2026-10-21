@@ -70,7 +70,7 @@ private actor RecordingTransferProcessExecutor: SystemProcessExecuting {
         self.result = result
     }
 
-    func run(executable: String, arguments: [String], timeout _: TimeInterval) async throws -> ProcessResult {
+    func run(executable: String, arguments: [String], environment _: [String: String], standardInput _: Data?, timeout _: TimeInterval) async throws -> ProcessResult {
         self.invocation = Invocation(executable: executable, arguments: arguments)
         return self.result
     }

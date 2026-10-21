@@ -13,3 +13,7 @@ Flow:
 The current implementation includes the domain model, verification result enum, durable JSON host trust store, `ssh-keyscan`/`ssh-keygen` fingerprint lookup, first-use trust sheet, changed-fingerprint blocking, and a Driftline-managed `known_hosts` file.
 
 SSH/SCP commands run with `UserKnownHostsFile=<Application Support>/Driftline/known_hosts`, `GlobalKnownHostsFile=/dev/null`, and `StrictHostKeyChecking=yes`.
+
+The System SSH backend scans a host key (`ssh-keyscan`) only when ssh reports an unknown or changed key. Each scan opens unauthenticated connections, and OpenSSH 9.8+ servers block a source address that opens many (`PerSourcePenalties`).
+
+FTPS certificates that macOS trusts are accepted. For any other certificate (self-signed, wrong name), Driftline shows the SHA-256 certificate fingerprint in the same trust sheet and stores the decision as algorithm `TLS`. A later certificate with another fingerprint is blocked as a changed fingerprint.

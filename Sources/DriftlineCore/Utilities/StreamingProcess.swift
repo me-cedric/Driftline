@@ -7,7 +7,17 @@ public enum ProcessOutputEvent: Sendable, Equatable {
 }
 
 public protocol StreamingProcessExecuting: Sendable {
-    func stream(executable: String, arguments: [String], timeout: TimeInterval) -> AsyncThrowingStream<ProcessOutputEvent, Error>
+    func stream(executable: String, arguments: [String], environment: [String: String], standardInput: Data?, timeout: TimeInterval) -> AsyncThrowingStream<ProcessOutputEvent, Error>
+}
+
+public extension StreamingProcessExecuting {
+    func stream(executable: String, arguments: [String], timeout: TimeInterval) -> AsyncThrowingStream<ProcessOutputEvent, Error> {
+        self.stream(executable: executable, arguments: arguments, environment: [:], standardInput: nil, timeout: timeout)
+    }
+
+    func stream(executable: String, arguments: [String], environment: [String: String], timeout: TimeInterval) -> AsyncThrowingStream<ProcessOutputEvent, Error> {
+        self.stream(executable: executable, arguments: arguments, environment: environment, standardInput: nil, timeout: timeout)
+    }
 }
 
 public protocol CancellableStreamingProcessExecuting: StreamingProcessExecuting {
@@ -21,7 +31,13 @@ public struct FoundationStreamingProcessExecutor: CancellableStreamingProcessExe
         self.registry = registry
     }
 
-    public func stream(executable: String, arguments: [String], timeout: TimeInterval = 60 * 60) -> AsyncThrowingStream<ProcessOutputEvent, Error> {
+    public func stream(
+        executable: String,
+        arguments: [String],
+        environment: [String: String] = [:],
+        standardInput: Data? = nil,
+        timeout: TimeInterval = 60 * 60
+    ) -> AsyncThrowingStream<ProcessOutputEvent, Error> {
         AsyncThrowingStream { continuation in
             let process = Process()
             let stdout = Pipe()
@@ -29,6 +45,11 @@ public struct FoundationStreamingProcessExecutor: CancellableStreamingProcessExe
             let state = StreamingProcessState()
             process.executableURL = URL(fileURLWithPath: executable)
             process.arguments = arguments
+            if !environment.isEmpty {
+                process.environment = ProcessInfo.processInfo.environment.merging(environment) { _, override in override }
+            }
+            let stdin = Pipe()
+            process.standardInput = standardInput == nil ? FileHandle.nullDevice : stdin
             process.standardOutput = stdout
             process.standardError = stderr
 
@@ -70,6 +91,14 @@ public struct FoundationStreamingProcessExecutor: CancellableStreamingProcessExe
             } catch {
                 continuation.finish(throwing: error)
                 return
+            }
+            if let standardInput {
+                DispatchQueue.global().async {
+                    let handle = stdin.fileHandleForWriting
+                    _ = fcntl(handle.fileDescriptor, F_SETNOSIGPIPE, 1)
+                    try? handle.write(contentsOf: standardInput)
+                    try? handle.close()
+                }
             }
 
             Task {

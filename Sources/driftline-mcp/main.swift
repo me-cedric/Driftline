@@ -13,12 +13,21 @@ struct DriftlineMCPMain {
                 return
             }
 
+            let credentialStore = KeychainCredentialStore()
+            let hostTrustStore = JSONHostTrustStore()
+            let ftpPins = FTPTLSPinCache()
             let context = MCPToolContext(
                 localFileSystem: FoundationLocalFileSystemClient(),
-                remoteFileSystem: SystemSFTPClient.secureDefault(),
-                transferClient: SystemRsyncTransferClient(),
+                remoteFileSystem: ProtocolRoutingRemoteFileSystemClient(
+                    sftp: SystemSFTPClient.secureDefault(credentialStore: credentialStore),
+                    ftp: FTPClient(credentialStore: credentialStore, hostTrustStore: hostTrustStore, pinCache: ftpPins)
+                ),
+                transferClient: ProtocolRoutingTransferClient(
+                    sftp: SystemRsyncTransferClient(credentialStore: credentialStore),
+                    ftp: FTPTransferClient(credentialStore: credentialStore, hostTrustStore: hostTrustStore, pinCache: ftpPins)
+                ),
                 profileRepository: JSONServerProfileRepository(),
-                hostTrustStore: JSONHostTrustStore(),
+                hostTrustStore: hostTrustStore,
                 sessionRegistry: MCPSessionRegistry(),
                 sandbox: LocalPathSandbox(roots: configuration.allowedLocalRoots),
                 configuration: configuration,

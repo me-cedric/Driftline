@@ -25,14 +25,16 @@ final class SFTPIntegrationTests: XCTestCase {
         )
         let trustStore = InMemoryHostTrustStore()
         let fingerprintProvider = SystemHostFingerprintProvider()
-        let firstClient = SystemSFTPClient(hostTrustStore: trustStore, hostFingerprintProvider: fingerprintProvider)
+        let knownHosts = FileManager.default.temporaryDirectory.appendingPathComponent("driftline-known-hosts-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: knownHosts) }
+        let firstClient = SystemSFTPClient(hostTrustStore: trustStore, hostFingerprintProvider: fingerprintProvider, knownHostsURL: knownHosts)
 
         do {
             _ = try await firstClient.connect(to: profile)
             XCTFail("Expected first connection to require trust")
         } catch let RemoteClientError.hostNotTrusted(host, port, algorithm, fingerprint, knownHostsLine) {
             try await trustStore.trust(HostTrustRecord(host: host, port: port, algorithm: algorithm, fingerprint: fingerprint, knownHostsLine: knownHostsLine))
-            try await ManagedKnownHostsFile().trust(HostTrustRecord(host: host, port: port, algorithm: algorithm, fingerprint: fingerprint, knownHostsLine: knownHostsLine))
+            try await ManagedKnownHostsFile(url: knownHosts).trust(HostTrustRecord(host: host, port: port, algorithm: algorithm, fingerprint: fingerprint, knownHostsLine: knownHostsLine))
         }
 
         let session = try await firstClient.connect(to: profile)
@@ -483,6 +485,122 @@ final class SFTPIntegrationTests: XCTestCase {
     private func sha256(of data: Data) -> String {
         let digest = SHA256.hash(data: data)
         return digest.map { String(format: "%02x", $0) }.joined()
+    }
+
+    func testSystemSSHPasswordLoginUsesSFTPSubsystemWhenHarnessEnabled() async throws {
+        let env = ProcessInfo.processInfo.environment
+        guard env["DRIFTLINE_INTEGRATION_SFTP"] == "1", let password = env["DRIFTLINE_TEST_PASSWORD"], !password.isEmpty else {
+            throw XCTSkip("Set DRIFTLINE_INTEGRATION_SFTP=1 and DRIFTLINE_TEST_PASSWORD after running scripts/integration-sftp-server.sh start")
+        }
+        let host = env["DRIFTLINE_TEST_HOST"] ?? "127.0.0.1"
+        let port = Int(env["DRIFTLINE_TEST_PORT"] ?? "22222") ?? 22222
+        let user = env["DRIFTLINE_TEST_USER"] ?? "driftline"
+        let remoteRoot = self.integrationRemoteRoot(env)
+        let reference = CredentialReference(service: "app.driftline.integration", account: "system-\(user)@\(host)")
+        let credentials = InMemoryCredentialStore()
+        try await credentials.saveString(password, reference: reference)
+        let profile = ServerProfile(
+            displayName: "System Password",
+            host: host,
+            port: port,
+            protocolKind: .sftp,
+            username: user,
+            authenticationMethod: .password(reference),
+            remoteDefaultPath: remoteRoot
+        )
+        let trustStore = try await self.trustedStore(host: host, port: port)
+        let fingerprint = try await SystemHostFingerprintProvider().fingerprint(host: host, port: port)
+        let knownHosts = FileManager.default.temporaryDirectory.appendingPathComponent("driftline-known-hosts-\(UUID().uuidString)")
+        try "\(fingerprint.knownHostsLine)\n".write(to: knownHosts, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: knownHosts) }
+        let client = SystemSFTPClient(
+            hostTrustStore: trustStore,
+            hostFingerprintProvider: SystemHostFingerprintProvider(),
+            credentialStore: credentials,
+            knownHostsURL: knownHosts
+        )
+
+        let session = try await client.connect(to: profile)
+        let folderName = "driftline-system-\(UUID().uuidString) with space"
+        try await client.createFolder(named: folderName, in: remoteRoot, profile: profile, session: session)
+        let folderPath = self.remotePath(root: remoteRoot, folderName)
+        let listing = try await client.listDirectory(at: remoteRoot, profile: profile, session: session, preferences: FileListPreferences())
+        XCTAssertEqual(listing.first { $0.name == folderName }?.kind, .folder)
+        XCTAssertEqual(listing.first { $0.name == folderName }?.path, folderPath)
+
+        let homeListing = try await client.listDirectory(at: "~", profile: profile, session: session, preferences: FileListPreferences(showHiddenFiles: true))
+        XCTAssertTrue(homeListing.allSatisfy { $0.path.hasPrefix("/") })
+
+        let localDirectory = FileManager.default.temporaryDirectory.appendingPathComponent("driftline-system-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: localDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: localDirectory) }
+        let localFile = localDirectory.appendingPathComponent("hello.txt")
+        try Data("hello over sftp".utf8).write(to: localFile)
+
+        let transferClient = SystemRsyncTransferClient(credentialStore: credentials)
+        let remoteFile = "\(folderPath)/hello.txt"
+        let upload = TransferJob(direction: .upload, sourcePath: localFile.path, destinationPath: remoteFile)
+        try await self.withKnownHosts(knownHosts) {
+            try await transferClient.enqueue(upload, profile: profile)
+        }
+        let uploaded = await transferClient.jobs().first { $0.id == upload.id }
+        XCTAssertEqual(uploaded?.status, .succeeded)
+
+        let downloadedFile = localDirectory.appendingPathComponent("downloaded.txt")
+        let download = TransferJob(direction: .download, sourcePath: remoteFile, destinationPath: downloadedFile.path)
+        try await self.withKnownHosts(knownHosts) {
+            try await transferClient.enqueue(download, profile: profile)
+        }
+        XCTAssertEqual(try String(contentsOf: downloadedFile, encoding: .utf8), "hello over sftp")
+
+        try await client.deleteItem(at: folderPath, profile: profile, session: session)
+        let existsAfterDelete = try await client.itemExists(at: folderPath, profile: profile, session: session)
+        XCTAssertFalse(existsAfterDelete)
+
+        try await credentials.saveString("wrong-password", reference: reference)
+        do {
+            _ = try await client.connect(to: profile)
+            XCTFail("Expected a wrong password to fail")
+        } catch {
+            XCTAssertEqual(error as? RemoteClientError, .authenticationFailed)
+        }
+    }
+
+    func testNativeSwiftWrongPasswordFailsFastWhenHarnessEnabled() async throws {
+        let env = ProcessInfo.processInfo.environment
+        guard env["DRIFTLINE_NATIVE_INTEGRATION_SFTP"] == "1" else {
+            throw XCTSkip("Set DRIFTLINE_NATIVE_INTEGRATION_SFTP=1 after running scripts/integration-sftp-server.sh start")
+        }
+        let host = env["DRIFTLINE_TEST_HOST"] ?? "127.0.0.1"
+        let port = Int(env["DRIFTLINE_TEST_PORT"] ?? "22222") ?? 22222
+        let reference = CredentialReference(service: "app.driftline.integration", account: "native-wrong")
+        let credentials = InMemoryCredentialStore()
+        try await credentials.saveString("wrong-password", reference: reference)
+        let profile = ServerProfile(displayName: "Native Wrong", host: host, port: port, protocolKind: .sftp, username: env["DRIFTLINE_TEST_USER"] ?? "driftline", authenticationMethod: .password(reference))
+        let client = try await NativeSFTPClient(credentialStore: credentials, hostTrustStore: self.trustedStore(host: host, port: port))
+        let started = Date()
+
+        do {
+            _ = try await client.connect(to: profile)
+            XCTFail("Expected a wrong password to fail")
+        } catch {
+            XCTAssertEqual(error as? RemoteClientError, .authenticationFailed)
+        }
+        // Before the fix, SwiftNIO SSH waited for the server's login timeout (minutes).
+        XCTAssertLessThan(Date().timeIntervalSince(started), 15)
+    }
+
+    /// Transfer clients read the managed known_hosts path; the test points it at its own file.
+    private func withKnownHosts(_ url: URL, _ body: () async throws -> Void) async throws {
+        let managed = DriftlineStoragePaths.knownHostsURL
+        let backup = try? Data(contentsOf: managed)
+        try FileManager.default.createDirectory(at: managed.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let existing = (try? String(contentsOf: managed, encoding: .utf8)) ?? ""
+        try (existing + String(contentsOf: url, encoding: .utf8)).write(to: managed, atomically: true, encoding: .utf8)
+        defer {
+            if let backup { try? backup.write(to: managed) } else { try? FileManager.default.removeItem(at: managed) }
+        }
+        try await body()
     }
 
     private func integrationRemoteRoot(_ env: [String: String]) -> String {

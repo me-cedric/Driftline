@@ -155,9 +155,9 @@ final class AppModel: @unchecked Sendable {
         bookmarkRepository: ServerBookmarkRepository = JSONServerBookmarkRepository(),
         recentRepository: RecentServerRepository = JSONRecentServerRepository(),
         localFileSystem: LocalFileSystemClient = FoundationLocalFileSystemClient(),
-        remoteFileSystem: RemoteFileSystemClient = SystemSFTPClient.secureDefault(),
+        remoteFileSystem: RemoteFileSystemClient? = nil,
         nativeRemoteFileSystem: RemoteFileSystemClient? = nil,
-        transferClient: TransferClient = SystemRsyncTransferClient(),
+        transferClient: TransferClient? = nil,
         nativeTransferClient: TransferClient? = nil,
         hostTrustStore: HostTrustStore = JSONHostTrustStore(),
         knownHostsFile: ManagedKnownHostsFile = ManagedKnownHostsFile(),
@@ -174,10 +174,25 @@ final class AppModel: @unchecked Sendable {
         self.transferHistoryRepository = transferHistoryRepository
         self.bookmarkRepository = bookmarkRepository
         self.recentRepository = recentRepository
-        self.remoteFileSystem = remoteFileSystem
-        self.nativeRemoteFileSystem = nativeRemoteFileSystem ?? NativeSFTPClient(credentialStore: credentialStore, hostTrustStore: hostTrustStore)
-        self.transferClient = transferClient
-        self.nativeTransferClient = nativeTransferClient ?? NativeSFTPTransferClient(credentialStore: credentialStore, hostTrustStore: hostTrustStore)
+        // FTP and FTPS always use curl; the backend preference only picks the SFTP implementation.
+        let ftpPins = FTPTLSPinCache()
+        let ftpClient = FTPClient(credentialStore: credentialStore, hostTrustStore: hostTrustStore, pinCache: ftpPins)
+        let ftpTransferClient = FTPTransferClient(credentialStore: credentialStore, hostTrustStore: hostTrustStore, pinCache: ftpPins)
+        let systemSFTPClient = SystemSFTPClient(
+            hostTrustStore: hostTrustStore,
+            hostFingerprintProvider: SystemHostFingerprintProvider(),
+            credentialStore: credentialStore
+        )
+        self.remoteFileSystem = ProtocolRoutingRemoteFileSystemClient(sftp: remoteFileSystem ?? systemSFTPClient, ftp: ftpClient)
+        self.nativeRemoteFileSystem = ProtocolRoutingRemoteFileSystemClient(
+            sftp: nativeRemoteFileSystem ?? NativeSFTPClient(credentialStore: credentialStore, hostTrustStore: hostTrustStore),
+            ftp: ftpClient
+        )
+        self.transferClient = ProtocolRoutingTransferClient(sftp: transferClient ?? SystemRsyncTransferClient(credentialStore: credentialStore), ftp: ftpTransferClient)
+        self.nativeTransferClient = ProtocolRoutingTransferClient(
+            sftp: nativeTransferClient ?? NativeSFTPTransferClient(credentialStore: credentialStore, hostTrustStore: hostTrustStore),
+            ftp: ftpTransferClient
+        )
         self.hostTrustStore = hostTrustStore
         self.knownHostsFile = knownHostsFile
         self.terminalLauncher = terminalLauncher
@@ -622,7 +637,6 @@ final class AppModel: @unchecked Sendable {
     private func connect(_ profile: ServerProfile, localPath: String? = nil, remotePath: String? = nil) async {
         let paths = self.connectionPaths(for: profile, localPath: localPath, remotePath: remotePath)
         self.isConnecting = true
-        self.useNativeBackendIfNeeded(for: profile)
         self.session = ConnectionSession(serverID: profile.id, state: .connecting, protocolKind: profile.protocolKind, localPath: paths.localPath, remotePath: paths.remotePath)
         self.persistIntegrationState()
         do {
@@ -683,15 +697,6 @@ final class AppModel: @unchecked Sendable {
         } catch {
             self.recordError(error, category: "recent.record")
         }
-    }
-
-    private func useNativeBackendIfNeeded(for profile: ServerProfile) {
-        guard case .password = profile.authenticationMethod,
-              self.preferences.remoteBackendKind != .nativeSwiftExperimental
-        else { return }
-        self.preferences.remoteBackendKind = .nativeSwiftExperimental
-        self.footerMessage = self.loc("toast.nativeSSHSwitch")
-        self.savePreferences()
     }
 
     func trustPendingHostAndReconnect() {
@@ -956,7 +961,9 @@ final class AppModel: @unchecked Sendable {
     }
 
     func saveProfileDraft() {
-        guard let draft = profileDraft else { return }
+        guard var draft = profileDraft else { return }
+        draft.applyAddressFromHost()
+        self.profileDraft = draft
         do {
             let profile = draft.makeProfile()
             try ServerProfileValidator.validate(profile)
@@ -2014,6 +2021,40 @@ struct ServerProfileDraft: Identifiable, Equatable {
         }
     }
 
+    /// The authentication methods the protocol supports. FTP and FTPS log in with a password or anonymously.
+    static func authKinds(for protocolKind: TransferProtocolKind) -> [AuthKind] {
+        protocolKind == .sftp ? AuthKind.allCases : [.password, .none]
+    }
+
+    mutating func changeProtocol(to protocolKind: TransferProtocolKind) {
+        let previous = self.protocolKind
+        self.protocolKind = protocolKind
+        if self.port == previous.defaultPort {
+            self.port = protocolKind.defaultPort
+        }
+        if !Self.authKinds(for: protocolKind).contains(self.authKind) {
+            self.authKind = .password
+        }
+    }
+
+    /// Splits a pasted URL or `user@host:port` in the host field into the matching fields.
+    mutating func applyAddressFromHost() {
+        let address = ServerAddress.parse(self.host)
+        if let protocolKind = address.protocolKind {
+            self.changeProtocol(to: protocolKind)
+        }
+        self.host = address.host
+        if let port = address.port {
+            self.port = port
+        }
+        if let username = address.username, !username.isEmpty {
+            self.username = username
+        }
+        if let path = address.path {
+            self.remoteDefaultPath = path
+        }
+    }
+
     func makeProfile() -> ServerProfile {
         let trimmedHost = self.host.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedUsername = self.username.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -2035,7 +2076,8 @@ struct ServerProfileDraft: Identifiable, Equatable {
 
         return ServerProfile(
             id: self.id,
-            displayName: self.displayName.trimmingCharacters(in: .whitespacesAndNewlines),
+            // Quick Connect needs no name: the host is a clear default.
+            displayName: self.displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? trimmedHost : self.displayName.trimmingCharacters(in: .whitespacesAndNewlines),
             host: trimmedHost,
             port: self.port,
             protocolKind: self.protocolKind,

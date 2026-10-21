@@ -4,7 +4,7 @@ import NIOSSH
 
 public enum NativeSFTPAuthFactory {
     public static func passwordDelegate(username: String, password: String) -> NIOSSHClientUserAuthenticationDelegate {
-        SimplePasswordDelegate(username: username, password: password)
+        NativeSFTPAuthDelegate(username: username, methods: [.password(password)])
     }
 
     public static func offerSequence(username: String, methods: [NativeSFTPAuthMethod]) -> NIOSSHClientUserAuthenticationDelegate {
@@ -47,7 +47,8 @@ final class NativeSFTPAuthDelegate: NIOSSHClientUserAuthenticationDelegate {
                 continue
             }
         }
-        nextChallengePromise.succeed(nil)
+        // A nil offer makes SwiftNIO SSH wait until the server's login timeout; a failure closes the connection now.
+        nextChallengePromise.fail(RemoteClientError.authenticationFailed)
     }
 }
 

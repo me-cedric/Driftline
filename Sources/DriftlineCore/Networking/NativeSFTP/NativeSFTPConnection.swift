@@ -61,7 +61,8 @@ public actor NativeSFTPConnection {
                             role: .client(
                                 .init(
                                     userAuthDelegate: authDelegate,
-                                    serverAuthDelegate: hostTrustDelegate
+                                    serverAuthDelegate: hostTrustDelegate,
+                                    transportProtectionSchemes: NativeSFTPTransportSchemes.all
                                 )
                             ),
                             allocator: channel.allocator,

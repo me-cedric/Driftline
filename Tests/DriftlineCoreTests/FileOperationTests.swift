@@ -25,18 +25,6 @@ final class FileOperationTests: XCTestCase {
         XCTAssertTrue(arguments.contains("GlobalKnownHostsFile=/dev/null"))
     }
 
-    func testRemoteFileCommandsQuotePaths() {
-        XCTAssertEqual(RemoteFileCommandBuilder.createFolderCommand(name: "New Folder", in: "/var/www"), "mkdir -- '/var/www/New Folder'")
-        XCTAssertEqual(RemoteFileCommandBuilder.renameCommand(path: "/var/www/old name.txt", newName: "new name.txt"), "mv -- '/var/www/old name.txt' '/var/www/new name.txt'")
-        XCTAssertEqual(RemoteFileCommandBuilder.deleteCommand(path: "/var/www/it's.txt"), "rm -rf -- '/var/www/it'\\''s.txt'")
-    }
-
-    func testRemoteFileCommandsExpandUserHomePaths() {
-        XCTAssertEqual(RemoteFileCommandBuilder.createFolderCommand(name: "Sites", in: "~"), "mkdir -- \"$HOME\"/'Sites'")
-        XCTAssertEqual(RemoteFileCommandBuilder.renameCommand(path: "~/old name.txt", newName: "new name.txt"), "mv -- \"$HOME\"/'old name.txt' \"$HOME\"/'new name.txt'")
-        XCTAssertEqual(RemoteFileCommandBuilder.deleteCommand(path: "~/old name.txt"), "rm -rf -- \"$HOME\"/'old name.txt'")
-    }
-
     func testLocalFileOperationsCreateRenameDelete() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

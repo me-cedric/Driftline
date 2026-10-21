@@ -73,7 +73,10 @@ let package = Package(
             dependencies: [
                 "DriftlineCore",
                 "DriftlineApp",
-                .product(name: "Crypto", package: "swift-crypto")
+                .product(name: "Crypto", package: "swift-crypto"),
+                .product(name: "NIOCore", package: "swift-nio"),
+                .product(name: "NIOEmbedded", package: "swift-nio"),
+                .product(name: "NIOSSH", package: "swift-nio-ssh")
             ]
         ),
         .testTarget(

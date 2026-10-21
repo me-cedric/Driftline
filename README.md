@@ -27,15 +27,16 @@ Driftline is free and open source. If it helps you, you can [support development
 
 ## Status
 
-Driftline is active pre-1.0 software. SFTP workflows are functional and tested, but storage and APIs may still change before a stable 1.0 release.
+Driftline is active pre-1.0 software. SFTP, FTP and FTPS workflows are functional and tested, but storage and APIs may still change before a stable 1.0 release.
 
 | Area | Current state |
 | --- | --- |
-| System SSH/SFTP | Default backend. Uses system SSH tooling, strict host checks, and `rsync`/SCP transfers. |
-| Native Swift SFTP | Opt-in backend. Supports password auth, Ed25519 keys, passphrase-protected Ed25519 keys, ECDSA PEM keys, browsing, file/folder transfers, cancellation, and large-file tests. |
+| System SSH/SFTP | Default backend. Runs file operations through `sftp -b`, so SFTP-only servers (chroot, `internal-sftp`, managed transfer servers) work. Supports password and keyboard-interactive login through `SSH_ASKPASS`, private keys, SSH agent, strict host checks, and legacy server algorithms (`ssh-rsa`, DH group 14, CBC). Transfers use `rsync` and fall back to SFTP when the server has no shell or rsync. |
+| Native Swift SFTP | Opt-in backend. Supports password auth, Ed25519 keys, passphrase-protected Ed25519 keys, ECDSA PEM keys, AES-GCM and AES-CTR with HMAC-SHA-256 (also encrypt-then-MAC), browsing, file/folder transfers, cancellation, and large-file tests. No RSA host keys or DH key exchange: use System SSH for those servers. |
+| FTP/FTPS | Swift client. Passive mode (EPSV, then PASV), explicit FTPS (AUTH TLS) and implicit FTPS (port 990), TLS session reuse on data connections, certificate trust prompt for self-signed certificates. |
 | MCP server | Opt-in local AI integration over stdio or loopback HTTP. Off by default. |
 | SCP | Fallback transfer backend. |
-| FTP/FTPS/WebDAV/S3/SMB | Roadmap only. Not implemented or claimed secure yet. |
+| WebDAV/S3/SMB | Roadmap only. Not implemented or claimed secure yet. |
 | Signing/notarization | Scripts and CI hooks exist, but public releases are unsigned until Apple credentials are configured. |
 
 1.0 scope is frozen around secure SFTP. System SSH remains the default backend; Native Swift SFTP stays opt-in until broader real-server, accessibility, and security QA are complete. See [docs/release/1.0-scope.md](docs/release/1.0-scope.md).
@@ -176,6 +177,16 @@ DRIFTLINE_TEST_USER=driftline \
 DRIFTLINE_TEST_KEY="$PWD/.integration/ssh/id_ed25519" \
 DRIFTLINE_TEST_PASSWORD='driftline-test-password' \
 swift test
+```
+
+Run the Docker FTP/FTPS integration harness (vsftpd with a self-signed certificate; implicit FTPS uses host port 990):
+
+```bash
+DRIFTLINE_TEST_PASSWORD='driftline-test-password' ./scripts/integration-ftp-server.sh start
+
+DRIFTLINE_INTEGRATION_FTP=1 \
+DRIFTLINE_TEST_PASSWORD='driftline-test-password' \
+swift test --filter FTPIntegrationTests
 ```
 
 For real-host QA, see [docs/testing/real-server-qa-matrix.md](docs/testing/real-server-qa-matrix.md).

@@ -157,6 +157,21 @@ public struct NativeSFTPClient: RemoteFileSystemClient {
         hostTrustStore: HostTrustStore
     ) async throws -> NativeSFTPConnection {
         do {
+            return try await self.connectOnceWithRetry(profile: profile, authDelegate: authDelegate, hostTrustStore: hostTrustStore)
+        } catch let error as NIOSSHError where error.type == .keyExchangeNegotiationFailure {
+            // SwiftNIO SSH has no RSA host keys and no Diffie-Hellman key exchange. OpenSSH supports both.
+            throw RemoteClientError.nativeBackendUnavailable(
+                "The server needs SSH algorithms that Native Swift SSH does not support (for example an RSA-only host key). Choose System SSH in Settings > Connections."
+            )
+        }
+    }
+
+    private static func connectOnceWithRetry(
+        profile: ServerProfile,
+        authDelegate: () -> NIOSSHClientUserAuthenticationDelegate,
+        hostTrustStore: HostTrustStore
+    ) async throws -> NativeSFTPConnection {
+        do {
             return try await NativeSFTPConnection.connect(
                 profile: profile,
                 authDelegate: authDelegate(),

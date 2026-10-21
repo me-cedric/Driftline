@@ -79,9 +79,9 @@ public enum RemoteClientError: Error, Equatable, LocalizedError {
     public var errorDescription: String? {
         switch self {
         case let .unsupportedProtocol(kind):
-            "\(kind.rawValue.uppercased()) is scaffolded but not enabled in this build."
-        case .connectionFailed:
-            "The connection could not be established."
+            "\(kind.rawValue.uppercased()) is not supported by this connection backend."
+        case let .connectionFailed(message):
+            message.isEmpty ? "The connection could not be established." : "The connection could not be established. \(message)"
         case .authenticationFailed:
             "Authentication failed. Check the username, key, or password."
         case .hostFingerprintChanged:

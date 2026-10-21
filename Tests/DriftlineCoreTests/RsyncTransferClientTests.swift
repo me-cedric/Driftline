@@ -61,7 +61,7 @@ final class RsyncTransferClientTests: XCTestCase {
 private struct ScriptedStreamingExecutor: StreamingProcessExecuting {
     var events: [ProcessOutputEvent]
 
-    func stream(executable _: String, arguments _: [String], timeout _: TimeInterval) -> AsyncThrowingStream<ProcessOutputEvent, Error> {
+    func stream(executable _: String, arguments _: [String], environment _: [String: String], standardInput _: Data?, timeout _: TimeInterval) -> AsyncThrowingStream<ProcessOutputEvent, Error> {
         AsyncThrowingStream { continuation in
             for event in self.events {
                 continuation.yield(event)
@@ -84,7 +84,7 @@ private final class CancellableScriptedStreamingExecutor: CancellableStreamingPr
         self.events = events
     }
 
-    func stream(executable _: String, arguments _: [String], timeout _: TimeInterval) -> AsyncThrowingStream<ProcessOutputEvent, Error> {
+    func stream(executable _: String, arguments _: [String], environment _: [String: String], standardInput _: Data?, timeout _: TimeInterval) -> AsyncThrowingStream<ProcessOutputEvent, Error> {
         AsyncThrowingStream { continuation in
             for event in self.events {
                 continuation.yield(event)

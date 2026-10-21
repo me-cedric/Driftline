@@ -1,0 +1,29 @@
+{
+  "servers": {
+    "agent-device": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "agent-device@0.21.28",
+        "mcp"
+      ]
+    },
+    "codebase-memory": {
+      "type": "stdio",
+      "command": "codebase-memory-mcp",
+      "args": [
+        "--tool-profile=analysis"
+      ]
+    },
+    "xcodebuildmcp": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "xcodebuildmcp@2.7.0",
+        "mcp"
+      ]
+    }
+  }
+}

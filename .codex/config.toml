@@ -1,0 +1,14 @@
+model_verbosity = "low"
+model_reasoning_summary = "none"
+
+[mcp_servers.agent-device]
+command = "npx"
+args = ["-y", "agent-device@0.21.28", "mcp"]
+
+[mcp_servers.codebase-memory]
+command = "codebase-memory-mcp"
+args = ["--tool-profile=analysis"]
+
+[mcp_servers.xcodebuildmcp]
+command = "npx"
+args = ["-y", "xcodebuildmcp@2.7.0", "mcp"]
